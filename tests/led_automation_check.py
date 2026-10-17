@@ -27,12 +27,12 @@ async def check():
             assert result=={'restart_required':True,'error':'','can_restart':True}
             assert (config/'custom_components/pixora_local/manifest.json').is_file()
             assert len(calls)==1 and calls[0][0]=='http://supervisor/discovery'
-            assert calls[0][1]['json']=={'service':'pixora_local','config':{'displays':panels,'companion_version':'1.1.0'}}
+            assert calls[0][1]['json']=={'service':'pixora_local','config':{'displays':panels,'companion_version':'1.2.0'}}
             assert not calls[0][1]['allow_redirects']
             assert not (folder/'data/action-backups').exists()
             await setup.sync(panels)
             assert not (folder/'data/action-backups').exists(), 'Unchanged restart made needless backup'
-            (config/'.pixora-led-ha-version').write_text('1.1.0')
+            (config/'.pixora-led-ha-version').write_text('1.2.0')
             assert not (await setup.status())['restart_required']
             # Restart is only sent on explicit UI request, never by installation/discovery.
             assert all(url.endswith('/discovery') for url,_ in calls)

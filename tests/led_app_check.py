@@ -44,6 +44,7 @@ async def checks():
         config.mkdir()
         app = module.make_app(root / 'data', config, Panel, ingress_peer='127.0.0.1')
         async with TestClient(TestServer(app)) as client:
+            app["studio"].pipeline.start=lambda ident:None
             assert (await client.post('/api/show', json=[])).status == 400
             assert (await client.post('/api/displays', json={'host': '8.8.8.8'})).status == 400
             response = await client.post('/api/displays', json={'host': '192.168.1.50', 'name': 'Kitchen'})
@@ -51,18 +52,21 @@ async def checks():
             assert response.status == 200 and 'key' not in data['displays'][0]
             assert json.loads((root / 'data/displays.json').read_text())['displays'][0]['key'] == 'a' * 32
             assert (await client.post('/api/show', json={'id': 'panel1', 'message': 'Done', 'duration': 10})).status == 200
-            assert calls[-1] == ('text', 'Done', [255, 255, 255], 10)
+            assert app['studio'].pipeline.data['queues']['panel1'][-1]['message']=='Done'
             count = len(calls)
             response = await client.post('/api/show', json={'id': 'panel1', 'message': 'uncertain'})
-            assert response.status == 400 and len(calls) == count + 1
+            assert response.status == 200 and len(calls) == count
+            assert app['studio'].pipeline.data['queues']['panel1'][-1]['message']=='uncertain'
             assert (await client.post('/api/show', json={'id': 'panel1', 'message': 'bad', 'duration': 0})).status == 400
             assert (await client.post('/api/show', json={'id': 'missing', 'message': 'bad'})).status == 400
             image = io.BytesIO()
             Image.new('RGB', (128, 64), 'red').save(image, format='PNG')
             assert (await client.post('/api/image?id=panel1&duration=5', data=image.getvalue())).status == 200
-            path, payload = calls[-1]
-            assert path == '/api/frame' and len(base64.b64decode(payload['rgb'])) == 64 * 32 * 3
+            payload=app['studio'].pipeline.data['queues']['panel1'][-1]
+            with Image.open(io.BytesIO(base64.b64decode(payload['body']))) as queued:assert queued.size==(64,32)
             assert payload['duration'] == 5
+            app['studio'].pipeline.data['queues']['panel1']=[]
+            app['studio'].pipeline.persist()
             assert (await client.post('/api/image?id=panel1', data=b'bad')).status == 400
             assert (await client.post('/api/update?id=panel1', data=b'test firmware')).status == 200
             assert calls[-1] == ('firmware', 13)

@@ -65,6 +65,12 @@ async def check():
     await deck_callback(types.SimpleNamespace(service='play_deck',data=deck_schema({'config_entry_id':'entry1','deck':'Evening'})))
     assert posts[-1][0]=='http://test-pixora-led-displays:4188/api/studio/ha-action'
     assert posts[-1][1]['json']=={'id':'stable','action':'play','deck':'Evening'} and not posts[-1][1]['allow_redirects']
+    from pixora_local.client import DisplayClient
+    real_client=DisplayClient(Session(),'192.168.1.50','a'*32);real_client.app_host=panel.app_host;real_client.device_id='stable'
+    real_client.request=AsyncMock(side_effect=AssertionError('HA bypassed hub queue'))
+    await real_client.show('Queued notification',[255,255,255],10)
+    assert posts[-1][1]['json']=={'id':'stable','action':'message','message':'Queued notification','color':[255,255,255],'duration':10}
+    real_client.request.assert_not_awaited()
     entry=types.SimpleNamespace(data={'host':'192.168.1.50','key':'a'*32,'device_id':'stable'},title='Kitchen',entry_id='entry1')
     class Client:
         def __init__(self, session,host,key=''): self.host,self.key=host,key
@@ -91,7 +97,7 @@ async def check():
     result=await flow.async_step_hassio(types.SimpleNamespace(config={'displays':[{'id':'stable'}]},slug='6264a0fa_pixora_led_displays'))
     assert result['reason']=='panels_registered'
     manager.flow.async_init.assert_awaited_once_with('pixora_local',context={'source':'integration_discovery'},data={'id':'stable','app_host':'http://6264a0fa-pixora-led-displays:4188'})
-    assert Path(temp.name,'.pixora-led-ha-version').read_text()=='1.1.0'
+    assert Path(temp.name,'.pixora-led-ha-version').read_text()=='1.2.0'
     entity=notify_module.PixoraDisplay(panel,entry)
     try: await entity.async_send_message('Done')
     except HAError: pass

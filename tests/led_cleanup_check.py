@@ -24,7 +24,7 @@ async def checks():
         target.mkdir(parents=True); (target/'test.py').write_text('remove')
         other = config/'custom_components'/'other'
         other.mkdir(); (other/'keep.py').write_text('keep')
-        (config/'.pixora-led-ha-version').write_text('1.1.0')
+        (config/'.pixora-led-ha-version').write_text('1.2.0')
         calls = []
         remaining = [{'domain':'pixora_local','entry_id':'panel'}, {'domain':'other','entry_id':'keep'}]
         fail = True

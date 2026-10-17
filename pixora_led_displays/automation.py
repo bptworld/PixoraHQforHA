@@ -7,7 +7,7 @@ from urllib.parse import quote
 from pathlib import Path
 import aiohttp
 
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 
 def install_companion(root, config_root):
     source = Path(__file__).parent / 'custom_components/pixora_local'

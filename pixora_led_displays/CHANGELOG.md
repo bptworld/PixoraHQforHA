@@ -1,3 +1,19 @@
+# 1.2.0
+
+- Add hub-local event history, structured card results, special-graphic queues, play-once event delivery and interruption-aware deck resumption. Route HA notifications through the hub queue.
+- Preserve animation timing and animated uploads. Fan group-wall event artwork into ordered display slices.
+- Companion 1.2.0 requires one HA restart to load queued notification delivery.
+
+- Skip broken cards for the current playback session while other cards continue. Show skipped card names; pause clearly if none can play. Never retry uncertain panel writes.
+
+- Outline disabled deck cards in red.
+
+- Keep bounded rendered artwork on the hub, serve last good artwork immediately, and refresh it in the background like Cloud. Preserve cache isolation by card options, dimensions, settings and renderer revision.
+
+- Prepare the next card during playback and retain artwork across deck loop transitions instead of briefly showing Waiting. Renew long static cards before the panel timeout.
+
+- Add Pro Sports, College Sports and Fantasy submenus to the Card Library and Decks card picker, matching the Cloud grouping.
+
 # 1.1.4
 
 - Fix standalone card previews and playback when Heartbeat is the first downloaded card.

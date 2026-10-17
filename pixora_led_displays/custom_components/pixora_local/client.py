@@ -19,6 +19,10 @@ def local_host(value):
     return host
 
 
+class DisplayBusy(ValueError):
+    """Panel explicitly rejected this write before accepting it."""
+
+
 class PriorityMessageActive(ValueError):
     """A deck frame was explicitly rejected because an HA message has priority."""
 
@@ -45,7 +49,7 @@ class DisplayClient:
                     except (ValueError,aiohttp.ClientError):detail={}
                     if isinstance(detail,dict) and detail.get('error')=='priority_message_active':
                         raise PriorityMessageActive('An HA message has priority.')
-                    raise ValueError('Display is busy. This card was not accepted.')
+                    raise DisplayBusy('Display is busy. This card was not accepted.')
                 if response.status not in (200, 202):
                     raise ValueError('Display rejected the request (' + str(response.status) + ').')
                 try:
@@ -77,6 +81,16 @@ class DisplayClient:
             raise ValueError('The display returned invalid pairing information.')
         self.key = key
 
+    async def hub_action(self,payload):
+        try:
+            async with self.session.post(self.app_host+'/api/studio/ha-action',json={'id':self.device_id,**payload},
+                    headers={'Authorization':'Bearer '+self.key},allow_redirects=False,timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status!=200:raise ValueError('The hub did not accept this display action. It was not retried.')
+                result=await response.json()
+                if result.get('accepted') is not True:raise ValueError('The hub did not confirm this display action.')
+        except (aiohttp.ClientError,asyncio.TimeoutError) as exc:
+            raise ValueError('Hub action outcome is uncertain. Check LED Studio; it was not retried.') from exc
+
     async def show(self, message, color, duration):
         if type(duration) is not int or not 1 <= duration <= 300:
             raise ValueError('Choose 1 to 300 seconds.')
@@ -84,6 +98,8 @@ class DisplayClient:
             raise ValueError('Use 1 to 160 plain-text characters. For other fonts or characters, send an image.')
         if not isinstance(color, (list, tuple)) or len(color) != 3 or any(type(c) is not int or not 0 <= c <= 255 for c in color):
             raise ValueError('Choose a valid RGB color.')
+        if getattr(self,'app_host',''):
+            return await self.hub_action({'action':'message','message':message,'color':list(color),'duration':duration})
         await self.request('/api/message', {'message': message, 'color': ''.join(f'{c:02X}' for c in color), 'duration': duration})
 
     async def update_firmware(self, body):

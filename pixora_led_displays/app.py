@@ -29,7 +29,7 @@ def image_payload(body, width, height, duration):
 
 
 def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_factory=DisplayClient, ingress_peer='172.30.32.2'):
-    app = web.Application(client_max_size=5 * 1024 * 1024)
+    app = web.Application(client_max_size=8 * 1024 * 1024)
     lock = asyncio.Lock()
     file = root / 'displays.json'
     # Fail visibly on corrupt storage rather than replacing paired identities.
@@ -122,8 +122,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         duration = payload.get('duration', 10)
         if type(duration) is not int or not 1 <= duration <= 300:
             raise ValueError('Choose 1 to 300 seconds.')
-        client = selected(payload.get('id'))
-        await client.show(payload.get('message'), payload.get('color', [255, 255, 255]), duration)
+        await studio.queue_message(payload.get('id'),payload.get('message'),payload.get('color',[255,255,255]),duration)
         return web.json_response({'accepted': True})
 
     async def manage_display(request):
@@ -140,6 +139,12 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
                 return web.json_response({'error': 'That display is no longer in the list.'}, status=404)
             previous = state['displays']
             if request.method == 'DELETE':
+                await studio.stop(ident)
+                priority=studio.pipeline.jobs.pop(ident,None)
+                if priority:priority.cancel();await asyncio.gather(priority,return_exceptions=True)
+                async with studio.pipeline.lock:
+                    studio.pipeline.data['queues'].pop(ident,None);studio.pipeline.data['inflight'].pop(ident,None)
+                    studio.pipeline.errors.pop(ident,None);await studio.pipeline.commit()
                 state['displays'] = [d for d in previous if d['id'] != ident]
             else:
                 state['displays'] = [dict(d, name=name) if d['id'] == ident else d for d in previous]
@@ -155,10 +160,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         duration = int(request.query.get('duration', '10'))
         if not 1 <= duration <= 300:
             raise ValueError('Choose 1 to 300 seconds.')
-        client = selected(request.query.get('id'))
-        info = await client.info()
-        payload = await asyncio.to_thread(image_payload, await request.read(), info['width'], info['height'], duration)
-        await client.request('/api/frame', payload)
+        await studio.queue_image(request.query.get('id'),await request.read(),duration)
         return web.json_response({'accepted': True})
 
     async def update_firmware(request):
@@ -235,8 +237,11 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         app['firmware_updates'] = FirmwareUpdates(app['session'])
         app['automation'] = HomeAssistantSetup(app['session'], root, config_root)
         await app['automation'].sync(list(state['displays']))
+        if not (root/'.cleanup-started').exists():
+            for ident,queue in studio.pipeline.data['queues'].items():
+                if queue and ident not in studio.pipeline.errors:studio.pipeline.start(ident)
         for ident,cfg in list(studio.data['devices'].items()):
-            if cfg.get('playing') and not (root/'.cleanup-started').exists():
+            if cfg.get('playing') and not (root/'.cleanup-started').exists() and ident not in studio.pipeline.errors:
                 try:await studio.play(ident)
                 except ValueError as exc:
                     cfg['playing']=False

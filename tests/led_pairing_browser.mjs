@@ -34,7 +34,7 @@ try {
  release();await page.locator('#pairStatus.success').waitFor();
  assert.equal(await name.inputValue(),'');assert.equal(await host.inputValue(),'');assert.equal(await page.locator('#display').inputValue(),'new');
  const box=await page.locator('#pairStatus').boundingBox();assert.ok(box.y>=0&&box.y+box.height<=600,'Confirmation should be visible near the clicked button');
- await page.getByRole('button',{name:'Show card',exact:true}).click();await page.locator('#sendStatus').filter({hasText:'Card accepted'}).waitFor();assert.equal(sent.id,'new');
+ await page.getByRole('button',{name:'Show card',exact:true}).click();await page.locator('#sendStatus').filter({hasText:'Card queued'}).waitFor();assert.equal(sent.id,'new');
  await name.fill('Left-64');await host.fill('192.168.4.90');mode='failure';await button.click();
  await page.locator('#pairStatus[role=alert]').waitFor();assert.match(await page.locator('#pairStatus').innerText(),/Pairing window closed/);
  assert.equal(await name.inputValue(),'Left-64');assert.equal(await host.inputValue(),'192.168.4.90');assert.equal(await button.isEnabled(),true);assert.equal(calls,2);

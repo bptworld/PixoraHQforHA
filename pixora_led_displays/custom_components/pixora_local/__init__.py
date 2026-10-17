@@ -21,7 +21,7 @@ def rgb(value):
 async def async_setup(hass, config):
     hass.data.setdefault(DOMAIN, {})
     marker = Path(hass.config.path('.pixora-led-ha-version'))
-    await hass.async_add_executor_job(marker.write_text, '1.1.0')
+    await hass.async_add_executor_job(marker.write_text, '1.2.0')
 
     async def show_card(call):
         client = hass.data[DOMAIN].get(call.data['config_entry_id'])
@@ -42,9 +42,11 @@ async def async_setup(hass, config):
                             raise ValueError('Use an image with at most 16 million pixels.')
                         image = ImageOps.exif_transpose(image).convert('RGBA')
                         image = Image.alpha_composite(Image.new('RGBA', image.size, 'black'), image).convert('RGB')
+                        if getattr(client,'app_host',''):return base64.b64encode(Path(path).read_bytes()).decode('ascii')
                         return base64.b64encode(ImageOps.pad(image, (info['width'], info['height']), color='black').tobytes()).decode('ascii')
                 pixels = await hass.async_add_executor_job(image_pixels)
-                await client.request('/api/frame', {'rgb': pixels, 'width': info['width'], 'height': info['height'], 'duration': call.data['duration']})
+                if getattr(client,'app_host',''):await client.hub_action({'action':'image_file','body':pixels,'duration':call.data['duration']})
+                else:await client.request('/api/frame', {'rgb': pixels, 'width': info['width'], 'height': info['height'], 'duration': call.data['duration']})
             else:
                 await client.show(call.data['message'], call.data['color'], call.data['duration'])
         except (ValueError, OSError) as exc:

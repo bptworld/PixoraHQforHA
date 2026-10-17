@@ -59,7 +59,7 @@ class PixoraLocalFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.hass.config_entries.flow.async_init(
                 DOMAIN, context={'source': 'integration_discovery'}, data=display)
         marker = Path(self.hass.config.path('.pixora-led-ha-version'))
-        await self.hass.async_add_executor_job(marker.write_text, '1.1.0')
+        await self.hass.async_add_executor_job(marker.write_text, '1.2.0')
         return self.async_abort(reason='panels_registered')
 
     async def async_step_integration_discovery(self, display):
