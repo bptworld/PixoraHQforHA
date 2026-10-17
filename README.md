@@ -2,7 +2,7 @@
 
 One Home Assistant app repository for PixoraHQ apps.
 
-[Add this repository to Home Assistant](https://my.home-assistant.io/redirect/supervisor_addon_repository/?repository=https%3A%2F%2Fgithub.com%2Fbptworld%2FPixoraHQforHA)
+[Add this repository to Home Assistant](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fbptworld%2FPixoraHQforHA)
 
 ## Install
 
