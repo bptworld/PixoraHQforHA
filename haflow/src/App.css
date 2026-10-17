@@ -2688,3 +2688,7 @@ textarea:focus {
 
 .pixora-credit { font-size: 12px; line-height: 1.5; margin: 10px 0 16px; color: inherit; }
 .pixora-credit a { color: inherit; text-underline-offset: 3px; }
+
+.migration-content { padding: 20px; overflow: auto; line-height: 1.6; }
+.migration-content li { margin-bottom: 12px; }
+.migration-content [role="status"] { font-weight: 600; }

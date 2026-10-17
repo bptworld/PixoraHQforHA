@@ -39,6 +39,8 @@ Stop the old app before starting its replacement so automations and connectors
 do not run twice. Keep the old installation until the replacement is verified.
 Do not assume a normal update transfers data between repositories.
 
+For HAFlow, follow the [complete Flow transfer guide](haflow/TRANSFER_FLOWS.md).
+
 ## Releases
 
 This repository is the primary location for future HA app development/releases.

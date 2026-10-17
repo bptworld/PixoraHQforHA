@@ -19,6 +19,10 @@ To install this app, follow these steps:
 7. Select **HAFlow** and click **Install**.
 8. Start HAFlow and open it from the app page or sidebar.
 
+## Move from the old HAFlow repository
+
+Follow the [step-by-step Flow transfer guide](TRANSFER_FLOWS.md) to export from the old app, install this version, import paused copies, check devices, and switch over safely. It also covers single-flow files, duplicate imports and going back to the old app.
+
 ## App
 
 The HAFlow app source is in [`haflow/`](haflow/).

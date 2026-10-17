@@ -2671,6 +2671,9 @@ function FlowWorkspace() {
   const wrapperRef = useRef(null)
   const importRef = useRef(null)
   const backupImportRef = useRef(null)
+  const [migrationOpen, setMigrationOpen] = useState(false)
+  const [migrationStatus, setMigrationStatus] = useState('')
+  const [migrationBusy, setMigrationBusy] = useState(false)
   const saveFlowRef = useRef(null)
   const runFlowRef = useRef(null)
   const viewportRef = useRef(defaultViewport)
@@ -3501,6 +3504,9 @@ function FlowWorkspace() {
     event.target.value = ''
     if (!file) return
 
+    if (file.size > 9_000_000) { setMigrationStatus('Choose a JSON export smaller than 9 MB.'); return }
+    setMigrationBusy(true)
+    setMigrationStatus('Importing flows…')
     try {
       const backup = JSON.parse(await file.text())
       const response = await apiFetch('/api/backup', {
@@ -3511,11 +3517,12 @@ function FlowWorkspace() {
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Backup import failed.')
       setFlows(result.flows ?? [])
-      if (result.importedIds?.[0]) await loadFlow(result.importedIds[0])
+      setMigrationStatus(`Imported ${result.importedIds?.length ?? 0} flow${result.importedIds?.length === 1 ? '' : 's'}. They are paused. Close this window and select them from the flow list. Review them, stop the old HAFlow app, then resume the flows you want to run.`)
       setLogs((current) => [{ time: new Date().toISOString(), level: 'info', message: `Imported ${result.importedIds?.length ?? 0} backup flow${result.importedIds?.length === 1 ? '' : 's'}.` }, ...current])
     } catch (error) {
+      setMigrationStatus(error instanceof SyntaxError ? 'This is not valid JSON. Choose Export Backup or Export Flow from the old HAFlow app.' : error.message)
       setLogs((current) => [{ time: new Date().toISOString(), level: 'error', message: error.message }, ...current])
-    }
+    } finally { setMigrationBusy(false) }
   }
 
   const addStarterPack = async () => {
@@ -3942,7 +3949,7 @@ function FlowWorkspace() {
             <button onClick={exportFlow} title="Export current flow" type="button"><Download size={16} /> Export Flow</button>
             <button onClick={() => importRef.current?.click()} title="Import flow into current canvas" type="button"><Upload size={16} /> Import Flow</button>
             <button onClick={exportBackup} title="Export all flows" type="button"><Download size={16} /> Export Backup</button>
-            <button onClick={() => backupImportRef.current?.click()} title="Import all-flow backup" type="button"><Upload size={16} /> Import Backup</button>
+            <button onClick={() => {setMigrationStatus('');setMigrationOpen(true)}} title="Import a backup or flows from the old HAFlow app" type="button"><Upload size={16} /> Import old HAFlow</button>
             <button onClick={() => setIsRecipeModalOpen(true)} title="Create a flow from a guided recipe" type="button"><FilePlus size={16} /> Recipes</button>
             <button onClick={() => setIsVoiceSetupModalOpen(true)} title="Set up Home Assistant voice commands" type="button"><Mic size={16} /> Voice Setup</button>
             <button onClick={addStarterPack} title="Add starter flows" type="button"><FilePlus size={16} /> Starter Pack</button>
@@ -4049,7 +4056,7 @@ function FlowWorkspace() {
             </div>
           ) : null}
           <input accept="application/json" className="hidden-input" onChange={importFlow} ref={importRef} type="file" />
-          <input accept="application/json" className="hidden-input" onChange={importBackup} ref={backupImportRef} type="file" />
+          <input accept=".json,application/json" className="hidden-input" onChange={importBackup} ref={backupImportRef} type="file" />
         </header>
         <div className="flow-surface" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
           <ReactFlow
@@ -4230,6 +4237,20 @@ function FlowWorkspace() {
         </div>
       </aside>
 
+      {migrationOpen ? (
+        <div className="log-modal-backdrop" onMouseDown={() => {if (!migrationBusy) setMigrationOpen(false)}}>
+          <section className="log-modal recipe-modal" role="dialog" aria-modal="true" aria-labelledby="migration-title" onMouseDown={event => event.stopPropagation()}>
+            <header><div><strong id="migration-title">Import from old HAFlow</strong><span>Bring your existing flows into this installation.</span></div><button type="button" autoFocus disabled={migrationBusy} aria-label="Close import" onClick={() => setMigrationOpen(false)}><X size={18}/></button></header>
+            <div className="migration-content">
+              <ol><li>Open the old HAFlow app, expand <strong>Library</strong>, and choose <strong>Export Backup</strong> to download all saved flows. You can also use an <strong>Export Flow</strong> file.</li><li>Choose that JSON file below.</li><li>Review the imported flows and devices here. Stop the old HAFlow app before resuming these flows.</li></ol>
+              <p>Flows are added as separate, paused copies. Existing flows and unsaved edits stay in place. This does not transfer settings or run history. Device references stay the same; check them if you moved to a different Home Assistant.</p>
+              <p><a href="https://github.com/bptworld/PixoraHQforHA/blob/main/haflow/TRANSFER_FLOWS.md" target="_blank" rel="noopener noreferrer">Full transfer instructions and troubleshooting</a></p>
+              <p role="status" aria-live="polite">{migrationStatus}</p>
+              <button type="button" disabled={migrationBusy} onClick={() => backupImportRef.current?.click()}><Upload size={16}/>{migrationBusy ? 'Importing…' : 'Choose backup or Flow file'}</button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {isRecipeModalOpen ? (
         <div className="log-modal-backdrop" onMouseDown={() => setIsRecipeModalOpen(false)}>
           <section className="log-modal recipe-modal" onMouseDown={(event) => event.stopPropagation()}>

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.67
+
+- Add guided import from the old HAFlow app, supporting backups and single-flow exports.
+- Validate all flows before importing, preserve existing flows, and import paused copies with unique names.
+
+
 ## 0.1.66
 
 - Add the PixoraHQ.com credit to app information and documentation and the app interface.

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import express from 'express'
 import WebSocket, { WebSocketServer } from 'ws'
 import { getIdentifierValues, isLutronPicoTrigger, LUTRON_PICO_PLATFORM, matchesLutronPicoPress } from './pico-trigger.js'
+import { prepareFlowImport } from './flow-import.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const dataDir = process.env.HAFLOW_DATA_DIR || path.join(__dirname, '..', 'data')
@@ -272,8 +273,9 @@ app.get('/api/backup', async (_, res) => {
 })
 
 app.post('/api/backup', async (req, res) => {
-  const importedFlows = Array.isArray(req.body?.flows) ? req.body.flows : []
-  if (!importedFlows.length) return res.status(400).json({ error: 'Backup JSON does not contain any flows.' })
+  let importedFlows
+  try { importedFlows = prepareFlowImport(req.body) }
+  catch (error) { return res.status(400).json({error: error.message}) }
 
   const existingFlows = await readFlowIndex()
   const nextFlows = [...existingFlows]
@@ -281,7 +283,7 @@ app.post('/api/backup', async (req, res) => {
   for (const item of importedFlows) {
     const sourceMeta = item.meta ?? item
     const sourceFlow = item.flow ?? item
-    const name = String(sourceMeta?.name || sourceFlow?.name || 'Imported Flow')
+    const name = ensureUniqueFlowName(sourceMeta.name, nextFlows)
     const baseId = safeFlowId(sourceMeta?.id) || slugifyFlowId(name)
     const id = ensureUniqueFlowId(baseId, nextFlows)
     const meta = normalizeFlowMeta({
@@ -289,6 +291,7 @@ app.post('/api/backup', async (req, res) => {
       id,
       name,
       createdAt: sourceMeta?.createdAt || new Date().toISOString(),
+      paused: true,
     })
     await writeFlow(id, sourceFlow)
     nextFlows.push(meta)
