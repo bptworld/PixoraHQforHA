@@ -47,6 +47,35 @@ async def check():
     response=await client.get('/api/studio/preview',params={'deck':heartbeat,'item':'item','width':str(width)})
     assert response.status==200,await response.text() if response.status!=200 else ''
     with Image.open(io.BytesIO(await response.read())) as image:assert image.size==(width,32) and image.n_frames>1
+   # Sample graphics use the normal queue but do not change decks or score history.
+   snapshot=json.loads(json.dumps(studio.data));history=json.loads(json.dumps(studio.pipeline.data['states']))
+   with patch.object(studio.pipeline,'start'):
+    response=await client.post('/api/studio/test-graphic',json={'display':'panel','card':'college_football','option':'scoreAnimationTarget','options':{'favoriteTeam':'ALA','scoreAnimationTarget':'device'}})
+    assert response.status==200,await response.text()
+    confirmation=await response.json();assert confirmation['queued'] and confirmation['render_ms']>=0
+    assert studio.data==snapshot and studio.pipeline.data['states']==history
+    queued=studio.pipeline.data['queues']['panel'][-1]
+    assert queued['source']=='test' and queued['once']
+    import base64
+    with Image.open(io.BytesIO(base64.b64decode(queued['body']))) as image:assert image.size==(64,32)
+    assert not studio.store.installed('college_football'),'Unused test card was retained'
+    bad=await client.post('/api/studio/test-graphic',json={'display':'panel','card':'college_football','option':'arbitrary_renderer','options':{}})
+    assert bad.status==400
+    bad=await client.post('/api/studio/test-graphic',json={'display':'panel','card':'college_football','option':'scoreAnimationTarget','options':{'scoreAnimationTarget':'group_wall'}})
+    assert bad.status==400
+   studio.data['groups']['test-wall']={'name':'Test wall','members':['panel','right']}
+   class WallPanel:
+    def __init__(self,ident):self.ident=ident
+    async def info(self):return {'width':64 if self.ident=='panel' else 128}
+   with patch.object(studio,'selected',side_effect=lambda ident:WallPanel(ident)),patch.object(studio.pipeline,'start'):
+    response=await client.post('/api/studio/test-graphic',json={'display':'panel','card':'college_football','option':'scoreAnimationTarget','options':{'favoriteTeam':'ALA','scoreAnimationTarget':'group_wall'}})
+    assert response.status==200,await response.text()
+    left=studio.pipeline.data['queues']['panel'][-1];right=studio.pipeline.data['queues']['right'][-1]
+    assert left['start_at']==right['start_at'] and left['event_id']==right['event_id']
+    for entry,width in ((left,64),(right,128)):
+     with Image.open(io.BytesIO(base64.b64decode(entry['body']))) as image:assert image.size==(width,32)
+   studio.data['groups'].pop('test-wall');studio.pipeline.data['queues'].pop('right',None)
+   studio.pipeline.data['queues']['panel']=[]
    assert (await client.delete('/api/studio/decks/'+heartbeat)).status==200
    response=await deck('Clock','clock');assert response.status==200,await response.text();deck1=(await response.json())['id']
    assert studio.store.installed('clock') and (studio.store.root/'card_utils.py').is_file()

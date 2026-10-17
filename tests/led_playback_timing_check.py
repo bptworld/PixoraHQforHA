@@ -65,6 +65,22 @@ async def check():
     await studio.player('panel')
     assert delivered==['first','second']
     assert ('second',{'label':'old'}) in rendered and ('second',{'label':'new'}) in rendered
+    # An interrupt during the first card advances once, preserving the rotation.
+    from client import PriorityMessageActive
+    sequence=[];ready=[]
+    studio.data['decks']['deck']={'items':[{'id':n,'card':n,'duration':10,'enabled':True} for n in ('first','second','third')]}
+    studio.store.cards['third']={'name':'third'}
+    async def wait_ready(ident):ready.append(ident)
+    studio.pipeline=SimpleNamespace(wait_ready=wait_ready)
+    async def interrupted_deliver(*args,**kwargs):
+        sequence.append(studio.runtime['panel']['item'])
+        if len(sequence)==1:raise PriorityMessageActive('Test graphic queued')
+        if len(sequence)==3:raise asyncio.CancelledError()
+    studio.render=render;studio.deliver=interrupted_deliver
+    try:await studio.player('panel')
+    except asyncio.CancelledError:pass
+    assert sequence==['first','second','third'],sequence
+    assert ready,'Player did not wait for the interrupt queue'
     print('Playback timing passed: next-card preparation across deck repeat, hold buffer, 300s lease renewal and task cleanup.')
 
 

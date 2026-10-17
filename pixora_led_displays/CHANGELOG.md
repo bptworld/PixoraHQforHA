@@ -1,3 +1,8 @@
+# 1.2.4
+
+- Add Test buttons beside special graphic settings. Send sample graphics through the real local interrupt queue without changing saved options or event history.
+- After interrupts, continue with the next card in the deck rotation instead of resuming or restarting the interrupted card.
+
 # 1.2.3
 
 - Audit all 27 special-event cards and panel/wall artwork variants. Preserve flight landing history, complete local flight snapshots, retain valid events when ordinary rendering fails, and keep event history when only deck duration changes.

@@ -43,7 +43,7 @@ Upload a PNG, JPEG or WebP, or open **Graphics Lab** to draw pixels and add text
 
 The app installs its companion and registers connected panels automatically. When new companion code needs loading, open **Displays & firmware** and use the clearly labelled **Restart Home Assistant** button at a convenient time. This restarts HA; it is never performed automatically.
 
-Each panel has a `notify` entity. Use **Send a notification message**, **Pixora LED (Local): Show card**, or **Show image card** for priority messages. The panel prevents a deck frame from overwriting an active priority message, and deck playback resumes afterwards.
+Each panel has a `notify` entity. Use **Send a notification message**, **Pixora LED (Local): Show card**, or **Show image card** for priority messages. The panel prevents a deck frame from overwriting an active priority message, and deck playback continues with the next card afterwards.
 
 Use **Pixora LED (Local): Play deck** with an optional saved deck name or ID, or **Pause deck**, in HA automations. Blank deck selection uses the display’s assigned deck. HA’s native automation editor provides device, sensor, calendar and time triggers; no second rule engine or Cloud automation service is required.
 
@@ -67,11 +67,13 @@ Then uninstall **Pixora LED Studio** in **Settings → Apps** and restart Home A
 
 ## Local special graphics and interruptions
 
+Use **Test** beside a special graphic setting to send a sample to the selected display or group through the normal interrupt queue. It uses the options currently shown without saving them, changing live event history, or starting a paused deck. Progress and success/error feedback appear in the dialog; render time is shown after queueing. Group tests use the same synchronized start as real group events.
+
 After updating to 1.2.0, restart Home Assistant once if prompted so its notify entities use the hub queue. Existing display entities keep their identities.
 
 - Enable a card's score/event animation options, choose its team or other required values, save the deck, and press **Play**. Event-capable cards are checked on the hub while the deck runs (approximately every 15 seconds, plus provider/render time). No Pixora Cloud account or event server is involved; live cards still contact their own data providers.
 - Previewing cards and preparing ordinary deck frames do not consume events. The hub retains each card/display's event history across renderer restarts, queues new special graphics once, and keeps celebrations out of the repeating artwork cache. A first observation establishes the baseline rather than celebrating an old score.
-- HA notifications and image actions go through a local, durable queue. HA messages precede waiting card events; HA messages retain their own order. The current priority item finishes before the next one. Deck artwork pauses immediately and resumes with its remaining dwell afterward. A cold card with no active content is skipped; a broken card does not stop healthy cards.
+- HA notifications and image actions go through a local, durable queue. HA messages precede waiting card events; HA messages retain their own order. The current priority item finishes before the next one. Deck artwork stops for the interrupt, then continues with the next card in the rotation. A cold card with no active content is skipped; a broken card does not stop healthy cards.
 - GIF and animated WebP uploads retain their frames and delays. Special events play once and hold the final frame for any remaining event duration. Original animation delays are preserved down to 20 ms. Frames are streamed over local Wi-Fi, so physical frame rate and cross-panel timing depend on the hub, network and display; this is not a hardware frame-synchronization guarantee.
 - For a card's **group/wall** event target, create a Device Group and arrange displays from left to right with **Move left**. Its artwork is rendered at the combined width, sliced for each 64/128 panel and scheduled with a shared start time. If a display is occupied long enough to miss that start, its late slice is discarded instead of showing a wall out of phase. Keep one intended wall group per display; if several contain it, the first matching saved group is used.
 - If a physical delivery has an uncertain outcome, that display stops delivery and does not replay the item, including after an app restart. Check the display, then press **Play** to explicitly resume. An explicit busy rejection may be retried briefly because the panel confirmed it did not accept the write.

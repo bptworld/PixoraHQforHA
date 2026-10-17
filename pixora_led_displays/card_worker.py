@@ -45,6 +45,7 @@ def artwork(body,width,durations=None,once=False):
 
 def renderer_body(module,spec,width):
     renderer=getattr(module,str(spec.get('renderer','')),None)
+    if not callable(renderer) and spec.get('renderer')=='_render_score_alert_frames':renderer=getattr(module,'render_score_alert_frames',None)
     if not callable(renderer):raise ValueError('Special graphic renderer is unavailable.')
     team=dict(spec.get('team') or {});team['_width']=width
     result=renderer(team,str(spec.get('kind') or spec.get('type') or 'score'))
@@ -90,6 +91,9 @@ def run(request):
         request['options'].update({'host':'local','token':'local'})
     options=dict(request['options']);options.update({'_pixora_target':'pixora-s3-wide' if request['width']==128 else 'pixora-s3','_settings':settings,'_width':request['width'],'_device_id':request.get('device_id','preview'),
         '_dwell':request.get('dwell',15),'_is_prefetch':not request.get('events',False)})
+    if request.get('test_graphic'):
+        from special_graphics import render_test
+        return {'event':render_test(module,request['card_metadata'],request['test_graphic'],options,request['width']),'state':{},'body':None,'skip':True,'duration':6}
     result=module.render(options);event=None;state={}
     if request.get('events'):
         for name,value in vars(module).items():

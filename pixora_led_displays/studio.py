@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from aiohttp import web,ClientTimeout
 from PIL import Image,ImageOps,ImageSequence
 from card_store import CardStore
+from special_graphics import tests_for
 from pipeline import Pipeline,normalize_image
 
 class CardSkipped(ValueError):pass
@@ -44,7 +45,7 @@ class Studio:
         result['runtime']=json.loads(json.dumps(self.runtime))
         for ident,message in getattr(self,'monitor_errors',{}).items():result['runtime'].setdefault(ident,{})['warning']=message
         result['priority']={ident:{'queued':len(queue),'active':ident in self.pipeline.jobs and not self.pipeline.jobs[ident].done(),'error':self.pipeline.errors.get(ident,'')} for ident,queue in self.pipeline.data['queues'].items()}
-        result['cards']=[{k:v for k,v in card.items() if k not in ('files','module')}|{'installed':self.store.installed(card['id'])} for card in self.store.cards.values()]
+        result['cards']=[{k:v for k,v in card.items() if k not in ('files','module')}|{'installed':self.store.installed(card['id']),'specialTests':tests_for(card)} for card in self.store.cards.values()]
         result['displays']=sorted([{k:v for k,v in d.items() if k!='key'} for d in self.displays()],key=lambda d:d['name'].casefold())
         return result
 
@@ -236,7 +237,7 @@ class Studio:
         self.cache[key]=(time.time(),out)
         return out
 
-    async def render_request(self,request):
+    async def run_worker(self,request):
         await self.store.ensure({request['card_id']})
         env={k:v for k,v in os.environ.items() if k.upper() in ('PATH','SYSTEMROOT','WINDIR','TEMP','TMP','LANG','TZ','PYTHONIOENCODING')}
         async with self.store.lock:
@@ -246,7 +247,10 @@ class Studio:
                 if process.returncode or not out or len(out)>15*1024*1024:raise ValueError('This card could not render. Check its options and data-provider connection.')
             finally:
                 if process.returncode is None:process.kill();await process.wait()
-        result=json.loads(out)
+        return json.loads(out)
+
+    async def render_request(self,request):
+        result=await self.run_worker(request)
         if request.get('events'):
             await self.accept_event(request,result)
         if result.get('skip'):raise CardSkipped('No active artwork for this card.')
@@ -364,24 +368,21 @@ class Studio:
                 frames.append((out.getvalue(),max(.02,min(60,frame.info.get('duration',100)/1000))))
         remaining=float(duration);position=0
         while remaining>0:
-            if ident:await self.pipeline.wait_ready(ident)
+            if ident:
+                if self.pipeline.signals(ident)[0].is_set():raise PriorityMessageActive('An interrupt is ready.')
+                await self.pipeline.wait_ready(ident)
             pixels,delay=frames[min(position,len(frames)-1) if once else position%len(frames)]
             final=once and position>=len(frames)-1
             step=min(remaining,240 if len(frames)==1 or final else delay)
             lease=min(300,max(1,__import__('math').ceil(remaining+(60 if owner=='deck' else 0))))
             started=time.monotonic()
-            try:await self.send_frame(client,pixels,width,lease,owner=owner,ident=ident or wire_ident)
-            except PriorityMessageActive:
-                if not ident:raise
-                info=await client.info()
-                await asyncio.sleep(min(.1,max(.02,float(info.get('remaining',1)))))
-                continue
+            await self.send_frame(client,pixels,width,lease,owner=owner,ident=ident or wire_ident)
             elapsed=time.monotonic()-started
             wait=max(0,step-elapsed)
             left=await self.pipeline.delay(ident,wait) if ident else 0
             if not ident:await asyncio.sleep(wait)
             played=max(0,step-left);remaining-=max(played,elapsed)
-            if left>0:continue
+            if left>0:raise PriorityMessageActive('An interrupt is ready.')
             position+=1
 
     def quiet(self,config):
@@ -470,8 +471,7 @@ class Studio:
                     writing=False
                 except PriorityMessageActive:
                     writing=False
-                    position-=1
-                    await asyncio.sleep(1)
+                    await self.pipeline.wait_ready(ident)
                     continue
 
         except asyncio.CancelledError:raise
@@ -490,6 +490,41 @@ class Studio:
                 prepared.cancel()
                 await asyncio.gather(prepared,return_exceptions=True)
 
+    async def test_graphic(self,payload):
+        ident=payload.get('display');self.selected(ident)
+        card=self.store.cards.get(payload.get('card'))
+        key=payload.get('option')
+        if not card or key not in tests_for(card):raise ValueError('Choose a special graphic for this card.')
+        validated=self.validate_deck({'name':'Graphic test','items':[{'id':'test','card':card['id'],'options':payload.get('options',{}),'duration':6}]})['items'][0]
+        options=validated['options'];group=None
+        target=str(options.get(key,'device'))
+        if target in ('group','group_wall','wall') or target.startswith('group:'):
+            group=next((g for g in self.data['groups'].values() if ident in g['members']),None)
+            if not group:raise ValueError('Add this display to a device group before testing a group graphic.')
+        targets=group['members'] if group else [ident]
+        widths=[]
+        for member in targets:
+            info=await self.selected(member).info();widths.append((member,info['width']))
+        width=sum(w for _,w in widths)
+        if width>512:raise ValueError('Test graphics support a group up to 512 pixels wide.')
+        request=await self.render(validated,width,device_id=ident,request_only=True)
+        request.update(test_graphic=key,card_metadata=card)
+        started=time.monotonic()
+        # Serialize temporary test downloads with deck saves; remove unused card files afterward.
+        async with self.lock:
+            try:result=await self.run_worker(request)
+            finally:await self.store.collect(self.used())
+        event=result.get('event')
+        if not event or not event.get('body'):raise ValueError('This test graphic could not render. Nothing was sent.')
+        render_ms=round((time.monotonic()-started)*1000)
+        body=base64.b64decode(event['body'],validate=True);offset=0;entries=[]
+        start=time.time()+2 if group else 0;event_id='test-'+uuid.uuid4().hex
+        for member,member_width in widths:
+            artwork=self.slice_artwork(body,offset,member_width) if group else body;offset+=member_width
+            entries.append((member,{**event,'body':base64.b64encode(artwork).decode(),'source':'test','event_id':event_id,'start_at':start}))
+        await self.pipeline.submit(entries)
+        return {'queued':True,'render_ms':render_ms,'displays':len(widths),'message':'Test graphic queued'+(' for the group' if group else '')+'. The deck continues with the next card after the interrupt.'}
+
     def register(self):
         routes=self.app.router
         async def object_data(request):
@@ -497,6 +532,7 @@ class Studio:
             if not isinstance(data,dict):raise ValueError('Use a valid form.')
             return data
         async def state(request):return web.json_response(self.public())
+        async def test_graphic(request):return web.json_response(await self.test_graphic(await object_data(request)))
         async def deck_save(request):
             payload=await object_data(request);ident=payload.get('id') or uuid.uuid4().hex
             if not isinstance(ident,str) or len(ident)>80:raise ValueError('Invalid deck.')
@@ -608,6 +644,7 @@ class Studio:
             if ident not in self.data['graphics']:raise ValueError('Graphic not found.')
             if any(i.get('graphic')==ident for d in self.data['decks'].values() for i in d['items']):raise ValueError('Remove this graphic from saved decks first.')
             await self.mutate(lambda:self.data['graphics'].pop(ident,None));(self.root/'graphics'/ident).unlink(missing_ok=True);return web.json_response(self.public())
+        routes.add_post('/api/studio/test-graphic',test_graphic)
         routes.add_get('/api/studio',state);routes.add_post('/api/studio/decks',deck_save);routes.add_delete('/api/studio/decks/{ident}',deck_delete)
         routes.add_post('/api/studio/ha-action',ha_action);routes.add_post('/api/studio/devices/{ident}',device_save);routes.add_post('/api/studio/action',action);routes.add_get('/api/studio/preview',preview)
         routes.add_get('/api/studio/entities',entities);routes.add_post('/api/studio/settings',settings)

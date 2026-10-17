@@ -12,15 +12,26 @@ import card_utils
 card_utils.fetch_logo=lambda *args,**kwargs:None
 card_utils.warm_priority_graphic=lambda *args,**kwargs:None
 from card_worker import renderer_body,artwork
+from special_graphics import tests_for,render_test
 
 catalog=json.loads((ROOT/'pixora_led_displays/card_catalog.json').read_text(encoding='utf-8'))
-rendered=0;aliases=0;seen=set()
+rendered=0;aliases=0;seen=set();button_tests=0
 for card in catalog['cards']:
     path=source/'addons'/(card['module']+'.py')
     text=path.read_text(encoding='utf-8-sig')
-    if not any(token in text for token in ('maybe_score_alert','_priority','_group_wall')):continue
+    if not tests_for(card) and not any(token in text for token in ('maybe_score_alert','_priority','_group_wall')):continue
     spec=importlib.util.spec_from_file_location('audit_'+card['module'],path)
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    import base64
+    for key in tests_for(card):
+        for width in (64,128,192):
+            opts={o['key']:o.get('default','') for o in card.get('options',[])}
+            opts.update({'_target':'matrixportal-s3-'+str(width)+'x32','favoriteTeam':'ALA',key:'group_wall' if width==192 else 'device'})
+            try:result=render_test(module,card,key,opts,width)
+            except Exception as exc:raise AssertionError((card['id'],key,width)) from exc
+            with Image.open(io.BytesIO(base64.b64decode(result['body']))) as image:assert image.size==(width,32)
+            assert result['once'] and result['duration']>0
+            button_tests+=1
     names={name for name in ('_render_score_alert_frames','_render_score_animation_frames','_render_run_animation_frames','_render_goal_animation_frames') if callable(getattr(module,name,None))}
     # Every literal wall renderer referenced by a result must resolve on the card module.
     for node in ast.walk(ast.parse(text)):
@@ -51,4 +62,5 @@ for card in catalog['cards']:
                 normalized=artwork(body,width,timing,True)
                 with Image.open(io.BytesIO(normalized)) as image:assert image.size==(width,32)
                 rendered+=1
+print(f'Graphic buttons passed: {button_tests} option/width tests.')
 print(f'Special artwork passed: {aliases} card renderer aliases, {len(seen)} implementations, {rendered} variant/width renders; provider traffic blocked.')

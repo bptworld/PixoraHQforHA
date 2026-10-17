@@ -71,9 +71,12 @@ async def check():
         deck=asyncio.create_task(playback.deliver(panel,png.getvalue(),64,.2,ident='panel'))
         await first_frame.wait()
         await playback.pipeline.submit([('panel',{'message':'interrupt','duration':.05,'source':'ha'})])
-        await asyncio.wait_for(deck,2)
-        assert timeline==['deck','ha','deck'],timeline
-        assert time.monotonic()-started>=.24,'Interruption consumed the remaining deck dwell'
+        from client import PriorityMessageActive
+        try:await asyncio.wait_for(deck,2)
+        except PriorityMessageActive:pass
+        else:raise AssertionError('Interrupted card resumed instead of advancing')
+        await playback.pipeline.jobs['panel']
+        assert timeline==['deck','ha'],timeline
         attempts=0
         async def busy_write():
             nonlocal attempts
