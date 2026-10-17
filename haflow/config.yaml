@@ -1,7 +1,7 @@
 name: "HAFlow"
-version: "0.1.67"
+version: "0.1.68"
 slug: "haflow"
-description: "A flow editor and runner for Home Assistant automations. Brought to you by PixoraHQ.com."
+description: "Local automations. Moving from old HAFlow? Open the app and choose Import old HAFlow. Brought to you by PixoraHQ.com."
 url: https://github.com/bptworld/PixoraHQforHA/tree/main/haflow
 arch:
   - aarch64

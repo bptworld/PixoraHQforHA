@@ -3889,6 +3889,11 @@ function FlowWorkspace() {
           </div>
         </div>
         <p className="pixora-credit">Brought to you by <a href="https://pixorahq.com/" target="_blank" rel="noopener noreferrer">PixoraHQ.com</a></p>
+        <section className="transfer-notice" aria-label="HAFlow transfer instructions">
+          <strong>Moving from the old HAFlow? Import your saved flows here.</strong>
+          <p>In the old app, save your changes and choose <strong>Library → Export Backup</strong>. Stop the old app, then import that file here. Your flows are added as paused copies.</p>
+          <button type="button" onClick={() => {setMigrationStatus('');setMigrationOpen(true)}}><Upload size={16}/>Import old HAFlow</button>
+        </section>
         <div className="section-title">Flows</div>
         <div className="flow-library">
           <div className="flow-select-menu" onBlur={(event) => {
@@ -3949,7 +3954,6 @@ function FlowWorkspace() {
             <button onClick={exportFlow} title="Export current flow" type="button"><Download size={16} /> Export Flow</button>
             <button onClick={() => importRef.current?.click()} title="Import flow into current canvas" type="button"><Upload size={16} /> Import Flow</button>
             <button onClick={exportBackup} title="Export all flows" type="button"><Download size={16} /> Export Backup</button>
-            <button onClick={() => {setMigrationStatus('');setMigrationOpen(true)}} title="Import a backup or flows from the old HAFlow app" type="button"><Upload size={16} /> Import old HAFlow</button>
             <button onClick={() => setIsRecipeModalOpen(true)} title="Create a flow from a guided recipe" type="button"><FilePlus size={16} /> Recipes</button>
             <button onClick={() => setIsVoiceSetupModalOpen(true)} title="Set up Home Assistant voice commands" type="button"><Mic size={16} /> Voice Setup</button>
             <button onClick={addStarterPack} title="Add starter flows" type="button"><FilePlus size={16} /> Starter Pack</button>
@@ -4242,7 +4246,7 @@ function FlowWorkspace() {
           <section className="log-modal recipe-modal" role="dialog" aria-modal="true" aria-labelledby="migration-title" onMouseDown={event => event.stopPropagation()}>
             <header><div><strong id="migration-title">Import from old HAFlow</strong><span>Bring your existing flows into this installation.</span></div><button type="button" autoFocus disabled={migrationBusy} aria-label="Close import" onClick={() => setMigrationOpen(false)}><X size={18}/></button></header>
             <div className="migration-content">
-              <ol><li>Open the old HAFlow app, expand <strong>Library</strong>, and choose <strong>Export Backup</strong> to download all saved flows. You can also use an <strong>Export Flow</strong> file.</li><li>Choose that JSON file below.</li><li>Review the imported flows and devices here. Stop the old HAFlow app before resuming these flows.</li></ol>
+              <ol><li>Open the old HAFlow app, expand <strong>Library</strong>, and choose <strong>Export Backup</strong> to download all saved flows. You can also use an <strong>Export Flow</strong> file.</li><li>In Home Assistant, stop the old app and turn off its <strong>Start on boot</strong> and <strong>Watchdog</strong>. Keep the old installation and backup.</li><li>Choose that JSON file below. All flows are added as separate, paused copies.</li><li>Close this window, select each imported flow, and check its devices and connections. With the old app stopped, use <strong>Resume</strong> to enable the flows you want. Enable Start on boot and Watchdog for this new app after testing.</li></ol>
               <p>Flows are added as separate, paused copies. Existing flows and unsaved edits stay in place. This does not transfer settings or run history. Device references stay the same; check them if you moved to a different Home Assistant.</p>
               <p><a href="https://github.com/bptworld/PixoraHQforHA/blob/main/haflow/TRANSFER_FLOWS.md" target="_blank" rel="noopener noreferrer">Full transfer instructions and troubleshooting</a></p>
               <p role="status" aria-live="polite">{migrationStatus}</p>
