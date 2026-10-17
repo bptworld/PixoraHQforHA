@@ -1,0 +1,55 @@
+show_card:
+  name: Show card
+  description: Show a message directly over local Wi-Fi, then return to normal playback. No Cloud connection is used.
+  fields:
+    config_entry_id:
+      name: Display
+      required: true
+      selector:
+        config_entry:
+          integration: pixora_local
+    message:
+      name: Message
+      required: true
+      selector:
+        text:
+          multiline: true
+    color:
+      name: Text color
+      default: [255, 255, 255]
+      selector:
+        color_rgb:
+    duration:
+      name: Show for
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 300
+          unit_of_measurement: seconds
+          mode: box
+show_image:
+  name: Show image card
+  description: Send a local Home Assistant image directly to the panel. The image is fitted to the panel without cropping.
+  fields:
+    config_entry_id:
+      name: Display
+      required: true
+      selector:
+        config_entry:
+          integration: pixora_local
+    image_path:
+      name: Image file
+      description: A local allowed file, for example /config/www/washer.png.
+      required: true
+      selector:
+        text:
+    duration:
+      name: Show for
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 300
+          unit_of_measurement: seconds
+          mode: box

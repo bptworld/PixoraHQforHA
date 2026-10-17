@@ -1,0 +1,14 @@
+{
+  "title": "Pixora LED (Local)",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect your Pixora display",
+        "description": "Use firmware 2.0.14 or newer. Restart the display, then connect within two minutes. Enter its local IP address. Home Assistant and the display must be on the same subnet. {reason}",
+        "data": {"host": "Display IP address"}
+      }
+    },
+    "error": {"cannot_connect": "Could not connect. Check the address and restart the display to reopen pairing."},
+    "abort": {"already_configured": "This display is already connected."}
+  }
+}

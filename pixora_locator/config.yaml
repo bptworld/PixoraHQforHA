@@ -1,0 +1,26 @@
+name: "Pixora Locator"
+version: "1.5.0"
+slug: "pixora_locator"
+description: "Connect Pixora Locator to Home Assistant and import selected zones as fresh Locator Places."
+url: https://github.com/bptworld/PixoraHQforHA/tree/main/pixora_locator
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+ingress: true
+ingress_port: 8099
+options:
+  pairing_token: ""
+  poll_seconds: 30
+  distance_units: "mi"
+schema:
+  pairing_token: password
+  poll_seconds: "int(15,300)"
+  distance_units: "list(mi|km)"
+panel_icon: "mdi:map-marker-account"
