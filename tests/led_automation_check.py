@@ -24,7 +24,7 @@ async def check():
         panels=[{'id':'panel1','host':'192.168.1.50','key':'a'*32,'name':'Kitchen','width':64,'height':32,'version':'2.0.18'}]
         with patch.dict(os.environ,{'SUPERVISOR_TOKEN':'test-token'}):
             result=await setup.sync(panels)
-            assert result=={'restart_required':True,'error':''}
+            assert result=={'restart_required':True,'error':'','can_restart':True}
             assert (config/'custom_components/pixora_local/manifest.json').is_file()
             assert len(calls)==1 and calls[0][0]=='http://supervisor/discovery'
             assert calls[0][1]['json']=={'service':'pixora_local','config':{'displays':panels}}
@@ -40,6 +40,7 @@ async def check():
             assert calls[-1][0]=='http://supervisor/core/api/services/homeassistant/restart'
         with patch.dict(os.environ,{},clear=True):
             result=await setup.sync(panels)
+            assert result['can_restart'] is False
             assert result['error'] and 'test-token' not in str(result) and 'a'*32 not in str(result)
         original=(config/'custom_components/pixora_local/client.py').read_bytes()
         with patch.object(module.shutil,'copytree',side_effect=OSError('Cannot stage update')):
@@ -50,3 +51,11 @@ async def check():
         assert (config/'custom_components/pixora_local/client.py').read_bytes()==original
 asyncio.run(check())
 print('Automatic HA setup passed: startup install, complete discovery, idempotent updates, private keys, failure recovery and explicit-only restart.')
+
+# S6 strips the ordinary CMD environment; the launcher must explicitly restore it.
+folder=root/'pixora_led_displays'
+docker=(folder/'Dockerfile').read_text()
+assert 'COPY run.sh /run.sh' in docker and 'chmod 0755 /run.sh' in docker and 'CMD ["/run.sh"]' in docker
+launcher=(folder/'run.sh').read_bytes()
+assert launcher.startswith(b'#!/command/with-contenv bash\n') and b'\r' not in launcher
+assert b'exec python3 /app/app.py' in launcher

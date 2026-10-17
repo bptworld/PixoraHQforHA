@@ -1,3 +1,8 @@
+# 1.0.7
+
+- Load Home Assistant’s container environment before starting the app, restoring Supervisor discovery and the HA restart button.
+- Hide the restart button when HA API access is unavailable and show an actionable error.
+
 # 1.0.6
 
 - Check published S3 firmware and offer one-click download, verification and local installation.

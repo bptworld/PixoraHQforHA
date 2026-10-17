@@ -45,7 +45,7 @@ class HomeAssistantSetup:
     async def supervisor(self, path, payload):
         token = os.environ.get('SUPERVISOR_TOKEN')
         if not token:
-            raise ValueError('Automatic HA setup is available when this app runs in Home Assistant.')
+            raise ValueError('Home Assistant API access is unavailable. Update LED Displays to 1.0.7 or newer and restart the LED Displays app. Your saved displays are kept.')
         try:
             async with self.session.post('http://supervisor/' + path, json=payload,
                     headers={'Authorization':'Bearer ' + token}, allow_redirects=False,
@@ -78,7 +78,7 @@ class HomeAssistantSetup:
             restart = await asyncio.to_thread(loaded) != VERSION
         except OSError:
             restart = True
-        return {'restart_required':restart, 'error':self.error}
+        return {'restart_required':restart, 'error':self.error, 'can_restart':bool(os.environ.get('SUPERVISOR_TOKEN')) and not self.error}
 
     async def restart(self):
         # Only called by the explicit Restart Home Assistant button, never startup/connect.
