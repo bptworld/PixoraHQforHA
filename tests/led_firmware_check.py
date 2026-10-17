@@ -61,8 +61,16 @@ async def check():
             app['firmware_updates'].latest=AsyncMock(return_value=latest)
             app['firmware_updates'].download=AsyncMock(return_value=body)
             assert (await client.post('/api/displays',json={'host':'192.168.1.50'})).status==200
+            with patch.object(Panel,'info',AsyncMock(return_value={'id':'panel','version':'2.0.20','width':128,'height':32})):
+                fresh=await (await client.get('/api/displays/panel/status')).json()
+                assert fresh['display']['width']==128 and fresh['display']['version']=='2.0.20' and 'key' not in fresh['display']
+                stored=json.loads((folder/'data'/'displays.json').read_text())['displays'][0]
+                assert stored['width']==128 and stored['key']=='a'*32 and stored['host']=='192.168.1.50'
+            with patch.object(Panel,'info',AsyncMock(return_value={'id':'wrong','version':'2.0.20','width':64,'height':32})):
+                assert (await client.get('/api/displays/panel/status')).status==400
+                assert json.loads((folder/'data'/'displays.json').read_text())['displays'][0]['width']==128
             result=await (await client.get('/api/firmware?id=panel')).json()
-            assert result=={'current':'2.0.14','latest':'2.0.18','preview':True,'available':True}
+            result.pop('display');assert result=={'current':'2.0.14','latest':'2.0.18','preview':True,'available':True}
             with patch('app.verify_restart',AsyncMock(return_value={'id':'panel','version':'2.0.18'})) as reconnect:
                 response = await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})
                 assert response.status==200 and len(sent)==1 and (await response.json())['verified']

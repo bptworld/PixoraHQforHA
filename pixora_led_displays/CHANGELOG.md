@@ -1,3 +1,9 @@
+# 1.2.10
+
+- Show failed display actions with the display name and actual cause. Keep each affected display’s error visible instead of incorrectly reporting every failure as a group action.
+
+- Refresh and persist confirmed panel dimensions and firmware after USB flashing or size changes. Update setup controls and the Studio device screen from the selected panel without changing its name, pairing or playback.
+
 # 1.2.9
 
 - Move display name, panel size and removal into a visible Manage displays section at the top of Displays & firmware. Remove manual card sending from this setup page. Keep the management and firmware display pickers synchronized.

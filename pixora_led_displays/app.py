@@ -82,6 +82,25 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     async def listing(request):
         return web.json_response({'displays': public()})
 
+    async def refresh_display(ident):
+        info = await selected(ident).info()
+        if info['id'] != ident:
+            raise ValueError('A different display answered at the saved address. Saved details were not changed.')
+        async with lock:
+            previous = state['displays']
+            state['displays'] = [dict(d,width=info['width'],height=info['height'],version=info['version']) if d['id']==ident else d for d in previous]
+            if previous != state['displays']:
+                try: await asyncio.to_thread(persist)
+                except OSError:
+                    state['displays']=previous
+                    raise
+        return info
+
+    async def display_status(request):
+        ident=request.match_info['display_id']
+        await refresh_display(ident)
+        return web.json_response({'display':next(d for d in public() if d['id']==ident)})
+
     async def object_payload(request):
         try:
             payload = await request.json()
@@ -196,11 +215,11 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         return web.json_response({'updated': True})
 
     async def firmware_status(request):
-        client = selected(request.query.get('id'))
-        info = await client.info()
+        info = await refresh_display(request.query.get('id'))
         release = await app['firmware_updates'].latest(force=request.query.get('refresh') == '1')
         return web.json_response({'current':info['version'], 'latest':release['version'],
-            'preview':release['preview'], 'available':version(info['version']) < version(release['version'])})
+            'preview':release['preview'], 'available':version(info['version']) < version(release['version']),
+            'display':next(d for d in public() if d['id']==info['id'])})
 
     async def automatic_update(request):
         payload = await object_payload(request)
@@ -317,6 +336,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app.router.add_get('/', index)
     app.router.add_get('/tools', tools)
     app.router.add_get('/api/displays', listing)
+    app.router.add_get('/api/displays/{display_id}/status', display_status)
     app.router.add_post('/api/displays', pair)
     app.router.add_post('/api/displays/{display_id}/panel',panel_size)
     app.router.add_patch('/api/displays/{display_id}', manage_display)

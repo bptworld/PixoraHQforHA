@@ -604,7 +604,18 @@ class Studio:
                 else:
                     await self.stop(target);await self.selected(target).request('/api/reboot',{})
             outcomes=await asyncio.gather(*(perform(target) for target in targets),return_exceptions=True)
-            if any(isinstance(result,BaseException) for result in outcomes):raise ValueError('Some displays could not complete the group action. Check each display status.')
+            failures=[]
+            names={d['id']:d['name'] for d in self.displays()}
+            for target,result in zip(targets,outcomes):
+                if isinstance(result,BaseException):
+                    reason=str(result) or 'The action was interrupted. Check the display before trying again.'
+                    self.runtime[target]={'playing':False,'error':reason}
+                    if target in self.data['devices']:
+                        self.data['devices'][target].update(playing=False,last_error=reason)
+                    failures.append(names.get(target,target)+': '+reason)
+            if failures:
+                await self.save()
+                raise ValueError('\n'.join(failures))
             return web.json_response(self.public())
         async def ha_action(request):
             data=await object_data(request);ident=data.get('id');client=self.selected(ident)
