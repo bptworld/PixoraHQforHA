@@ -3,8 +3,8 @@
 Connects Home Assistant to Planner, Home Control, and Flows using a secure outbound connection. No public Home Assistant address, Nabu Casa subscription, long-lived token, or port forwarding is needed.
 
 1. Add `https://github.com/bptworld/PixoraHQforHA` to your Home Assistant app/add-on repositories.
-2. Install **Pixora Home Control**.
-3. In **Planner → Smart Home → Home Assistant**, choose **Pair Home Control app**.
+2. Install **Pixora Home Control** in Home Assistant, then open [planner.pixorahq.com](https://planner.pixorahq.com/) and sign in.
+3. In Planner, go to **Smart Home → Home Assistant** and choose **Pair Home Control app**.
 4. Copy the pairing code into this app’s **Configuration → pairing_code**, save, and start the app. Codes expire after ten minutes and work once.
 5. Enable **Start on boot** and **Watchdog**. Planner will show the app as online.
 
