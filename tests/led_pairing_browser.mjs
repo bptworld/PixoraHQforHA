@@ -15,6 +15,7 @@ try {
   const url=new URL(route.request().url());
   if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:html});
   if(url.pathname==='/api/automation-status')return route.fulfill({json:{restart_required:true,error:''}});
+  if(url.pathname==='/api/firmware')return route.fulfill({json:{current:'2.0.18',latest:'2.0.18',available:false,preview:true}});
   if(url.pathname==='/api/displays'){
    if(route.request().method()==='GET')return route.fulfill({json:{displays:[old]}});
    calls++;

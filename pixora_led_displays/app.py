@@ -11,6 +11,7 @@ from PIL import Image, ImageOps
 sys.path.insert(0, str(Path(__file__).parent / 'custom_components' / 'pixora_local'))
 from client import DisplayClient
 from automation import HomeAssistantSetup
+from firmware_updates import FirmwareUpdates, version
 
 
 def image_payload(body, width, height, duration):
@@ -154,6 +155,31 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         await client.update_firmware(await request.read())
         return web.json_response({'updated': True})
 
+    async def firmware_status(request):
+        client = selected(request.query.get('id'))
+        info = await client.info()
+        release = await app['firmware_updates'].latest(force=request.query.get('refresh') == '1')
+        return web.json_response({'current':info['version'], 'latest':release['version'],
+            'preview':release['preview'], 'available':version(info['version']) < version(release['version'])})
+
+    async def automatic_update(request):
+        payload = await object_payload(request)
+        expected = payload.get('version')
+        updates = app['firmware_updates']
+        if updates.update_lock.locked():
+            raise ValueError('A firmware update is already in progress. Check the panel before trying again.')
+        async with updates.update_lock:
+            client = selected(request.query.get('id'))
+            info = await client.info()
+            release = await updates.latest(force=True)
+            if expected != release['version']:
+                raise ValueError('The available firmware changed. Check for updates again before installing.')
+            if version(info['version']) >= version(release['version']):
+                return web.json_response({'updated':False, 'message':'This display is already up to date.'})
+            body = await updates.download(release)
+            await client.update_firmware(body)
+            return web.json_response({'updated':True,'message':'Firmware '+release['version']+' confirmed. The display is restarting; keep it powered on.'})
+
     async def install_actions(request):
         async with lock:
             result = await app['automation'].sync(list(state['displays']))
@@ -168,6 +194,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
 
     async def startup(app):
         app['session'] = ClientSession()
+        app['firmware_updates'] = FirmwareUpdates(app['session'])
         app['automation'] = HomeAssistantSetup(app['session'], root, config_root)
         await app['automation'].sync(list(state['displays']))
 
@@ -187,6 +214,8 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app.router.add_get('/api/automation-status', automation_status)
     app.router.add_post('/api/restart-ha', restart_ha)
     app.router.add_post('/api/update', update_firmware)
+    app.router.add_get('/api/firmware', firmware_status)
+    app.router.add_post('/api/firmware/update', automatic_update)
     return app
 
 

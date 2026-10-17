@@ -1,3 +1,8 @@
+# 1.0.6
+
+- Check published S3 firmware and offer one-click download, verification and local installation.
+- Show installed/latest versions and preview labels; preserve manual file installation under advanced controls.
+
 # 1.0.5
 
 - Install companion updates automatically at app startup.

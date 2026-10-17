@@ -90,3 +90,9 @@ Brought to you by [PixoraHQ.com](https://pixorahq.com/).
 App updates prepare companion updates automatically. If needed, use the single **Restart Home Assistant to finish setup** button in the app. Reconnect a saved display at its new address and HA updates that same display without replacing its entity or automation references. Manual **Reconfigure** in HA remains available for troubleshooting.
 
 If automatic preparation fails, the app keeps your saved panels and shows the reason. Open **Setup troubleshooting > Retry HA setup** after fixing it. This never resends cards or restarts HA automatically.
+
+### Firmware updates
+
+Select a display. The app checks GitHub for the newest S3 user-OTA firmware and shows its installed version. If an update is available, choose **Update display**. The app downloads it, verifies its size and SHA-256, then sends it directly to the panel. No file download or upload is needed. Both S3 panel sizes use the same verified image. Preview releases are labelled. Keep the panel powered on until it restarts.
+
+Internet access is needed only to check and download firmware; sending cards and HA automations stay local. Checks are cached for one hour; **Check for updates** refreshes them. Firmware never installs automatically and uncertain transfers are never retried. **Install a file manually** remains available as an advanced option.

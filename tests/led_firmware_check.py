@@ -1,0 +1,73 @@
+"""No hardware is touched: verify release filtering, bounded download and one-shot OTA routes."""
+import asyncio
+import hashlib
+import json
+import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import AsyncMock
+from aiohttp.test_utils import TestClient, TestServer
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_led_displays'))
+from firmware_updates import FirmwareUpdates, MAX_SIZE
+from app import make_app
+
+async def check():
+    body=bytearray(1024);body[0]=0xe9;body[12:14]=b'\x09\x00';body[32:36]=b'\x32\x54\xcd\xab';body=bytes(body)
+    digest=hashlib.sha256(body).hexdigest()
+    release={'tag_name':'led-local-v2.0.18','prerelease':True,'assets':[{'name':'pixora-v2.0.18-s3-user-ota-firmware.bin','size':len(body),'digest':'sha256:'+digest}]}
+    class Content:
+        def __init__(self,body): self.body=body
+        async def iter_chunked(self,size):
+            for start in range(0,len(self.body),37): yield self.body[start:start+37]
+    class Response:
+        status=200;headers={}
+        def __init__(self,body): self.content=Content(body)
+        async def __aenter__(self): return self
+        async def __aexit__(self,*args): pass
+    class Session:
+        calls=0;bad=False;redirect=False
+        def get(self,url,**kwargs):
+            assert kwargs['allow_redirects'] is False
+            self.calls+=1
+            if 'api.github.com' in url:
+                # Ignore wrong products and releases missing a trusted digest.
+                return Response(json.dumps([{'tag_name':'other-v99.0.0'},release,{'tag_name':'led-local-v3.0.0','assets':[]}]).encode())
+            if self.redirect:
+                response=Response(b'');response.status=302;response.headers={'Location':'http://192.168.1.1/secret'};return response
+            return Response(body+b'x' if self.bad else body)
+    session=Session();updates=FirmwareUpdates(session)
+    latest=await updates.latest();assert latest['version']=='2.0.18' and latest['preview']
+    await updates.latest();assert session.calls==1
+    assert await updates.download(latest)==body
+    for mode in ('bad','redirect'):
+        setattr(session,mode,True)
+        try: await updates.download(latest)
+        except ValueError: pass
+        else: raise AssertionError('Unverified/untrusted firmware accepted')
+        setattr(session,mode,False)
+    sent=[]
+    class Panel:
+        def __init__(self,session,host,key=''): self.host,self.key=host,key
+        async def info(self): return {'id':'panel','name':'Test','version':'2.0.14','width':64,'height':32}
+        async def pair(self): self.key='a'*32
+        async def update_firmware(self,body):
+            sent.append(body)
+            if len(sent)>1: raise ValueError('Uncertain OTA; not retried')
+    with tempfile.TemporaryDirectory() as temp:
+        folder=Path(temp);config=folder/'ha';config.mkdir()
+        app=make_app(folder/'data',config,Panel,ingress_peer='127.0.0.1')
+        async with TestClient(TestServer(app)) as client:
+            app['firmware_updates'].latest=AsyncMock(return_value=latest)
+            app['firmware_updates'].download=AsyncMock(return_value=body)
+            assert (await client.post('/api/displays',json={'host':'192.168.1.50'})).status==200
+            result=await (await client.get('/api/firmware?id=panel')).json()
+            assert result=={'current':'2.0.14','latest':'2.0.18','preview':True,'available':True}
+            assert (await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})).status==200 and len(sent)==1
+            assert (await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})).status==400 and len(sent)==2
+            app['firmware_updates'].download.side_effect=ValueError('Checksum mismatch')
+            assert (await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})).status==400 and len(sent)==2
+            assert (await client.post('/api/firmware/update?id=unknown')).status==400 and len(sent)==2
+            async with app['firmware_updates'].update_lock:
+                assert (await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})).status==400 and len(sent)==2
+asyncio.run(check())
+print('Firmware updates passed: release selection/cache, chunked download, checksum/size, redirect isolation, selected panel, update serialization and no retries.')
