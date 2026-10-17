@@ -42,6 +42,12 @@ async def check():
    await client.post('/api/displays',json={'host':'192.168.1.50'})
    async def deck(name,card,ident=None):
     return await client.post('/api/studio/decks',json={'id':ident,'name':name,'items':[{'id':'item','card':card,'options':{'showWeather':False},'duration':1}]})
+   response=await deck('Heartbeat first','heartbeat');assert response.status==200,await response.text();heartbeat=(await response.json())['id']
+   for width in (64,128):
+    response=await client.get('/api/studio/preview',params={'deck':heartbeat,'item':'item','width':str(width)})
+    assert response.status==200,await response.text() if response.status!=200 else ''
+    with Image.open(io.BytesIO(await response.read())) as image:assert image.size==(width,32) and image.n_frames>1
+   assert (await client.delete('/api/studio/decks/'+heartbeat)).status==200
    response=await deck('Clock','clock');assert response.status==200,await response.text();deck1=(await response.json())['id']
    assert studio.store.installed('clock') and (studio.store.root/'card_utils.py').is_file()
    response=await deck('Calendar','clock_calendar');assert response.status==200;deck2=(await response.json())['id']

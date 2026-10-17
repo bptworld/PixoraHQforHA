@@ -8,9 +8,11 @@ sys.path[:0]=[str(root),str(root/'addons')]
 sys.dont_write_bytecode=True
 spec=importlib.util.spec_from_file_location('selected_card',root/'addons'/(request['module']+'.py'))
 module=importlib.util.module_from_spec(spec)
-import card_utils
 settings=request.get('settings',{})
-card_utils._settings_value=lambda key,default='':settings.get(key,default)
+# Standalone cards need not download or import the optional shared helper.
+if (root/'card_utils.py').is_file():
+    import card_utils
+    card_utils._settings_value=lambda key,default='':settings.get(key,default)
 spec.loader.exec_module(module)
 if request['module']=='home_assistant_entity':
     state=request.get('ha_state')

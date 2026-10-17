@@ -1,3 +1,8 @@
+# 1.1.4
+
+- Fix standalone card previews and playback when Heartbeat is the first downloaded card.
+- Show preview loading and readable failure messages with a manual retry option. Separate card names from timing details.
+
 # 1.1.3
 
 - Fix card downloads by hashing exact public Git blobs, independent of Windows line endings. Preserve integrity checks and identify any failed file.
