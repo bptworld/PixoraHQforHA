@@ -2,6 +2,8 @@
 
 Pixora Locator privately connects actively sharing phones to Home Assistant using a pairing token.
 
+Access your Pixora account at [planner.pixorahq.com](https://planner.pixorahq.com/). The Locator phone app is required; create the Home Assistant pairing token in that phone app using the steps below.
+
 ## Install
 
 1. Navigate to the app store in the Home Assistant UI: **Settings**, **Apps**, then **Install App**.
