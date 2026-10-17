@@ -2,6 +2,7 @@
 import asyncio
 import base64
 import io
+import hmac
 import json
 import os
 import sys
@@ -12,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent / 'custom_components' / 'pixora_loc
 from client import DisplayClient
 from automation import HomeAssistantSetup
 from firmware_updates import FirmwareUpdates, version, verify_restart
+from studio import Studio
 
 
 def image_payload(body, width, height, duration):
@@ -54,7 +56,11 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     @web.middleware
     async def errors(request, handler):
         try:
-            if request.remote != ingress_peer:
+            ha_action = request.path == '/api/studio/ha-action' and request.method == 'POST'
+            if ha_action:
+                auth=request.headers.get('Authorization','')
+                if not any(hmac.compare_digest(auth,'Bearer '+d['key']) for d in state['displays']):raise web.HTTPForbidden()
+            elif request.remote != ingress_peer:
                 raise web.HTTPForbidden()
             if request.headers.get('Sec-Fetch-Site') == 'cross-site':
                 raise web.HTTPForbidden()
@@ -65,6 +71,9 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app.middlewares.append(errors)
 
     async def index(request):
+        return web.FileResponse(Path(__file__).with_name('studio.html'))
+
+    async def tools(request):
         return web.FileResponse(Path(__file__).with_name('index.html'))
 
     async def listing(request):
@@ -197,18 +206,33 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         await app['automation'].restart()
         return web.json_response({'message':'Home Assistant restart requested. Wait for HA to reconnect.'})
 
+    studio = Studio.__new__(Studio)
+    app['studio'] = studio
+    studio.app = app
+    studio.register()
+
     async def startup(app):
         app['session'] = ClientSession()
+        studio.__init__(app, root, selected, lambda:state['displays'])
         app['firmware_updates'] = FirmwareUpdates(app['session'])
         app['automation'] = HomeAssistantSetup(app['session'], root, config_root)
         await app['automation'].sync(list(state['displays']))
+        for ident,cfg in list(studio.data['devices'].items()):
+            if cfg.get('playing'):
+                try:await studio.play(ident)
+                except ValueError as exc:
+                    cfg['playing']=False
+                    studio.runtime[ident]={'playing':False,'error':str(exc)}
+                    await studio.save()
 
     async def cleanup(app):
+        await studio.shutdown()
         await app['session'].close()
 
     app.on_startup.append(startup)
     app.on_cleanup.append(cleanup)
     app.router.add_get('/', index)
+    app.router.add_get('/tools', tools)
     app.router.add_get('/api/displays', listing)
     app.router.add_post('/api/displays', pair)
     app.router.add_patch('/api/displays/{display_id}', manage_display)

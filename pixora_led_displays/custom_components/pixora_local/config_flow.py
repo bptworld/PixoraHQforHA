@@ -53,10 +53,13 @@ class PixoraLocalFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not isinstance(displays, list) or len(displays) > 30:
             return self.async_abort(reason='invalid_discovery')
         for display in displays:
+            display=dict(display)
+            if not re.fullmatch('[a-z0-9_]+',discovery_info.slug):return self.async_abort(reason='invalid_discovery')
+            display['app_host']='http://'+discovery_info.slug.replace('_','-')+':4188'
             await self.hass.config_entries.flow.async_init(
                 DOMAIN, context={'source': 'integration_discovery'}, data=display)
         marker = Path(self.hass.config.path('.pixora-led-ha-version'))
-        await self.hass.async_add_executor_job(marker.write_text, '1.0.5')
+        await self.hass.async_add_executor_job(marker.write_text, '1.1.0')
         return self.async_abort(reason='panels_registered')
 
     async def async_step_integration_discovery(self, display):
@@ -71,6 +74,10 @@ class PixoraLocalFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason='invalid_discovery')
         await self.async_set_unique_id(ident)
         data = {'host':client.host, 'key':key, 'device_id':ident}
+        app_host=display.get('app_host','')
+        if app_host:
+            if not re.fullmatch(r'http://[a-z0-9-]+:4188',app_host):return self.async_abort(reason='invalid_discovery')
+            data['app_host']=app_host
         existing = next((entry for entry in self.hass.config_entries.async_entries(DOMAIN) if entry.unique_id == ident), None)
         if existing:
             if existing.source != 'ignore' and any(existing.data.get(k) != v for k,v in data.items()):

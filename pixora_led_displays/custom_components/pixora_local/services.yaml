@@ -1,6 +1,7 @@
 show_card:
   name: Show card
-  description: Show a message directly over local Wi-Fi, then show Waiting…. No Cloud connection is used.
+  description: Show a priority message directly over local Wi-Fi, then resume the
+    deck or show Waiting.
   fields:
     config_entry_id:
       name: Display
@@ -16,9 +17,12 @@ show_card:
           multiline: true
     color:
       name: Text color
-      default: [255, 255, 255]
+      default:
+      - 255
+      - 255
+      - 255
       selector:
-        color_rgb:
+        color_rgb: null
     duration:
       name: Show for
       default: 10
@@ -30,7 +34,8 @@ show_card:
           mode: box
 show_image:
   name: Show image card
-  description: Send a local Home Assistant image directly to the panel. The image is fitted to the panel without cropping.
+  description: Send a local Home Assistant image directly to the panel. The image
+    is fitted to the panel without cropping.
   fields:
     config_entry_id:
       name: Display
@@ -43,7 +48,7 @@ show_image:
       description: A local allowed file, for example /config/www/washer.png.
       required: true
       selector:
-        text:
+        text: null
     duration:
       name: Show for
       default: 10
@@ -53,3 +58,28 @@ show_image:
           max: 300
           unit_of_measurement: seconds
           mode: box
+play_deck:
+  name: Play deck
+  description: Start the assigned local deck or choose a saved deck by name.
+  fields:
+    config_entry_id:
+      name: Display
+      required: true
+      selector:
+        config_entry:
+          integration: pixora_local
+    deck:
+      name: Deck name or ID
+      description: Leave blank to use the assigned deck.
+      selector:
+        text: null
+pause_deck:
+  name: Pause deck
+  description: Pause local deck playback.
+  fields:
+    config_entry_id:
+      name: Display
+      required: true
+      selector:
+        config_entry:
+          integration: pixora_local

@@ -1,3 +1,11 @@
+# 1.1.0
+
+- Redesign the local app around a 142-card catalog, editable saved decks, per-display playback and previews.
+- Download and verify only cards used by saved decks. Remove unused card-specific files; keep shared helpers, fonts and common assets on the hub.
+- Add device groups, brightness, quiet hours, local uploads and a simple Graphics Lab.
+- Add native HA Play/Pause deck actions and automatic companion registration. HA messages interrupt decks and playback resumes afterwards.
+- Use local S3 firmware 2.0.19 for deck priority, brightness and reboot controls. Firmware source stays private.
+
 # 1.0.8
 
 - Reconnect automatically after a one-click firmware update to restore saved pairing and the Waiting screen.

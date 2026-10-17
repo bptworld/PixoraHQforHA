@@ -51,6 +51,20 @@ async def check():
     try: await callback(types.SimpleNamespace(data={**data,'config_entry_id':'missing'},service='show_card'))
     except HAError: pass
     else: raise AssertionError('Missing display accepted')
+    panel.app_host='http://test-pixora-led-displays:4188';panel.device_id='stable';panel.key='a'*32
+    posts=[]
+    class Reply:
+        status=200
+        async def __aenter__(self):return self
+        async def __aexit__(self,*args):pass
+        async def json(self):return {'accepted':True}
+    class Session:
+        def post(self,url,**kwargs):posts.append((url,kwargs));return Reply()
+    integration.async_get_clientsession=lambda hass:Session()
+    deck_callback,deck_schema=callbacks['play_deck']
+    await deck_callback(types.SimpleNamespace(service='play_deck',data=deck_schema({'config_entry_id':'entry1','deck':'Evening'})))
+    assert posts[-1][0]=='http://test-pixora-led-displays:4188/api/studio/ha-action'
+    assert posts[-1][1]['json']=={'id':'stable','action':'play','deck':'Evening'} and not posts[-1][1]['allow_redirects']
     entry=types.SimpleNamespace(data={'host':'192.168.1.50','key':'a'*32,'device_id':'stable'},title='Kitchen',entry_id='entry1')
     class Client:
         def __init__(self, session,host,key=''): self.host,self.key=host,key
@@ -74,10 +88,10 @@ async def check():
     assert result['title']=='New panel' and result['data']['device_id']=='new'
     result=await flow.async_step_integration_discovery({'id':'bad','key':'secret','host':'192.168.1.71'})
     assert result['reason']=='invalid_discovery'
-    result=await flow.async_step_hassio(types.SimpleNamespace(config={'displays':[{'id':'stable'}]}))
+    result=await flow.async_step_hassio(types.SimpleNamespace(config={'displays':[{'id':'stable'}]},slug='6264a0fa_pixora_led_displays'))
     assert result['reason']=='panels_registered'
-    manager.flow.async_init.assert_awaited_once_with('pixora_local',context={'source':'integration_discovery'},data={'id':'stable'})
-    assert Path(temp.name,'.pixora-led-ha-version').read_text()=='1.0.5'
+    manager.flow.async_init.assert_awaited_once_with('pixora_local',context={'source':'integration_discovery'},data={'id':'stable','app_host':'http://6264a0fa-pixora-led-displays:4188'})
+    assert Path(temp.name,'.pixora-led-ha-version').read_text()=='1.1.0'
     entity=notify_module.PixoraDisplay(panel,entry)
     try: await entity.async_send_message('Done')
     except HAError: pass

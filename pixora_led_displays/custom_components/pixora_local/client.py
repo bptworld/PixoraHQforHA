@@ -19,6 +19,10 @@ def local_host(value):
     return host
 
 
+class PriorityMessageActive(ValueError):
+    """A deck frame was explicitly rejected because an HA message has priority."""
+
+
 class DisplayClient:
     def __init__(self, session, host, key=''):
         self.session, self.host, self.key = session, local_host(host), key
@@ -36,6 +40,11 @@ class DisplayClient:
                 if response.status == 401:
                     raise ValueError('Display authorization failed. Use Reconfigure in the integration to reconnect it.')
                 if response.status == 409:
+                    try:
+                        detail=await response.json()
+                    except (ValueError,aiohttp.ClientError):detail={}
+                    if isinstance(detail,dict) and detail.get('error')=='priority_message_active':
+                        raise PriorityMessageActive('An HA message has priority.')
                     raise ValueError('Display is busy. This card was not accepted.')
                 if response.status not in (200, 202):
                     raise ValueError('Display rejected the request (' + str(response.status) + ').')
@@ -45,7 +54,7 @@ class DisplayClient:
                     raise ValueError('The display returned an invalid response. The request was not retried.') from exc
                 if not isinstance(result, dict):
                     raise ValueError('The display returned an invalid response.')
-                if path in ('/api/message', '/api/frame') and result.get('accepted') is not True:
+                if path in ('/api/message', '/api/frame', '/api/settings', '/api/reboot') and result.get('accepted') is not True:
                     raise ValueError('The display did not confirm this card. Check it before trying again.')
                 return result
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:

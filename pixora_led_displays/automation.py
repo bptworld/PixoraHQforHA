@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 import aiohttp
 
-VERSION = '1.0.5'
+VERSION = '1.1.0'
 
 def install_companion(root, config_root):
     source = Path(__file__).parent / 'custom_components/pixora_local'
@@ -64,7 +64,7 @@ class HomeAssistantSetup:
             try:
                 await asyncio.to_thread(install_companion, self.root, self.config_root)
                 # Supervisor keeps one discovery record per app/service. Send the whole catalog.
-                await self.supervisor('discovery', {'service':'pixora_local', 'config':{'displays':displays}})
+                await self.supervisor('discovery', {'service':'pixora_local', 'config':{'displays':displays,'companion_version':VERSION}})
                 self.error = ''
             except (ValueError,OSError) as exc:
                 self.error = str(exc)
