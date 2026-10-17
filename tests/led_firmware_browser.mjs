@@ -15,7 +15,7 @@ try{
   if(url.pathname==='/api/firmware/update'){
    updates++;assert.equal(url.searchParams.get('id'),updates===1?'center':'left');assert.deepEqual(route.request().postDataJSON(),{version:'2.0.18'});
    if(!fail)await new Promise(resolve=>releaseUpdate=resolve);
-   return fail?route.fulfill({status:400,json:{error:'Update outcome is uncertain.'}}):route.fulfill({json:{updated:true,verified:true,current:'2.0.18',message:'Firmware 2.0.18 confirmed running. Display reconnected and ready.'}});
+   return fail?route.fulfill({status:400,json:{error:'Update not started. The display did not answer the status check.'}}):route.fulfill({json:{updated:true,verified:true,current:'2.0.18',message:'Firmware 2.0.18 confirmed running. Display reconnected and ready.'}});
   }
   throw Error('Unexpected request '+url.pathname);
  });
@@ -30,7 +30,7 @@ try{
  await page.locator('#display').selectOption('left');assert.equal(await page.locator('#firmwareDisplay').inputValue(),'left');
  await page.locator('#checkFirmware').click();await page.locator('#autoUpdate').waitFor({state:'visible'});fail=true;
  await page.locator('#autoUpdate').click();await page.locator('#firmwareStatus.error').waitFor();
- assert.equal(updates,2);assert.match(await page.locator('#firmwareStatus').innerText(),/not retried/);
+ assert.equal(updates,2);assert.equal(await page.locator('#firmwareStatus').innerText(),'Update not started. The display did not answer the status check.');
  assert.equal(await page.locator('#autoUpdate').isVisible(),false);
  console.log('Firmware browser passed: automatic check, preview label, one-click selected-panel update, no file upload and no automatic retry.');
 }finally{await browser.close()}

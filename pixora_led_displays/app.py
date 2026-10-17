@@ -4,13 +4,14 @@ import base64
 import io
 import hmac
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 from aiohttp import web, ClientSession
 from PIL import Image, ImageOps
 sys.path.insert(0, str(Path(__file__).parent / 'custom_components' / 'pixora_local'))
-from client import DisplayClient
+from client import DisplayClient, display_connection
 from automation import HomeAssistantSetup
 from firmware_updates import FirmwareUpdates, version, verify_restart, verify_panel_size
 from studio import Studio
@@ -209,16 +210,49 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
             raise ValueError('A firmware update is already in progress. Check the panel before trying again.')
         async with updates.update_lock:
             client = selected(request.query.get('id'))
-            info = await client.info()
+            try:
+                info = await client.info()
+            except ValueError as exc:
+                logging.warning('Firmware preflight failed for %s: %s', client.host, exc)
+                raise ValueError('Update not started. '+str(exc)) from exc
+            if info['id'] != request.query.get('id'):
+                raise ValueError('Update not started: a different display answered at the saved address.')
             release = await updates.latest(force=True)
             if expected != release['version']:
                 raise ValueError('The available firmware changed. Check for updates again before installing.')
             if version(info['version']) >= version(release['version']):
                 return web.json_response({'updated':False, 'message':'This display is already up to date.'})
             body = await updates.download(release)
-            await client.update_firmware(body)
-            verified = await verify_restart(client, info['id'], release['version'])
+            async with display_connection(app['session'], client.host):
+                try:
+                    current = await client.info()
+                except ValueError as exc:
+                    raise ValueError('Update not started. '+str(exc)) from exc
+                if current['id'] != info['id']:
+                    raise ValueError('Update not started: a different display answered at the saved address.')
+                if version(current['version']) >= version(release['version']):
+                    return web.json_response({'updated':False,'message':'This display is already up to date.'})
+                logging.warning('Firmware %s transfer starting for %s', release['version'], client.host)
+                transfer_error = None
+                try:
+                    await client.update_firmware(body)
+                except ValueError as exc:
+                    transfer_error = exc
+                    logging.warning('Firmware transfer unconfirmed for %s: %s; checking status only', client.host, exc)
+                try:
+                    verified = await verify_restart(client, info['id'], release['version'])
+                except ValueError:
+                    studio.pipeline.blocked.add(info['id'])
+                    raise
+                if not verified:
+                    studio.pipeline.blocked.add(info['id'])
+                if transfer_error and not verified:
+                    raise ValueError('Firmware transfer could not be confirmed, and the target version did not answer after restart. Keep the display powered on and check its current IP address. Firmware was not resent.') from transfer_error
             if verified:
+                logging.warning('Firmware %s confirmed for %s', verified['version'], client.host)
+                async with lock:
+                    state['displays'] = [dict(d,version=verified['version'],**{k:verified[k] for k in ('width','height') if k in verified}) if d['id']==info['id'] else d for d in state['displays']]
+                    await asyncio.to_thread(persist)
                 return web.json_response({'updated':True,'verified':True,'current':verified['version'],
                     'message':'Firmware '+verified['version']+' confirmed running. Display reconnected and ready.'})
             return web.json_response({'updated':True,'verified':False,

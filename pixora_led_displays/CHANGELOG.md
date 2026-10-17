@@ -1,3 +1,9 @@
+# 1.2.8
+
+- Serialize hub connections to each panel during firmware transfer and restart verification so deck traffic waits while other displays continue.
+- Verify the running version after an unconfirmed upload without resending firmware. Keep delivery blocked if verification fails.
+- Distinguish a failed status check from a firmware upload failure, record update stages in the app logs, and refresh saved firmware details after verification.
+
 # 1.2.7
 
 - Add a Display picker inside Panel firmware, synchronized with the main picker. Lock both during updates so checks, automatic updates and manual uploads use the intended display.

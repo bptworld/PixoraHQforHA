@@ -2,8 +2,28 @@
 import asyncio
 import ipaddress
 import re
+import weakref
+from contextlib import asynccontextmanager
 
 import aiohttp
+
+_connections = weakref.WeakKeyDictionary()
+
+@asynccontextmanager
+async def display_connection(session, host):
+    """One app connection per panel; an OTA owns it through restart verification."""
+    hosts = _connections.setdefault(session, {})
+    connection = hosts.setdefault(host, {'lock': asyncio.Lock(), 'owner': None})
+    task = asyncio.current_task()
+    if connection['owner'] is task:
+        yield
+        return
+    async with connection['lock']:
+        connection['owner'] = task
+        try:
+            yield
+        finally:
+            connection['owner'] = None
 
 
 def local_host(value):
@@ -32,6 +52,10 @@ class DisplayClient:
         self.session, self.host, self.key = session, local_host(host), key
 
     async def request(self, path, payload=None):
+        async with display_connection(self.session, self.host):
+            return await self._request(path, payload)
+
+    async def _request(self, path, payload=None):
         headers = {'Authorization': 'Bearer ' + self.key} if self.key else {}
         try:
             async with self.session.request(
@@ -62,6 +86,8 @@ class DisplayClient:
                     raise ValueError('The display did not confirm this card. Check it before trying again.')
                 return result
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            if payload is None:
+                raise ValueError('The display at '+self.host+' did not answer the status check. Check its power and current IP address.') from exc
             raise ValueError('Could not confirm delivery. Check the display; the request was not retried.') from exc
 
     async def info(self):
@@ -103,6 +129,10 @@ class DisplayClient:
         await self.request('/api/message', {'message': message, 'color': ''.join(f'{c:02X}' for c in color), 'duration': duration})
 
     async def update_firmware(self, body):
+        async with display_connection(self.session, self.host):
+            return await self._update_firmware(body)
+
+    async def _update_firmware(self, body):
         if not 1024 <= len(body) <= 2097152 or body[0] != 0xe9 or body[12:14] != b'\x09\x00' or body[32:36] != b'\x32\x54\xcd\xab':
             raise ValueError('Choose MatrixPortal S3 user-OTA firmware, not a factory image.')
         try:
