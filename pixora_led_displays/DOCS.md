@@ -56,3 +56,10 @@ Only S3 64×32 and 128×32 panels are supported. Both use the same user-OTA firm
 Add this app repository: **https://github.com/bptworld/PixoraHQforHA**.
 
 This release has local software, browser and firmware build checks. Physical-panel verification of new deck controls remains pending. No panel was flashed automatically.
+
+
+## Uninstall cleanly
+
+Before uninstalling, open LED Studio and expand **Remove Studio before uninstalling** at the bottom (also available in Displays & firmware). Type **REMOVE** and choose **Remove Studio data and HA devices**. Wait for **Cleanup complete**. This permanently removes all Studio data, downloaded cards and helpers, graphics, keys, local Studio backups, Pixora LED (Local) HA devices/entities and installed companion files. If cleanup fails, keep the app installed and use the same option again. Cleanup mode prevents devices and files from being recreated, including after an app restart.
+
+Then uninstall **Pixora LED Studio** in **Settings → Apps** and restart Home Assistant to unload the companion actions. HA removes the app package and remaining private storage, including the small cleanup marker and Supervisor options. Panel firmware and existing HA backups are unchanged. Update any automations that referenced the removed entities.

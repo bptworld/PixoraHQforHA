@@ -64,6 +64,8 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
                 raise web.HTTPForbidden()
             if request.headers.get('Sec-Fetch-Site') == 'cross-site':
                 raise web.HTTPForbidden()
+            if (root/'.cleanup-started').exists() and request.path.startswith('/api/') and request.path not in ('/api/cleanup','/api/restart-ha','/api/automation-status'):
+                raise ValueError('Cleanup mode is active. Finish cleanup, then uninstall this app.')
             return await handler(request)
         except (ValueError, OSError) as exc:
             return web.json_response({'error': str(exc)}, status=400)
@@ -206,6 +208,22 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         await app['automation'].restart()
         return web.json_response({'message':'Home Assistant restart requested. Wait for HA to reconnect.'})
 
+    async def uninstall_cleanup(request):
+        payload = await object_payload(request)
+        if payload.get('confirmation') != 'REMOVE':
+            raise ValueError('Type REMOVE to confirm deleting all Studio data and Pixora LED HA devices.')
+        async with lock:
+            async with studio.lock:
+                root.mkdir(parents=True,exist_ok=True)
+                (root/'.cleanup-started').write_text('Uninstall cleanup active. Do not reinstall companion.\n')
+                await studio.shutdown()
+                async with app['automation'].lock:
+                    await app['automation'].remove_ha()
+                    await asyncio.to_thread(app['automation'].remove_files)
+                state['displays']=[]
+                studio.cache.clear()
+        return web.json_response({'message':'Cleanup complete. Uninstall Pixora LED Studio from HA Settings > Apps now. Restart HA afterward to unload the removed companion actions. Panel firmware and existing HA backups are unchanged.'})
+
     studio = Studio.__new__(Studio)
     app['studio'] = studio
     studio.app = app
@@ -218,7 +236,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         app['automation'] = HomeAssistantSetup(app['session'], root, config_root)
         await app['automation'].sync(list(state['displays']))
         for ident,cfg in list(studio.data['devices'].items()):
-            if cfg.get('playing'):
+            if cfg.get('playing') and not (root/'.cleanup-started').exists():
                 try:await studio.play(ident)
                 except ValueError as exc:
                     cfg['playing']=False
@@ -242,6 +260,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app.router.add_post('/api/install-actions', install_actions)
     app.router.add_get('/api/automation-status', automation_status)
     app.router.add_post('/api/restart-ha', restart_ha)
+    app.router.add_post('/api/cleanup', uninstall_cleanup)
     app.router.add_post('/api/update', update_firmware)
     app.router.add_get('/api/firmware', firmware_status)
     app.router.add_post('/api/firmware/update', automatic_update)

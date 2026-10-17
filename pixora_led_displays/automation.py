@@ -3,6 +3,7 @@ import asyncio
 import os
 import shutil
 import uuid
+from urllib.parse import quote
 from pathlib import Path
 import aiohttp
 
@@ -60,6 +61,8 @@ class HomeAssistantSetup:
             raise ValueError('Could not confirm HA setup. Your connected displays are saved; use Retry HA setup.') from exc
 
     async def sync(self, displays):
+        if (self.root / ".cleanup-started").exists():
+            return {"restart_required":False,"error":"Cleanup mode is active. Finish cleanup, then uninstall this app.","can_restart":False}
         async with self.lock:
             try:
                 await asyncio.to_thread(install_companion, self.root, self.config_root)
@@ -83,3 +86,50 @@ class HomeAssistantSetup:
     async def restart(self):
         # Only called by the explicit Restart Home Assistant button, never startup/connect.
         await self.supervisor('core/api/services/homeassistant/restart', {})
+
+    async def cleanup_request(self, method, path, payload=None):
+        token = os.environ.get('SUPERVISOR_TOKEN')
+        if not token: raise ValueError('Home Assistant API is unavailable. Cleanup has not completed.')
+        try:
+            async with self.session.request(method, 'http://supervisor/' + path,
+                    json=payload, headers={'Authorization':'Bearer '+token},
+                    allow_redirects=False, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                if response.status != 200:
+                    raise ValueError('HA cleanup was not confirmed. Keep the app installed and try cleanup again.')
+                return await response.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            raise ValueError('HA cleanup outcome could not be confirmed. Keep the app installed and try cleanup again.') from exc
+
+    async def remove_ha(self):
+        # Replace this app's discovery with an empty catalog, then remove its owned record.
+        result = await self.cleanup_request('POST','discovery',{'service':'pixora_local','config':{'displays':[]}})
+        ident = result.get('data',{}).get('uuid') if result.get('result') == 'ok' else None
+        if not isinstance(ident,str) or not ident: raise ValueError('Could not confirm discovery cleanup.')
+        result = await self.cleanup_request('DELETE','discovery/'+quote(ident,safe=''))
+        if result.get('result') != 'ok': raise ValueError('Could not remove app discovery.')
+        path = 'core/api/config/config_entries/entry'
+        entries = await self.cleanup_request('GET',path+'?domain=pixora_local')
+        if not isinstance(entries,list): raise ValueError('Could not list Pixora LED devices.')
+        for entry in entries:
+            if entry.get('domain') != 'pixora_local': continue
+            ident=entry.get('entry_id')
+            if not isinstance(ident,str) or not ident: raise ValueError('Invalid HA display entry.')
+            result = await self.cleanup_request('DELETE',path+'/'+quote(ident,safe=''))
+            if not isinstance(result,dict) or result.get('require_restart') is True:
+                raise ValueError('Restart HA, then run cleanup again to finish removing display devices.')
+        remaining = await self.cleanup_request('GET',path+'?domain=pixora_local')
+        if not isinstance(remaining,list) or any(e.get('domain')=='pixora_local' for e in remaining):
+            raise ValueError('Some Pixora LED devices remain. Keep the app installed and run cleanup again.')
+
+    def remove_files(self):
+        # Fixed, app-owned paths only; never traverse links into other HA data.
+        target=self.config_root/'custom_components'/'pixora_local'
+        if target.parent.resolve() != self.config_root.resolve()/'custom_components':
+            raise ValueError('Cannot clean a linked custom_components folder. Remove the Pixora integration manually.')
+        if target.is_symlink(): target.unlink()
+        elif target.exists(): shutil.rmtree(target)
+        (self.config_root/'.pixora-led-ha-version').unlink(missing_ok=True)
+        for path in self.root.iterdir():
+            if path.name in ('.cleanup-started','options.json'): continue
+            if path.is_symlink() or path.is_file(): path.unlink()
+            elif path.is_dir(): shutil.rmtree(path)

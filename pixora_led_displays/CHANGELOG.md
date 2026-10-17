@@ -1,3 +1,7 @@
+# 1.1.2
+
+- Add confirmed pre-uninstall cleanup for Studio data, downloaded files, companion files and HA display devices. Prevent recreation after cleanup starts and report incomplete cleanup for retry.
+
 # 1.1.1
 
 - Add remembered Light (blue) and Dark (Planner Midnight) themes across Studio and display tools.
