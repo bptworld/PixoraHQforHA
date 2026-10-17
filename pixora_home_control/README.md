@@ -1,3 +1,17 @@
+**IMPORTANT — This is the current app from PixoraHQ for Home Assistant.**
+
+**App repository: `https://github.com/bptworld/PixoraHQforHA`**
+
+Add this repository once in **Settings → Apps → App store → ⋮ → Repositories** to find all PixoraHQ Home Assistant apps and their updates.
+
+**Moving from an older repository?** Back up the old app, turn off its **Start on boot** and **Watchdog**, and **Stop** it before starting this replacement. Keep the old installation until this one works. Follow the pairing steps below; app configuration and credentials do not transfer automatically. Keep only the replacement running.
+
+Open **[planner.pixorahq.com](https://planner.pixorahq.com/)** to pair Home Control. Your Home Control layouts and Flows remain in your Pixora account.
+
+Brought to you by [PixoraHQ.com](https://pixorahq.com/).
+
+---
+
 # Pixora Home Control
 
 Connects Home Assistant to Planner, Home Control, and Flows using a secure outbound connection. No public Home Assistant address, Nabu Casa subscription, long-lived token, or port forwarding is needed.

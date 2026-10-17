@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/base:latest
 FROM ${BUILD_FROM}
 
-ARG BUILD_VERSION=1.5.1
+ARG BUILD_VERSION=1.5.2
 
 LABEL \
     io.hass.version="${BUILD_VERSION}" \
