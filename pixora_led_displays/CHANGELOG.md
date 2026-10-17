@@ -1,3 +1,7 @@
+# 1.2.7
+
+- Add a Display picker inside Panel firmware, synchronized with the main picker. Lock both during updates so checks, automatic updates and manual uploads use the intended display.
+
 # 1.2.6
 
 - Add Panel size under Displays & firmware → Display settings. Correct a 128×32 panel that reports 64×32 without resetting Wi-Fi, pairing, names or decks. Requires panel firmware 2.0.20. Verify the restart before updating saved dimensions.
