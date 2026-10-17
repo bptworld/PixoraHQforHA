@@ -1,3 +1,9 @@
+# 1.2.2
+
+- Clear the HA restart notice automatically when setup is ready.
+- Keep playing decks running when saved; paused decks stay paused. Apply edited card options on the next card transition.
+- Audit all 142 cards at both display widths. Fix width-aware fallback artwork for Commodities, Currency Rates and Sector Heat; support longer scrolling animations such as Daily Bible Verse. Download missing Disney park artwork with its cards.
+
 # 1.2.1
 
 - Download dynamically loaded sibling animation modules for College Football, CFL, UFL, College Baseball, College Softball and NCAA Hockey. Fix first-use rendering without requiring another sports card to be installed.

@@ -27,7 +27,9 @@ class CardStore:
                 for name in sorted(self.required(ids)):
                     path=self.path(name);meta=self.catalog['files'][name]
                     if path.is_file() and await asyncio.to_thread(lambda:hashlib.sha256(path.read_bytes()).hexdigest())==meta['sha256']:continue
-                    url='https://raw.githubusercontent.com/bptworld/pixora/'+self.catalog['commit']+'/cards/'+name
+                    source=meta.get('source_path','cards/'+name)
+                    if PurePosixPath(source).is_absolute() or '..' in PurePosixPath(source).parts:raise ValueError('Invalid public card source.')
+                    url='https://raw.githubusercontent.com/bptworld/pixora/'+self.catalog['commit']+'/'+source
                     try:
                         async with self.session.get(url,allow_redirects=False,timeout=aiohttp.ClientTimeout(total=25)) as response:
                             if response.status!=200:raise ValueError('Could not download this card. Your deck was not changed.')

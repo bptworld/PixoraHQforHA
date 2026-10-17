@@ -49,6 +49,22 @@ async def check():
     studio.render=render;studio.deliver=deliver;studio.save=save
     await studio.player('panel')
     assert delivered==['first','second','first']
+    # A save during delivery must invalidate prefetched artwork with old options.
+    rendered.clear();delivered.clear()
+    items[1]['options']={'label':'old'}
+    async def edited_render(item,width,**kwargs):
+        rendered.append((item['id'],dict(item.get('options',{}))))
+        return body
+    async def edited_deliver(*args,**kwargs):
+        await asyncio.sleep(0)
+        delivered.append(studio.runtime['panel']['item'])
+        if len(delivered)==1:
+            studio.data['decks']['deck']={'items':[items[0],{**items[1],'options':{'label':'new'}}]}
+        else:raise ValueError('End edited deck check')
+    studio.data['decks']['deck']={'items':items};studio.render=edited_render;studio.deliver=edited_deliver
+    await studio.player('panel')
+    assert delivered==['first','second']
+    assert ('second',{'label':'old'}) in rendered and ('second',{'label':'new'}) in rendered
     print('Playback timing passed: next-card preparation across deck repeat, hold buffer, 300s lease renewal and task cleanup.')
 
 

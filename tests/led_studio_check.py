@@ -21,9 +21,9 @@ class Downloads:
  calls=[];fail=False
  def get(self,url,**kwargs):
   assert url.startswith('https://raw.githubusercontent.com/bptworld/pixora/') and not kwargs['allow_redirects']
-  name=url.split('/cards/',1)[1];self.calls.append(name)
+  catalog=json.loads((ROOT/'pixora_led_displays/card_catalog.json').read_text(encoding='utf-8'));source=url.split(catalog['commit']+'/',1)[1];self.calls.append(source)
   if self.fail:raise ValueError('Download failed')
-  return Response(subprocess.check_output(['git','-C',str(SOURCE.parent),'show',json.loads((ROOT/'pixora_led_displays/card_catalog.json').read_text())['commit']+':cards/'+name]))
+  return Response(subprocess.check_output(['git','-C',str(SOURCE.parent),'show',catalog['commit']+':'+source]))
 async def check():
  sent=[]
  class Panel:
@@ -62,7 +62,13 @@ async def check():
    await studio.store.ensure({'alien_march'})
    animated=await studio.render({'card':'alien_march','options':{}},64)
    with Image.open(io.BytesIO(animated)) as image:assert image.size==(64,32) and image.n_frames>1
+   await studio.store.ensure({'disney'})
+   assert (studio.store.root/'assets/park-art/cinderella-castle.png').is_file()
+   for width in (64,128):
+    artwork=await studio.render({'card':'disney','options':{}},width)
+    with Image.open(io.BytesIO(artwork)) as image:assert image.size==(width,32)
    await studio.store.collect(studio.used())
+   assert not (studio.store.root/'assets/park-art/cinderella-castle.png').exists(),'Unused card artwork remained'
    before=json.loads(studio.file.read_text())
    with patch.object(studio,'persist',side_effect=OSError('Disk unavailable')):
     response=await deck('Not saved','clock_calendar',deck2)
@@ -75,6 +81,34 @@ async def check():
    settings={'deck':deck2,'brightness':60,'quiet':False,'quietStart':'22:00','quietEnd':'06:00','quietBrightness':0}
    assert (await client.post('/api/studio/devices/panel',json=settings)).status==200
    assert (await client.delete('/api/studio/decks/'+deck2)).status==400,'Assigned deck deleted'
+   # Saving a running deck must not stop its existing player or clear a safety block.
+   entered=asyncio.Event();release=asyncio.Event()
+   async def running_player():
+    entered.set();await release.wait()
+   player=asyncio.create_task(running_player());await entered.wait()
+   studio.jobs['panel']=player;studio.data['devices']['panel']['playing']=True
+   studio.pipeline.errors['panel']='Uncertain previous write'
+   response=await deck('Updated calendar','clock_calendar',deck2)
+   assert response.status==200 and studio.data['devices']['panel']['playing']
+   assert studio.jobs['panel'] is player and not player.done()
+   assert studio.pipeline.errors['panel']=='Uncertain previous write'
+   with patch.object(studio,'persist',side_effect=OSError('Disk unavailable')):
+    response=await deck('Failed edit','clock_calendar',deck2)
+    assert response.status==400 and studio.data['devices']['panel']['playing'] and not player.done()
+   release.set();await player
+   render_started=asyncio.Event();render_release=asyncio.Event()
+   async def pending_render():
+    render_started.set();await render_release.wait();return b'artwork'
+   rendering=asyncio.create_task(pending_render());studio.refresh_jobs['pending-test']=rendering
+   await render_started.wait()
+   saving=asyncio.create_task(deck('While rendering','clock_calendar',deck2))
+   await asyncio.sleep(.05)
+   assert not rendering.cancelled(),'Save cancelled a render awaited by playback'
+   render_release.set();assert (await saving).status==200
+   assert await rendering==b'artwork';studio.refresh_jobs.pop('pending-test',None)
+   studio.data['devices']['panel']['playing']=False
+   response=await deck('Paused calendar','clock_calendar',deck2)
+   assert response.status==200 and not studio.data['devices']['panel']['playing']
    assert (await client.post('/api/studio/action',json={'id':'panel','action':'play'})).status==200
    await asyncio.wait_for(studio.jobs['panel'],10)
    assert len([s for s in sent if s[0]=='/api/frame'])==1

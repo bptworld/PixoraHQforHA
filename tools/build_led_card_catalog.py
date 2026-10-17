@@ -22,6 +22,7 @@ def dependencies(path,seen):
   if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='import_module' and node.args and isinstance(node.args[0],ast.Constant):
    name=str(node.args[0].value).split('.')[0]
    if name in modules:dependencies(modules[name],seen)
+external={}
 for card in registry['cards']:
  name=card['url'].rsplit('/',1)[-1];path=cards/'addons'/name
  if not path.is_file():raise ValueError('Missing public card '+name)
@@ -34,13 +35,20 @@ for card in registry['cards']:
   if any(word in option['key'].lower() for word in ('token','secret','password','apikey','api_key')):option['type']='password'
  card['module']=name[:-3]
  card['files']=[p.relative_to(cards).as_posix() for p in sorted(deps)]
+ if name in ('disney.py','disney_park_hours.py'):
+  for node in ast.walk(ast.parse(path.read_text(encoding='utf-8-sig'))):
+   if isinstance(node,ast.Constant) and isinstance(node.value,str) and node.value.endswith('.png') and '/' not in node.value:
+    local='assets/park-art/'+node.value;remote='graphics/assets/'+node.value
+    if not (source/remote).is_file():raise ValueError('Missing park artwork '+remote)
+    external[local]=remote;card['files'].append(local)
+  card['files']=sorted(set(card['files']))
  card['previewUrl']='https://raw.githubusercontent.com/bptworld/pixora/'+commit+'/cards/assets/previews/'+card['id']+'.webp'
  card.pop('url',None)
  if card['id']=='home_assistant_entity':card['options']=[o for o in card.get('options',[]) if o['key'] not in ('host','token')]
 paths={name for card in registry['cards'] for name in card['files']}
 # Hash immutable repository blobs, not checkout bytes altered by core.autocrlf.
 names=sorted(paths)
-queries=''.join(commit+':cards/'+name+'\n' for name in names).encode('utf-8')
+queries=''.join(commit+':'+external.get(name,'cards/'+name)+'\n' for name in names).encode('utf-8')
 blobs=subprocess.check_output(['git','-C',str(source),'cat-file','--batch'],input=queries)
 position=0;registry['files']={}
 for name in names:
@@ -48,8 +56,9 @@ for name in names:
  if len(header)!=3 or header[1]!=b'blob':raise ValueError('Missing public Git blob '+name)
  size=int(header[2]);body=blobs[end+1:end+1+size];position=end+size+2
  registry['files'][name]={'sha256':hashlib.sha256(body).hexdigest(),'size':len(body)}
+ if name in external:registry['files'][name]['source_path']=external[name]
 imported_helpers={name for card in registry['cards'] for name in card['files'] if name.endswith('.py') and name != 'addons/'+card['module']+'.py'}
-registry['shared_files']=[name for name in sorted(paths) if name in imported_helpers or name in ('card_utils.py','event_sport_utils.py','LICENSE') or name.startswith('assets/') or name.startswith('addons/_')]
+registry['shared_files']=[name for name in sorted(paths) if name in imported_helpers or name in ('card_utils.py','event_sport_utils.py','LICENSE') or (name.startswith('assets/') and not name.startswith('assets/park-art/')) or name.startswith('addons/_')]
 registry['commit']=commit
 out=Path(__file__).resolve().parents[1]/'pixora_led_displays/card_catalog.json'
 out.write_text(json.dumps(registry,indent=2)+'\n',encoding='utf-8')

@@ -16,7 +16,7 @@ def normalize_image(body,width):
         if image.width*image.height>16000000:raise ValueError('Image exceeds 16 million pixels.')
         frames=[];timing=[]
         for index,frame in enumerate(ImageSequence.Iterator(image)):
-            if index>=240:raise ValueError('Animation exceeds 240 frames.')
+            if index>=2048:raise ValueError('Animation exceeds 2048 frames.')
             rgba=ImageOps.exif_transpose(frame).convert('RGBA')
             rgb=Image.alpha_composite(Image.new('RGBA',rgba.size,'black'),rgba).convert('RGB')
             frames.append(ImageOps.pad(rgb,(width,32),color='black'))

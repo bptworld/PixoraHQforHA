@@ -1,5 +1,5 @@
 """Isolated local card renderer with Cloud-compatible result envelopes."""
-import base64,contextlib,importlib.util,io,json,os,sys
+import base64,contextlib,importlib.util,inspect,io,json,os,sys
 from datetime import datetime,date
 from pathlib import Path
 from PIL import Image,ImageOps,ImageSequence
@@ -32,7 +32,7 @@ def artwork(body,width,durations=None,once=False):
         if image.width*image.height>16000000:raise ValueError('Card artwork too large.')
         frames=[];timing=[]
         for index,frame in enumerate(ImageSequence.Iterator(image)):
-            if index>=240:raise ValueError('Animation exceeds 240 frames.')
+            if index>=2048:raise ValueError('Animation exceeds 2048 frames.')
             rgba=frame.convert('RGBA');rgb=Image.alpha_composite(Image.new('RGBA',rgba.size,'black'),rgba).convert('RGB')
             frames.append(ImageOps.pad(rgb,(width,32),color='black'))
             delay=durations[index] if durations and index<len(durations) else frame.info.get('duration',100)
@@ -62,9 +62,18 @@ def run(request):
     module=importlib.util.module_from_spec(spec);settings=request.get('settings',{})
     if (root/'card_utils.py').is_file():
         import card_utils
+        original_text=getattr(card_utils,'render_text_webp',None)
+        if callable(original_text) and 'width' not in inspect.signature(original_text).parameters:
+            card_utils.render_text_webp=lambda text,color,width=64:card_utils.fallback_frame(text,width=width,color=color)
         card_utils._settings_value=lambda key,default='':settings.get(key,default)
         if callable(getattr(card_utils,'use_runtime_settings',None)):card_utils.use_runtime_settings(settings)
     spec.loader.exec_module(module)
+    if request['module'] in ('disney','disney_park_hours'):
+        def park_asset(filename):
+            if not filename or Path(filename).name!=filename:return None
+            path=root/'assets/park-art'/filename
+            return path if path.is_file() else None
+        module._asset_path=park_asset
     for name,value in request.get('event_state',{}).items():
         if isinstance(getattr(module,name,None),dict) and ('STATE' in name or name in ('_LAST_SEEN','_LAST_FLIGHT_POS')):
             getattr(module,name).update(unpack(value))

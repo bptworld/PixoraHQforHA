@@ -11030,6 +11030,7 @@
       ],
       "module": "disney",
       "files": [
+        "LICENSE",
         "addons/disney.py",
         "assets/flight_landing_airplane.png",
         "assets/flight_landing_airplane.source.txt",
@@ -11041,8 +11042,16 @@
         "assets/fonts/Silkscreen-Bold.ttf",
         "assets/fonts/Silkscreen-Regular.ttf",
         "assets/helicopter_r22.png",
-        "card_utils.py",
-        "LICENSE"
+        "assets/park-art/blizzard-beach.png",
+        "assets/park-art/california-adventure-wheel.png",
+        "assets/park-art/cinderella-castle.png",
+        "assets/park-art/mickey-sorcerer-hat.png",
+        "assets/park-art/sleeping-beauty-castle.png",
+        "assets/park-art/spaceship-earth.png",
+        "assets/park-art/tower-of-terror.png",
+        "assets/park-art/tree-of-life.png",
+        "assets/park-art/typhoon-lagoon.png",
+        "card_utils.py"
       ]
     },
     {
@@ -11265,6 +11274,7 @@
       ],
       "module": "disney_park_hours",
       "files": [
+        "LICENSE",
         "addons/disney_park_hours.py",
         "assets/flight_landing_airplane.png",
         "assets/flight_landing_airplane.source.txt",
@@ -11276,8 +11286,15 @@
         "assets/fonts/Silkscreen-Bold.ttf",
         "assets/fonts/Silkscreen-Regular.ttf",
         "assets/helicopter_r22.png",
-        "card_utils.py",
-        "LICENSE"
+        "assets/park-art/blizzard-beach.png",
+        "assets/park-art/california-adventure-wheel.png",
+        "assets/park-art/cinderella-castle.png",
+        "assets/park-art/sleeping-beauty-castle.png",
+        "assets/park-art/spaceship-earth.png",
+        "assets/park-art/tower-of-terror.png",
+        "assets/park-art/tree-of-life.png",
+        "assets/park-art/typhoon-lagoon.png",
+        "card_utils.py"
       ]
     },
     {
@@ -13647,6 +13664,51 @@
     "assets/helicopter_r22.png": {
       "sha256": "10e74a2ea694bf5e15e9eec72afc9d59cdf96cfce1f055fef88e2572997d9a8b",
       "size": 664
+    },
+    "assets/park-art/blizzard-beach.png": {
+      "sha256": "43e961ed3aaabcea11473bb26ffa903633cf8d51fee010db92fd05449e0f30c1",
+      "size": 5395,
+      "source_path": "graphics/assets/blizzard-beach.png"
+    },
+    "assets/park-art/california-adventure-wheel.png": {
+      "sha256": "d441c897c130018b23d6aeccd24c107d5dda83fd5dc91fde918912f19961ff7c",
+      "size": 9982,
+      "source_path": "graphics/assets/california-adventure-wheel.png"
+    },
+    "assets/park-art/cinderella-castle.png": {
+      "sha256": "a47013f42a173ed39071c4938df7b5879bc56eece737a1073df6f1274ab90ab5",
+      "size": 236790,
+      "source_path": "graphics/assets/cinderella-castle.png"
+    },
+    "assets/park-art/mickey-sorcerer-hat.png": {
+      "sha256": "851df1bf9162005975e0d0a69e98c4d84f773aa51b6caecc7cb5e0e019a1c9a9",
+      "size": 3754,
+      "source_path": "graphics/assets/mickey-sorcerer-hat.png"
+    },
+    "assets/park-art/sleeping-beauty-castle.png": {
+      "sha256": "301bd8d5efe8b15ca23ca249d0f170fbd527408a5c07052ca561f8d6692b5229",
+      "size": 5800,
+      "source_path": "graphics/assets/sleeping-beauty-castle.png"
+    },
+    "assets/park-art/spaceship-earth.png": {
+      "sha256": "f4e844d3cbf261cac0b4d1fbc90ea0570005301f9e7e7fb4e313c7c3f980f402",
+      "size": 5804,
+      "source_path": "graphics/assets/spaceship-earth.png"
+    },
+    "assets/park-art/tower-of-terror.png": {
+      "sha256": "441fe008d771948eb4dfb665dc908da33f2391a4c2f8f545b7fd27d2cc4954f0",
+      "size": 3699,
+      "source_path": "graphics/assets/tower-of-terror.png"
+    },
+    "assets/park-art/tree-of-life.png": {
+      "sha256": "0a95750123c46040bb99bff3c9349bdbd07cf0773b5824b424ca8db27c875413",
+      "size": 5865,
+      "source_path": "graphics/assets/tree-of-life.png"
+    },
+    "assets/park-art/typhoon-lagoon.png": {
+      "sha256": "fbc5c3b73c1b73b2f7405027534c95d2e7911dce401d4d7e4729627110855c20",
+      "size": 6982,
+      "source_path": "graphics/assets/typhoon-lagoon.png"
     },
     "card_utils.py": {
       "sha256": "5bfa14dbf7d69fc5436b07aa2bdb5ed6b1ce9483047f1652e6e24dd52aa46287",

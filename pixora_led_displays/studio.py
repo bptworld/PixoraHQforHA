@@ -120,12 +120,11 @@ class Studio:
                 self.data=current
                 await self.store.collect(self.used())
                 raise
-            self.cache.clear();self.skipped.clear();self.artwork_timing.clear()
-            # Saved-deck edits remove cached artwork for removed or changed cards too.
+            # A running player may be awaiting this render. Cancelling it would also
+            # cancel playback, so let in-flight artwork finish before collecting files.
             tasks=list(self.refresh_jobs.values())
-            for task in tasks:task.cancel()
-            await asyncio.gather(*tasks,return_exceptions=True)
-            self.refresh_jobs.clear()
+            await asyncio.gather(*(asyncio.shield(task) for task in tasks),return_exceptions=True)
+            self.cache.clear();self.skipped.clear();self.artwork_timing.clear()
             await asyncio.to_thread(shutil.rmtree,self.root/'render-cache',True)
             await self.store.collect(self.used())
 
@@ -356,7 +355,7 @@ class Studio:
         with Image.open(io.BytesIO(body)) as image:
             frames=[]
             for index,frame in enumerate(ImageSequence.Iterator(image)):
-                if index>=240:raise ValueError('Animation exceeds 240 frames.')
+                if index>=2048:raise ValueError('Animation exceeds 2048 frames.')
                 out=io.BytesIO();frame.convert('RGB').save(out,'PNG')
                 frames.append((out.getvalue(),max(.02,min(60,frame.info.get('duration',100)/1000))))
         remaining=float(duration);position=0
@@ -403,11 +402,14 @@ class Studio:
         self.monitors[ident]=asyncio.create_task(self.monitor(ident))
 
     async def player(self,ident):
-        position=0;last_brightness=None;prepared=None;prepare_key=None;failed={};inactive=set();writing=False
+        position=0;last_brightness=None;prepared=None;prepare_key=None;failed={};inactive=set();writing=False;deck_snapshot=None
         try:
             while True:
                 cfg=self.data['devices'].get(ident,{})
                 deck=self.data['decks'].get(cfg.get('deck'),{})
+                snapshot=json.dumps(deck,sort_keys=True)
+                if snapshot!=deck_snapshot:
+                    failed.clear();inactive.clear();deck_snapshot=snapshot
                 items=[i for i in deck.get('items',[]) if i['enabled']]
                 if not items:raise ValueError('Deck has no enabled cards.')
                 if all(i['id'] in failed for i in items):raise ValueError('No playable cards remain. Skipped: '+', '.join(failed.values())+'. Fix the cards, then press Play.')
@@ -431,7 +433,7 @@ class Studio:
                 item=items[position%len(items)];position+=1
                 if item['id'] in failed or item['id'] in inactive:continue
                 name=self.store.cards[item['card']]['name'] if 'card' in item else self.data['graphics'].get(item.get('graphic'),{}).get('name','Graphic')
-                key=(item['id'],info['width'])
+                key=(json.dumps(item,sort_keys=True),info['width'])
                 try:
                     if prepared is not None and prepare_key==key:
                         pending=prepared;prepared=None
@@ -456,7 +458,7 @@ class Studio:
                 name=self.store.cards[item['card']]['name'] if 'card' in item else self.data['graphics'][item['graphic']]['name']
                 self.runtime[ident]={'playing':True,'status':name,'item':item['id'],**({'warning':'Skipped broken cards: '+', '.join(failed.values())+'. Fix them, then press Play to try them again.'} if failed else {})}
                 next_item=next(items[(position+offset)%len(items)] for offset in range(len(items)) if items[(position+offset)%len(items)]['id'] not in failed and items[(position+offset)%len(items)]['id'] not in inactive)
-                prepare_key=(next_item['id'],info['width'])
+                prepare_key=(json.dumps(next_item,sort_keys=True),info['width'])
                 prepared=asyncio.create_task(self.render(next_item,info['width'],device_id=ident))
                 try:
                     writing=True
@@ -496,8 +498,6 @@ class Studio:
             if not isinstance(ident,str) or len(ident)>80:raise ValueError('Invalid deck.')
             value=self.validate_deck(payload,self.data['decks'].get(ident) or self.data['decks'].get(payload.get('copyFrom')))
             if ident not in self.data['decks'] and len(self.data['decks'])>=100:raise ValueError('Up to 100 decks are supported.')
-            for device,cfg in self.data['devices'].items():
-                if cfg.get('deck')==ident:await self.stop(device)
             display=payload.get('display')
             if display:self.selected(display)
             def save_deck():
