@@ -1,13 +1,20 @@
 """Direct LAN client. Never sends data to Pixora Cloud or retries a write."""
 import asyncio
 import ipaddress
+import re
 
 import aiohttp
 
 
 def local_host(value):
-    host = str(ipaddress.IPv4Address(value.strip()))
-    if not ipaddress.ip_address(host).is_private or host.startswith(('127.', '169.254.', '0.')):
+    if not isinstance(value, str):
+        raise ValueError("Enter the display's local IPv4 address.")
+    try:
+        address = ipaddress.IPv4Address(value.strip())
+    except ipaddress.AddressValueError as exc:
+        raise ValueError("Enter the display's local IPv4 address.") from exc
+    host = str(address)
+    if not any(address in ipaddress.IPv4Network(network) for network in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')):
         raise ValueError('Enter the display\'s local IPv4 address.')
     return host
 
@@ -27,19 +34,30 @@ class DisplayClient:
                 if response.status == 403:
                     raise ValueError('Restart the display, then connect within two minutes.')
                 if response.status == 401:
-                    raise ValueError('Display authorization failed. Remove and reconnect the integration.')
+                    raise ValueError('Display authorization failed. Use Reconfigure in the integration to reconnect it.')
                 if response.status == 409:
                     raise ValueError('Display is busy. This card was not accepted.')
                 if response.status not in (200, 202):
                     raise ValueError('Display rejected the request (' + str(response.status) + ').')
-                return await response.json()
+                try:
+                    result = await response.json()
+                except (ValueError, UnicodeError) as exc:
+                    raise ValueError('The display returned an invalid response. The request was not retried.') from exc
+                if not isinstance(result, dict):
+                    raise ValueError('The display returned an invalid response.')
+                if path in ('/api/message', '/api/frame') and result.get('accepted') is not True:
+                    raise ValueError('The display did not confirm this card. Check it before trying again.')
+                return result
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise ValueError('Could not confirm delivery. Check the display; the request was not retried.') from exc
 
     async def info(self):
         info = await self.request('/api/info')
-        if (not isinstance(info, dict) or not isinstance(info.get('id'), str)
+        if (not isinstance(info, dict) or not isinstance(info.get('id'), str) or not 1 <= len(info['id']) <= 80
                 or not isinstance(info.get('version'), str) or info.get('width') not in (64, 128) or info.get('height') != 32):
+            raise ValueError('This display needs Pixora local-display firmware 2.0.14 or newer.')
+        version = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)', info['version'])
+        if not version or tuple(map(int, version.groups())) < (2, 0, 14):
             raise ValueError('This display needs Pixora local-display firmware 2.0.14 or newer.')
         return info
 
@@ -60,7 +78,7 @@ class DisplayClient:
         await self.request('/api/message', {'message': message, 'color': ''.join(f'{c:02X}' for c in color), 'duration': duration})
 
     async def update_firmware(self, body):
-        if not 1024 <= len(body) <= 2097152 or body[0] != 0xe9 or body[12:14] != b'\x09\x00':
+        if not 1024 <= len(body) <= 2097152 or body[0] != 0xe9 or body[12:14] != b'\x09\x00' or body[32:36] != b'\x32\x54\xcd\xab':
             raise ValueError('Choose MatrixPortal S3 user-OTA firmware, not a factory image.')
         try:
             async with self.session.post('http://' + self.host + '/api/update', data=body,
@@ -68,6 +86,9 @@ class DisplayClient:
                     timeout=aiohttp.ClientTimeout(total=95), allow_redirects=False) as response:
                 if response.status != 200:
                     raise ValueError('The panel did not confirm the update. Check it before trying again.')
-                return await response.json()
+                result = await response.json()
+                if not isinstance(result, dict) or result.get('updated') is not True:
+                    raise ValueError('The panel did not confirm the update. Check it before trying again.')
+                return result
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             raise ValueError('Update outcome is uncertain. Check the panel; it was not retried.') from exc

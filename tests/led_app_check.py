@@ -98,6 +98,16 @@ async def checks():
         removed = module.make_app(root / 'data', config, Panel, ingress_peer='127.0.0.1')
         async with TestClient(TestServer(removed)) as client:
             assert (await (await client.get('/api/displays')).json())['displays'] == []
+        full = [{'id': 'panel1' if i == 0 else 'other'+str(i), 'host':'192.168.1.50', 'name':'Existing '+str(i), 'key':'b'*32, 'width':64,'height':32,'version':'2.0.14'} for i in range(30)]
+        (root / 'data/displays.json').write_text(json.dumps({'displays':full}))
+        class ReconnectPanel(Panel):
+            async def pair(self):
+                assert self.key == 'b'*32
+        async with TestClient(TestServer(module.make_app(root / 'data', config, ReconnectPanel, ingress_peer='127.0.0.1'))) as client:
+            response = await client.post('/api/displays', json={'host':'192.168.1.60','name':''})
+            assert response.status == 200
+            saved = (await response.json())['displays']
+            assert len(saved) == 30 and saved[-1]['name'] == 'Existing 0' and saved[-1]['host'] == '192.168.1.60'
         async with TestClient(TestServer(module.make_app(root / 'data', config, Panel))) as client:
             assert (await client.get('/api/displays')).status == 403
 
@@ -111,6 +121,17 @@ async def checks():
         def request(self, method, url, **kwargs):
             calls.append((method, url, kwargs))
             return Response()
+    for host in (None, [], 123, '240.0.0.1', '127.0.0.1', '169.254.1.1', '8.8.8.8'):
+        try: local_host(host)
+        except ValueError: pass
+        else: raise AssertionError('Invalid panel address accepted')
+    class RejectedResponse(Response):
+        async def json(self): return {'accepted': False}
+    class RejectedSession:
+        def request(self, *args, **kwargs): return RejectedResponse()
+    try: await DisplayClient(RejectedSession(), '192.168.1.50').show('Done', [255,255,255], 10)
+    except ValueError as exc: assert 'did not confirm' in str(exc)
+    else: raise AssertionError('Missing acknowledgement reported as delivered')
     client = DisplayClient(Session(), '192.168.1.50', 'a' * 32)
     await client.show('Washer finished', [0, 255, 0], 10)
     assert calls[-1][1] == 'http://192.168.1.50/api/message'
@@ -119,6 +140,21 @@ async def checks():
         try: await client.show(message, [255, 255, 255], 10)
         except ValueError: pass
         else: raise AssertionError('Invalid text accepted')
+    class UpdateResponse(Response):
+        status=200
+        async def json(self): return {'updated':True}
+    class UpdateSession:
+        def post(self,*args,**kwargs):
+            calls.append('update')
+            return UpdateResponse()
+    ota=bytearray(1024);ota[0]=0xe9;ota[12:14]=b'\x09\x00'
+    updater=DisplayClient(UpdateSession(),'192.168.1.50','a'*32)
+    try: await updater.update_firmware(bytes(ota))
+    except ValueError: pass
+    else: raise AssertionError('Bootloader/factory header accepted as application OTA')
+    ota[32:36]=b'\x32\x54\xcd\xab'
+    await updater.update_firmware(bytes(ota))
+    assert calls[-1]=='update'
     class TimeoutSession:
         def request(self, *args, **kwargs):
             calls.append('timeout')

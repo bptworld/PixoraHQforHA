@@ -1,3 +1,8 @@
+# 1.0.4
+
+- Audit pairing, reconnecting, card acknowledgements, HA reconfiguration and safe companion installation.
+- Keep action feedback beside its button and refresh local setup instructions.
+
 # 1.0.3
 
 - Add Rename and Remove controls for saved displays, with removal confirmation and durable changes.

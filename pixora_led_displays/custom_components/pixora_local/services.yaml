@@ -1,6 +1,6 @@
 show_card:
   name: Show card
-  description: Show a message directly over local Wi-Fi, then return to normal playback. No Cloud connection is used.
+  description: Show a message directly over local Wi-Fi, then show Waiting…. No Cloud connection is used.
   fields:
     config_entry_id:
       name: Display

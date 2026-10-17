@@ -17,7 +17,7 @@ connection is needed for sending cards.
 ## Set up
 
 1. Install this app in Home Assistant, start it, and choose **Open Web UI**.
-2. Update your panel to **2.0.14 local-display user-OTA firmware** matching its
+2. Update your panel to **2.0.18 or newer local-display user-OTA firmware** matching its
    hardware (MatrixPortal S3 64x32 or 128x32). User-OTA preserves Wi-Fi and panel
    settings. Do not use a factory/reset firmware image for this update.
 3. Restart the panel. Within two minutes, enter its IP address in **Add a
@@ -31,13 +31,13 @@ other authorized clients continue working. Pairing lasts two minutes; ordinary
 card sending continues after it closes.
 
 The text card uses the panel's compact font (plain ASCII, up to 160 characters).
-Short messages work best; long messages can extend beyond the panel. Use a PNG,
+Firmware 2.0.17 or newer wraps at word boundaries and pages longer messages. Use a PNG,
 JPEG or WebP image for precise layouts, other fonts, icons or non-ASCII text.
 Images fit the panel with black borders and no cropping; animated files use the
 first frame. Cards display for 1–300 seconds. A new accepted card replaces the
 currently displayed local card. A second pending request receives a busy error.
 
-This is a local-only firmware and HA app. Cards clear after their duration. It
+This is a local-only firmware and HA app. On firmware 2.0.17 or newer, panels show Waiting... after a card expires. It
 has no online playback, online account setup, server polling or internet
 requirement. Firmware updates after installation are sent from this app's
 **Update panel firmware** section directly over the LAN.
@@ -86,3 +86,7 @@ one S3 user-OTA image; the existing saved panel target selects the width.
 ---
 
 Brought to you by [PixoraHQ.com](https://pixorahq.com/).
+
+### Updating an existing connection
+
+After an app update, choose **Install automation actions** again and restart Home Assistant to update the companion integration. If a panel IP changes, open **Settings > Devices & services > Pixora LED (Local) > Reconfigure**. This preserves its existing entity and automation references. Enter the same panel new address. On firmware 2.0.18 or newer, authorized reconnects do not need a panel restart. A new HA connection still needs the two-minute pairing window.

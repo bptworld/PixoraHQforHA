@@ -82,12 +82,19 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     async def pair(request):
         payload = await object_payload(request)
         async with lock:
-            if len(state['displays']) >= 30:
-                raise ValueError('Up to 30 displays are supported.')
             client = client_factory(app['session'], payload.get('host', ''))
             info = await client.info()
+            existing = next((d for d in state['displays'] if d['id'] == info['id']), None)
+            if len(state['displays']) >= 30 and existing is None:
+                raise ValueError('Up to 30 displays are supported.')
+            name = payload.get('name', '')
+            if not isinstance(name, str) or len(name.strip()) > 80:
+                raise ValueError('Enter a display name up to 80 characters.')
+            name = name.strip() or (existing or {}).get('name') or info.get('name') or 'Pixora LED'
+            if existing:
+                client.key = existing['key']
             await client.pair()
-            display = {'id': info['id'], 'name': str(payload.get('name') or info.get('name') or 'Pixora LED')[:80],
+            display = {'id': info['id'], 'name': name[:80],
                        'host': client.host, 'key': client.key, 'width': info['width'], 'height': info['height'], 'version': info['version']}
             previous = list(state['displays'])
             state['displays'] = [d for d in previous if d['id'] != display['id']] + [display]
@@ -152,11 +159,28 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         if not config_root.is_dir():
             raise ValueError('Home Assistant configuration folder is unavailable.')
         def install():
-            if target.exists():
-                backup = root / 'action-backups' / uuid.uuid4().hex
-                shutil.copytree(target, backup)
-            shutil.copytree(source, target, dirs_exist_ok=True)
-        await asyncio.to_thread(install)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            stage = target.with_name('.pixora-stage-' + uuid.uuid4().hex)
+            old = target.with_name('.pixora-old-' + uuid.uuid4().hex)
+            try:
+                shutil.copytree(source, stage, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+                if target.exists():
+                    backup = root / 'action-backups' / uuid.uuid4().hex
+                    shutil.copytree(target, backup)
+                    target.rename(old)
+                try:
+                    stage.rename(target)
+                except OSError:
+                    if old.exists():
+                        old.rename(target)
+                    raise
+                if old.exists():
+                    shutil.rmtree(old)
+            finally:
+                if stage.exists():
+                    shutil.rmtree(stage)
+        async with lock:
+            await asyncio.to_thread(install)
         return web.json_response({'message': 'Actions installed. Restart Home Assistant, then add the Pixora LED (Local) integration under Devices & services. Restart the panel before connecting it.'})
 
     async def startup(app):

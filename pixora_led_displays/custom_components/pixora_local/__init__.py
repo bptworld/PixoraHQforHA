@@ -2,7 +2,7 @@
 import base64
 from pathlib import Path
 import voluptuous as vol
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import device_registry as dr
 from .client import DisplayClient
@@ -55,7 +55,13 @@ async def async_setup(hass, config):
 
 async def async_setup_entry(hass, entry):
     client = DisplayClient(async_get_clientsession(hass), entry.data['host'], entry.data['key'])
-    # Setup does not send a card or require Cloud connectivity.
+    try:
+        info = await client.info()
+        if info['id'] != entry.data['device_id']:
+            raise ValueError('A different display is using this IP. Reconfigure the saved display.')
+    except ValueError as exc:
+        raise ConfigEntryNotReady(str(exc)) from exc
+    # An authenticated identity check restores legacy pairing state without sending a card.
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = client
     dr.async_get(hass).async_get_or_create(config_entry_id=entry.entry_id, identifiers={(DOMAIN, entry.data['device_id'])}, manufacturer='Pixora', name=entry.title, model='MatrixPortal S3 LED display')
     await hass.config_entries.async_forward_entry_setups(entry, ['notify'])
