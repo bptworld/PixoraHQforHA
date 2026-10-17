@@ -74,6 +74,14 @@ async def check():
     assert left['start_at']==right['start_at'] and left['event_id']==right['event_id']
     for entry,width in ((left,64),(right,128)):
      with Image.open(io.BytesIO(base64.b64decode(entry['body']))) as image:assert image.size==(width,32)
+   entered=[];both_ready=asyncio.Event()
+   async def group_play(ident):
+    entered.append(ident)
+    if len(entered)==2:both_ready.set()
+    await both_ready.wait()
+   with patch.object(studio,'selected',side_effect=lambda ident:WallPanel(ident)),patch.object(studio,'play',side_effect=group_play):
+    response=await asyncio.wait_for(client.post('/api/studio/action',json={'id':'test-wall','action':'play'}),2)
+    assert response.status==200 and set(entered)=={'panel','right'},'Group Play was serialized'
    studio.data['groups'].pop('test-wall');studio.pipeline.data['queues'].pop('right',None)
    studio.pipeline.data['queues']['panel']=[]
    assert (await client.delete('/api/studio/decks/'+heartbeat)).status==200

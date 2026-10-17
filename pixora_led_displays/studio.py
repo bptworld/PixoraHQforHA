@@ -7,7 +7,7 @@ from aiohttp import web,ClientTimeout
 from PIL import Image,ImageOps,ImageSequence
 from card_store import CardStore
 from special_graphics import tests_for
-from pipeline import Pipeline,normalize_image
+from pipeline import Pipeline,normalize_image,WALL_START_LEAD
 
 class CardSkipped(ValueError):pass
 from client import PriorityMessageActive
@@ -284,10 +284,12 @@ class Studio:
                     return value
                 signature=json.dumps(shared_state(result.get('state',{})),sort_keys=True)
                 event_id=hashlib.sha256((json.dumps(group)+request['module']+signature+event['body']).encode()).hexdigest()
-                body=base64.b64decode(event['body']);offset=0;start=time.time()+2
+                body=base64.b64decode(event['body']);offset=0;start=0
                 for ident,width in group:
                     sliced=self.slice_artwork(body,offset,width);offset+=width
-                    entries.append((ident,{**event,'body':base64.b64encode(sliced).decode(),'event_id':event_id,'source':'event','start_at':start}))
+                    entries.append((ident,{**event,'body':base64.b64encode(sliced).decode(),'event_id':event_id,'source':'event','start_at':start,'wall_members':[member for member,_ in group],'wall_width':width}))
+                ready_at=time.time()+WALL_START_LEAD
+                for _,payload in entries:payload['start_at']=ready_at
             else:entries.append((request['device_id'],{**event,'event_id':event_id,'source':'event'}))
         await self.pipeline.submit(entries,key,result.get('state',{}))
 
@@ -359,13 +361,18 @@ class Studio:
         if ident:await self.pipeline.write(ident,write)
         else:await write()
 
-    async def deliver(self,client,body,width,duration,owner='deck',ident=None,once=False,wire_ident=None):
+    async def deliver(self,client,body,width,duration,owner='deck',ident=None,once=False,wire_ident=None,synchronize=None,group_check=None):
         with Image.open(io.BytesIO(body)) as image:
             frames=[]
             for index,frame in enumerate(ImageSequence.Iterator(image)):
                 if index>=2048:raise ValueError('Animation exceeds 2048 frames.')
                 out=io.BytesIO();frame.convert('RGB').save(out,'PNG')
                 frames.append((out.getvalue(),max(.02,min(60,frame.info.get('duration',100)/1000))))
+        if synchronize:
+            # All wall slices are decoded before the barrier releases any panel.
+            start=await synchronize()
+            await self.deliver_timeline(client,frames,width,float(duration),start,owner,wire_ident,once,group_check)
+            return
         remaining=float(duration);position=0
         while remaining>0:
             if ident:
@@ -384,6 +391,24 @@ class Studio:
             played=max(0,step-left);remaining-=max(played,elapsed)
             if left>0:raise PriorityMessageActive('An interrupt is ready.')
             position+=1
+
+    async def deliver_timeline(self,client,frames,width,duration,start,owner,wire_ident,once,check):
+        import bisect,math
+        ends=[];total=0
+        for _,delay in frames:total+=delay;ends.append(total)
+        await asyncio.sleep(max(0,start-time.monotonic()))
+        while True:
+            if check:check()
+            elapsed=max(0,time.monotonic()-start)
+            if elapsed>=duration:return
+            phase=elapsed if once else elapsed%total
+            index=min(len(frames)-1,bisect.bisect_right(ends,phase))
+            # Skip expired frames after slow Wi-Fi writes; never stretch one slice's clock.
+            boundary=duration if once and index==len(frames)-1 else elapsed-phase+ends[index]
+            remaining=duration-elapsed
+            await self.send_frame(client,frames[index][0],width,min(300,max(1,math.ceil(remaining))),owner=owner,ident=wire_ident)
+            deadline=start+min(duration,boundary,elapsed+240)
+            await asyncio.sleep(max(0,deadline-time.monotonic()))
 
     def quiet(self,config):
         if not config.get('quiet'):return False
@@ -518,10 +543,13 @@ class Studio:
         if not event or not event.get('body'):raise ValueError('This test graphic could not render. Nothing was sent.')
         render_ms=round((time.monotonic()-started)*1000)
         body=base64.b64decode(event['body'],validate=True);offset=0;entries=[]
-        start=time.time()+2 if group else 0;event_id='test-'+uuid.uuid4().hex
+        start=0;event_id='test-'+uuid.uuid4().hex
         for member,member_width in widths:
             artwork=self.slice_artwork(body,offset,member_width) if group else body;offset+=member_width
-            entries.append((member,{**event,'body':base64.b64encode(artwork).decode(),'source':'test','event_id':event_id,'start_at':start}))
+            entries.append((member,{**event,'body':base64.b64encode(artwork).decode(),'source':'test','event_id':event_id,'start_at':start,**({'wall_members':targets,'wall_width':member_width} if group else {})}))
+        if group:
+            ready_at=time.time()+WALL_START_LEAD
+            for _,payload in entries:payload['start_at']=ready_at
         await self.pipeline.submit(entries)
         return {'queued':True,'render_ms':render_ms,'displays':len(widths),'message':'Test graphic queued'+(' for the group' if group else '')+'. The deck continues with the next card after the interrupt.'}
 
@@ -569,12 +597,14 @@ class Studio:
         async def action(request):
             data=await object_data(request);ident=data.get('id');targets=self.data['groups'].get(ident,{}).get('members',[ident])
             if data.get('action') not in ('play','stop','reboot'):raise ValueError('Choose Play, Stop or Reboot.')
-            for target in targets:
-                self.selected(target)
+            for target in targets:self.selected(target)
+            async def perform(target):
                 if data['action']=='play':await self.play(target)
                 elif data['action']=='stop':await self.stop(target)
                 else:
                     await self.stop(target);await self.selected(target).request('/api/reboot',{})
+            outcomes=await asyncio.gather(*(perform(target) for target in targets),return_exceptions=True)
+            if any(isinstance(result,BaseException) for result in outcomes):raise ValueError('Some displays could not complete the group action. Check each display status.')
             return web.json_response(self.public())
         async def ha_action(request):
             data=await object_data(request);ident=data.get('id');client=self.selected(ident)

@@ -67,7 +67,7 @@ Then uninstall **Pixora LED Studio** in **Settings → Apps** and restart Home A
 
 ## Local special graphics and interruptions
 
-Use **Test** beside a special graphic setting to send a sample to the selected display or group through the normal interrupt queue. It uses the options currently shown without saving them, changing live event history, or starting a paused deck. Progress and success/error feedback appear in the dialog; render time is shown after queueing. Group tests use the same synchronized start as real group events.
+Use **Test** beside a special graphic setting to send a sample to the selected display or group through the normal interrupt queue. It uses the options currently shown without saving them, changing live event history, or starting a paused deck. Progress and success/error feedback appear in the dialog; render time is shown after queueing. Group tests use the same readiness check and shared animation clock as real group events.
 
 After updating to 1.2.0, restart Home Assistant once if prompted so its notify entities use the hub queue. Existing display entities keep their identities.
 
@@ -79,3 +79,5 @@ After updating to 1.2.0, restart Home Assistant once if prompted so its notify e
 - If a physical delivery has an uncertain outcome, that display stops delivery and does not replay the item, including after an app restart. Check the display, then press **Play** to explicitly resume. An explicit busy rejection may be retried briefly because the panel confirmed it did not accept the write.
 
 Artwork, event history and queued messages are stored only in the app's private hub storage. Pre-uninstall cleanup removes them along with the other Studio data. Waiting priority items expire after five minutes so stale messages and celebrations do not play later. Queue limits are 32 waiting items and 8 MB of encoded content per display; artwork caches retain at most 32 entries. Automatic event checking runs only while its deck is playing and outside quiet hours. Pausing a deck removes its waiting card events; an already-playing priority item finishes normally, and HA notifications remain queued.
+
+Group walls wait until every member has finished prior messages and decoded its slice. The hub then starts one monotonic animation timeline with a short local lead; slow writes skip expired frames rather than stretching that panel’s timeline. A member that cannot become ready within 35 seconds causes the whole graphic to be skipped. An uncertain delivery stops further group writes without replay. This reduces drift; physical Wi-Fi and panel drawing latency still limit exact synchronization. Ordinary assigned decks retain their own content and rotation; group Play/Pause controls are dispatched concurrently.

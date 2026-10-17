@@ -9,6 +9,10 @@ import uuid
 from pathlib import Path
 from PIL import Image,ImageOps,ImageSequence
 
+WALL_READY_TIMEOUT=35
+WALL_START_LEAD=.15
+
+class WallNotReady(ValueError):pass
 
 def normalize_image(body,width):
     if not body or len(body)>5*1024*1024:raise ValueError('Choose an image smaller than 5 MB.')
@@ -31,7 +35,7 @@ class Pipeline:
     def __init__(self,root,studio):
         self.root,self.studio=root,studio;self.file=root/'pipeline.json'
         self.data=json.loads(self.file.read_text()) if self.file.exists() else {'states':{},'queues':{},'inflight':{},'seen':{}}
-        self.lock=asyncio.Lock();self.jobs={};self.busy={};self.idle={};self.wires={};self.errors=self.data.setdefault('errors',{});self.blocked=set()
+        self.lock=asyncio.Lock();self.jobs={};self.busy={};self.idle={};self.wires={};self.errors=self.data.setdefault('errors',{});self.blocked=set();self.walls={}
         # An interrupted in-flight request may have reached the panel. Do not replay it.
         for ident in self.data['inflight']:
             self.errors[ident]='Previous priority delivery was interrupted; it was not resent.'
@@ -113,6 +117,44 @@ class Pipeline:
         except asyncio.TimeoutError:return 0
         return max(0,seconds-(time.monotonic()-started))
 
+    def wall_session(self,payload):
+        for key,old in list(self.walls.items()):
+            if time.monotonic()-old['created']>600+WALL_READY_TIMEOUT:self.walls.pop(key,None)
+        return self.walls.setdefault(payload['event_id'],{'members':set(payload['wall_members']),'ready':set(),'done':set(),'gate':asyncio.Event(),'start':None,'error':'','created':time.monotonic()})
+
+    def abort_wall(self,payload,message):
+        session=self.wall_session(payload);session['error']=message;session['gate'].set()
+
+    def check_wall(self,payload):
+        session=self.wall_session(payload)
+        if session['error']:
+            if session['start'] is None:raise WallNotReady(session['error'])
+            raise ValueError(session['error'])
+
+    async def ready_wall(self,ident,payload):
+        session=self.wall_session(payload);self.check_wall(payload)
+        # A deck HTTP write may still hold this wire when the interrupt arrives.
+        # Fence it before declaring readiness, without holding wires across the barrier.
+        wire=self.wires.setdefault(ident,asyncio.Lock())
+        try:await asyncio.wait_for(wire.acquire(),WALL_READY_TIMEOUT)
+        except asyncio.TimeoutError:
+            self.abort_wall(payload,'Group graphic skipped: a display connection is still busy.');raise WallNotReady(session['error'])
+        else:wire.release()
+        if ident in self.errors or ident in self.blocked:raise ValueError('Display delivery is paused after an uncertain write.')
+        self.check_wall(payload)
+        session['ready'].add(ident)
+        if session['ready']==session['members']:
+            session['start']=time.monotonic()+WALL_START_LEAD;session['gate'].set()
+        try:await asyncio.wait_for(session['gate'].wait(),WALL_READY_TIMEOUT)
+        except asyncio.TimeoutError:
+            self.abort_wall(payload,'Group graphic skipped: not all displays became ready.');raise WallNotReady(session['error'])
+        self.check_wall(payload)
+        return session['start']
+
+    def finish_wall(self,ident,payload):
+        session=self.wall_session(payload);session['done'].add(ident)
+        if session['done']>=session['members']:self.walls.pop(payload['event_id'],None)
+
     async def consume(self,ident):
         busy,idle=self.signals(ident)
         try:
@@ -125,20 +167,44 @@ class Pipeline:
                     index=next((i for i,p in enumerate(queue) if p.get('source')=='ha'),0)
                     payload=queue.pop(index);self.data['inflight'][ident]=payload['event_id'];await self.commit()
                 start=payload.get('start_at',0)
-                client=self.studio.selected(ident)
-                info=await client.info()
-                if info.get('active') and info.get('owner')!='deck':await asyncio.sleep(min(300,max(0,float(info.get('remaining',0)))))
-                if start:
-                    if time.time()>start+.5:
-                        async with self.lock:self.data['inflight'].pop(ident,None);await self.commit()
-                        continue
-                    if start>time.time():await asyncio.sleep(start-time.time())
-                if payload.get('message') is not None:
-                    await self.write(ident,lambda:client.show(payload['message'],payload.get('color',[255,255,255]),payload['duration']))
-                    await asyncio.sleep(payload['duration'])
-                else:
-                    body=base64.b64decode(payload['body'],validate=True)
-                    await self.studio.deliver(client,body,info['width'],payload['duration'],owner='message',once=payload.get('once',False),wire_ident=ident)
+                wall=bool(payload.get('wall_members'))
+                try:
+                    client=self.studio.selected(ident)
+                    try:
+                        info=await client.info()
+                        if wall and payload.get('wall_width',info['width'])!=info['width']:raise ValueError('Display dimensions changed.')
+                        if info.get('active') and info.get('owner')!='deck':
+                            remaining=min(300,max(0,float(info.get('remaining',0))))
+                            if wall and remaining>0:
+                                session=self.wall_session(payload)
+                                try:await asyncio.wait_for(session['gate'].wait(),min(remaining,WALL_READY_TIMEOUT))
+                                except asyncio.TimeoutError:
+                                    if remaining>WALL_READY_TIMEOUT:
+                                        self.abort_wall(payload,'Group graphic skipped: a display is still busy.')
+                                self.check_wall(payload)
+                            else:await asyncio.sleep(remaining)
+                    except Exception:
+                        if not wall:raise
+                        self.abort_wall(payload,'Group graphic skipped: a display is unavailable.');raise WallNotReady('Group graphic skipped: a display is unavailable.')
+                    if start and not wall:
+                        if time.time()>start+.5:
+                            async with self.lock:self.data['inflight'].pop(ident,None);await self.commit()
+                            continue
+                        if start>time.time():await asyncio.sleep(start-time.time())
+                    if payload.get('message') is not None:
+                        await self.write(ident,lambda:client.show(payload['message'],payload.get('color',[255,255,255]),payload['duration']))
+                        await asyncio.sleep(payload['duration'])
+                    else:
+                        body=base64.b64decode(payload['body'],validate=True)
+                        options={'synchronize':lambda:self.ready_wall(ident,payload),'group_check':lambda:self.check_wall(payload)} if wall else {}
+                        await self.studio.deliver(client,body,info['width'],payload['duration'],owner='message',once=payload.get('once',False),wire_ident=ident,**options)
+                except WallNotReady as exc:
+                    self.studio.runtime.setdefault(ident,{})['warning']=str(exc)
+                except BaseException:
+                    if wall:self.abort_wall(payload,'Group graphic stopped after a delivery failure; it was not retried.')
+                    raise
+                finally:
+                    if wall:self.finish_wall(ident,payload)
                 async with self.lock:self.data['inflight'].pop(ident,None);await self.commit()
         except asyncio.CancelledError:raise
         except Exception:
@@ -157,4 +223,4 @@ class Pipeline:
     async def close(self):
         tasks=list(self.jobs.values())
         for task in tasks:task.cancel()
-        await asyncio.gather(*tasks,return_exceptions=True);self.jobs.clear()
+        await asyncio.gather(*tasks,return_exceptions=True);self.jobs.clear();self.walls.clear()

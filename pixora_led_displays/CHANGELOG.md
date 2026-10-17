@@ -1,3 +1,9 @@
+# 1.2.5
+
+- Compare Cloud wall timing with local delivery. Wait for every group member to finish prior messages and prepare artwork before starting one shared timeline.
+- Correct animation drift after slow Wi-Fi writes by skipping expired frames; skip the whole wall if a member cannot become ready. Stop group delivery after an uncertain write without replay.
+- Start group controls concurrently and validate panel dimensions before wall delivery.
+
 # 1.2.4
 
 - Add Test buttons beside special graphic settings. Send sample graphics through the real local interrupt queue without changing saved options or event history.
