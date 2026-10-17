@@ -23,7 +23,8 @@ try{
   return route.fulfill({json:{displays:items}});
  });
  await page.goto('http://led.test/');await page.waitForFunction(()=>!document.getElementById('pair').disabled);
- await page.getByText('Display settings',{exact:true}).click();
+ assert.equal(await page.getByRole('heading',{name:'Manage displays',exact:true}).isVisible(),true);assert.equal(await page.getByLabel('Panel size',{exact:true}).isVisible(),true);
+ assert.equal(await page.getByRole('heading',{name:'Send a card',exact:true}).count(),0);
  const name=page.getByLabel('Display name',{exact:true});
  assert.equal(await name.inputValue(),'Left-64');
  await name.fill('Porch');fail=true;await page.getByRole('button',{name:'Save name',exact:true}).click();

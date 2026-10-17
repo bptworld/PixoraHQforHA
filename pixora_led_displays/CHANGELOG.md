@@ -1,3 +1,7 @@
+# 1.2.9
+
+- Move display name, panel size and removal into a visible Manage displays section at the top of Displays & firmware. Remove manual card sending from this setup page. Keep the management and firmware display pickers synchronized.
+
 # 1.2.8
 
 - Serialize hub connections to each panel during firmware transfer and restart verification so deck traffic waits while other displays continue.

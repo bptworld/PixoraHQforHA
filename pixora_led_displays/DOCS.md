@@ -51,7 +51,7 @@ Use **Pixora LED (Local): Play deck** with an optional saved deck name or ID, or
 
 Decks, settings, uploaded graphics, downloaded cards and playback state live in this app’s Home Assistant data folder. Keep them in your normal HA backups. Browser access is through HA Ingress. Native HA deck actions use the panel-specific saved authorization over the internal HA app network. Card renderer subprocesses do not receive the Supervisor token.
 
-Only S3 64×32 and 128×32 panels are supported. Both use the same user-OTA firmware image and retain the saved panel-width setting. If a 128-wide panel repeats the same image on each half or appears as 64×32, update to panel firmware 2.0.20, open **Displays & firmware → Display settings**, choose **128 × 32**, and click **Save panel size**. The panel restarts; the app verifies its size while keeping Wi-Fi, pairing, its name and decks. Firmware source remains private; only ready-to-upload binaries are published separately.
+Only S3 64×32 and 128×32 panels are supported. Both use the same user-OTA firmware image and retain the saved panel-width setting. If a 128-wide panel repeats the same image on each half or appears as 64×32, update to panel firmware 2.0.20, open **Displays & firmware → Manage displays**, choose **128 × 32**, and click **Save panel size**. The panel restarts; the app verifies its size while keeping Wi-Fi, pairing, its name and decks. Firmware source remains private; only ready-to-upload binaries are published separately.
 
 Add this app repository: **https://github.com/bptworld/PixoraHQforHA**.
 
