@@ -1,3 +1,10 @@
+# 1.1.3
+
+- Fix card downloads by hashing exact public Git blobs, independent of Windows line endings. Preserve integrity checks and identify any failed file.
+
+- Deepen Light theme blues, strengthen borders and highlight selected controls in blue.
+- Correct garbled separators, dimensions and punctuation in Studio.
+
 # 1.1.2
 
 - Add confirmed pre-uninstall cleanup for Studio data, downloaded files, companion files and HA display devices. Prevent recreation after cleanup starts and report incomplete cleanup for retry.

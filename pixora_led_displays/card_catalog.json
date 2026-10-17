@@ -13003,8 +13003,8 @@
   ],
   "files": {
     "LICENSE": {
-      "sha256": "ad93432f25d38a150a4e428f8c7a5dbbb7aa78844a37006bb7a2d63b5b8a3e36",
-      "size": 1086
+      "sha256": "a2824880c32d21d1012183ff8bd449fa18ab50102264b32dd0b1b935c01d47be",
+      "size": 1065
     },
     "addons/_coastal_common.py": {
       "sha256": "91b8c6354b141bf409aa60ca533525b2ceb29c224af115a03cee3e4456b92a46",
@@ -13607,8 +13607,8 @@
       "size": 52561
     },
     "assets/flight_landing_airplane.source.txt": {
-      "sha256": "afd6989ceab439a62370fb8908e2969b2049941363d2f777766273f32406f33c",
-      "size": 340
+      "sha256": "d89d0da2e9f2119cffd01fd544c9f7aec5168020703caa784ac51fe74b548d33",
+      "size": 337
     },
     "assets/fonts/Jersey10-Regular.ttf": {
       "sha256": "47405193f6ef4e993e60078dd6f70c3b83e685b59ce2be07956f5119aa2d7ef6",

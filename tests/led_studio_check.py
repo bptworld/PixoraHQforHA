@@ -1,5 +1,5 @@
 """Local studio integration: on-demand cards, shared-file GC, storage and playback failures."""
-import asyncio,io,json,sys,tempfile
+import asyncio,io,json,subprocess,sys,tempfile
 from pathlib import Path
 from unittest.mock import patch
 from PIL import Image
@@ -23,7 +23,7 @@ class Downloads:
   assert url.startswith('https://raw.githubusercontent.com/bptworld/pixora/') and not kwargs['allow_redirects']
   name=url.split('/cards/',1)[1];self.calls.append(name)
   if self.fail:raise ValueError('Download failed')
-  return Response((SOURCE/name).read_bytes())
+  return Response(subprocess.check_output(['git','-C',str(SOURCE.parent),'show',json.loads((ROOT/'pixora_led_displays/card_catalog.json').read_text())['commit']+':cards/'+name]))
 async def check():
  sent=[]
  class Panel:

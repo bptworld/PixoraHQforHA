@@ -28,7 +28,16 @@ for card in registry['cards']:
  card.pop('url',None)
  if card['id']=='home_assistant_entity':card['options']=[o for o in card.get('options',[]) if o['key'] not in ('host','token')]
 paths={name for card in registry['cards'] for name in card['files']}
-registry['files']={name:{'sha256':hashlib.sha256((cards/name).read_bytes()).hexdigest(),'size':(cards/name).stat().st_size} for name in sorted(paths)}
+# Hash immutable repository blobs, not checkout bytes altered by core.autocrlf.
+names=sorted(paths)
+queries=''.join(commit+':cards/'+name+'\n' for name in names).encode('utf-8')
+blobs=subprocess.check_output(['git','-C',str(source),'cat-file','--batch'],input=queries)
+position=0;registry['files']={}
+for name in names:
+ end=blobs.index(b'\n',position);header=blobs[position:end].split()
+ if len(header)!=3 or header[1]!=b'blob':raise ValueError('Missing public Git blob '+name)
+ size=int(header[2]);body=blobs[end+1:end+1+size];position=end+size+2
+ registry['files'][name]={'sha256':hashlib.sha256(body).hexdigest(),'size':len(body)}
 imported_helpers={name for card in registry['cards'] for name in card['files'] if name.endswith('.py') and name != 'addons/'+card['module']+'.py'}
 registry['shared_files']=[name for name in sorted(paths) if name in imported_helpers or name in ('card_utils.py','event_sport_utils.py','LICENSE') or name.startswith('assets/') or name.startswith('addons/_')]
 registry['commit']=commit

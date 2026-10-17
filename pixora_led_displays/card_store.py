@@ -34,10 +34,10 @@ class CardStore:
                             body=bytearray()
                             async for chunk in response.content.iter_chunked(65536):
                                 body.extend(chunk)
-                                if len(body)>meta['size']:raise ValueError('Card file verification failed.')
+                                if len(body)>meta['size']:raise ValueError('Card file verification failed for '+name+'. Your deck was not changed. Check for an LED Studio app update.')
                     except (aiohttp.ClientError,asyncio.TimeoutError) as exc:
                         raise ValueError('Card download failed. Your deck was not changed.') from exc
-                    if len(body)!=meta['size'] or hashlib.sha256(body).hexdigest()!=meta['sha256']:raise ValueError('Card file verification failed.')
+                    if len(body)!=meta['size'] or hashlib.sha256(body).hexdigest()!=meta['sha256']:raise ValueError('Card file verification failed for '+name+'. Your deck was not changed. Check for an LED Studio app update.')
                     path.parent.mkdir(parents=True,exist_ok=True)
                     temp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp');temp.write_bytes(body);staged.append((temp,path))
                 for temp,path in staged:os.replace(temp,path)
