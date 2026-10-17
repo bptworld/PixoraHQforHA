@@ -1,7 +1,7 @@
 name: Pixora LED Displays
-version: "1.0.0"
+version: "1.0.1"
 slug: pixora_led_displays
-description: Send message and image cards straight to Pixora LED panels over local Wi-Fi.
+description: "Send message and image cards straight to Pixora LED panels over local Wi-Fi. Brought to you by PixoraHQ.com."
 arch: [aarch64, amd64, armv7]
 startup: application
 boot: auto

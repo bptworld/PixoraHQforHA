@@ -72,3 +72,7 @@ trusted local network. No commands or keys are sent to Pixora Cloud.
 
 Only MatrixPortal S3 64x32 and 128x32 are supported by this release. Both use
 one S3 user-OTA image; the existing saved panel target selects the width.
+
+---
+
+Brought to you by [PixoraHQ.com](https://pixorahq.com/).

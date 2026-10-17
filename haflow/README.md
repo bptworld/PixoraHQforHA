@@ -36,3 +36,7 @@ Example importable flows are available in [`haflow/examples/`](haflow/examples/)
 
 - `simple-motion-light.json`
 - `5-button-pico-example.json`
+
+---
+
+Brought to you by [PixoraHQ.com](https://pixorahq.com/).

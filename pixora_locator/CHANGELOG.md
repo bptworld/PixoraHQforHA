@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.1
+
+- Add the PixoraHQ.com credit to app information and documentation and the app interface.
+
+
 ## 1.5.0
 
 - Added Battery, Charging, Speed, Distance from Home, Location Health, and Battery Unrestricted sensors to each phone device.

@@ -3881,6 +3881,7 @@ function FlowWorkspace() {
             <span>Ver. {APP_VERSION}</span>
           </div>
         </div>
+        <p className="pixora-credit">Brought to you by <a href="https://pixorahq.com/" target="_blank" rel="noopener noreferrer">PixoraHQ.com</a></p>
         <div className="section-title">Flows</div>
         <div className="flow-library">
           <div className="flow-select-menu" onBlur={(event) => {

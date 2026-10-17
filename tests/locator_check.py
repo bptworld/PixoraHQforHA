@@ -117,7 +117,7 @@ def run() -> None:
             locator.request_json = fake_request
             bridge.home_checked_at = 0
             saved_registration = json.loads(locator.REGISTRATIONS_PATH.read_text())["phone-1"]
-            assert saved_registration["webhook_id"] == "managed-webhook-1" and saved_registration["app_version"] == "1.5.0"
+            assert saved_registration["webhook_id"] == "managed-webhook-1" and saved_registration["app_version"] == "1.5.1"
             page = locator.status_page(bridge).decode()
             assert "Bryan&#x27;s phone" in page and "Connected" in page and "Last successful sync" in page
             assert "42.36" not in page and "-71.06" not in page and "pha1.test" not in page

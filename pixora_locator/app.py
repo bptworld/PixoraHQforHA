@@ -34,7 +34,7 @@ REGISTRATIONS_PATH = Path("/data/registrations.json")
 MIGRATION_SOURCE_PATH = Path("/data/migration-source-id")
 PIXORA_URL = "https://planner.pixorahq.com/api/locator/home-assistant/current"
 HA_API = "http://supervisor/core/api"
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.5.1"
 INGRESS_PORT = 8099
 MAX_MIGRATION_ZONES = 50
 MAX_MIGRATION_FILE_BYTES = 512_000
@@ -518,6 +518,7 @@ h2{{margin:0 0 8px;font-size:22px}}p{{margin:6px 0;color:var(--muted)}}.message{
 <button type="submit"{' disabled' if migration_error else ''}>Create Locator import file</button>
 <p class="warning"><strong>Places only:</strong> No location, arrival, or departure history is read or included. New Places start fresh; an existing matching Place stays unchanged. Delete the file after importing it.</p></form></section>
 <section class="card"><h2>Setup</h2><ol><li>Open Pixora Locator on your phone.</li><li>Open <strong>Settings → Home Assistant App</strong> and create a pairing token.</li><li>Open this Home Assistant App's <strong>Configuration</strong> tab and paste the token.</li><li>Click <strong>Save</strong>, then restart the Home Assistant App.</li></ol><p>Only current locations are synchronized. Pixora Locator does not send location history or friend battery information.</p></section>
+<footer><p>Brought to you by <a href="https://pixorahq.com/" target="_blank" rel="noopener noreferrer" style="color:var(--blue)">PixoraHQ.com</a></p></footer>
 <script src="migration.js" defer></script></main></body></html>"""
     return document.encode("utf-8")
 

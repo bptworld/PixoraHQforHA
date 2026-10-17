@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.66
+
+- Add the PixoraHQ.com credit to app information and documentation and the app interface.
+
+
 ## 0.1.65
 
 - Publish through the shared PixoraHQforHA app repository.

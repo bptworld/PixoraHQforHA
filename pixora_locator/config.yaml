@@ -1,7 +1,7 @@
 name: "Pixora Locator"
-version: "1.5.0"
+version: "1.5.1"
 slug: "pixora_locator"
-description: "Connect Pixora Locator to Home Assistant and import selected zones as fresh Locator Places."
+description: "Connect Pixora Locator to Home Assistant and import selected zones as fresh Locator Places. Brought to you by PixoraHQ.com."
 url: https://github.com/bptworld/PixoraHQforHA/tree/main/pixora_locator
 arch:
   - aarch64

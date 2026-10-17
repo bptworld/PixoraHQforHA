@@ -21,3 +21,7 @@ Extract the supplied ZIP so its `pixora_home_control` folder is at `/addons/pixo
 ## Server deployment
 
 The Pixora connector socket and existing Flow engine run in the same server process. Deploy one Render instance with `WEB_CONCURRENCY=1` (set in this release’s Render blueprint). Multiple workers or replicas require a shared connection broker before enabling this transport. Pairing credentials use the existing encrypted Home Assistant connection storage. No credentials are placed in URLs or logs.
+
+---
+
+Brought to you by [PixoraHQ.com](https://pixorahq.com/).

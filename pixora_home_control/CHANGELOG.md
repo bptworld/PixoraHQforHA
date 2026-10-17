@@ -1,3 +1,7 @@
+# 1.0.9
+
+- Add the PixoraHQ.com credit to app information and documentation.
+
 # 1.0.8
 
 - Send each Home Assistant event once using one event-bus subscription, preserving state triggers, Lutron buttons, custom events and notification replies.

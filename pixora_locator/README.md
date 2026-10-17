@@ -36,3 +36,7 @@ The Pixora Locator Home Assistant App can run beside the official Home Assistant
 Each phone has a normal `device_tracker` for maps and zones. The same device also shows separate Place, Latitude, Longitude, GPS Accuracy, Since, Movement, Sharing Mode, Last Report, Battery, Charging, Speed, Distance from Home, Location Health, and Battery Unrestricted sensor rows, making the details directly usable in dashboards and automations. Home Assistant shows new App versions under **Settings → Apps** after its repository update check runs; use **Check for updates** in the App Store menu to check immediately.
 
 Distance from Home uses the center of Home Assistant's **Home** zone, not a driving route or a saved Place boundary. Set `distance_units` to `mi` (miles/mph, default) or `km` (kilometers/km/h) in the App configuration. Location Health shows Current, Delayed, Stale, One Time, or Off from PixoraHQ's current feed. Battery Unrestricted indicates Android's battery-optimization exemption, not every manufacturer's background restriction; unsupported or older phone apps show unavailable. Measurements come from existing location deliveries, with no extra GPS polling.
+
+---
+
+Brought to you by [PixoraHQ.com](https://pixorahq.com/).

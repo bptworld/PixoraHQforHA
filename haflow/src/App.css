@@ -2685,3 +2685,6 @@ textarea:focus {
 .theme-dark .react-flow__controls-button svg {
   fill: currentColor;
 }
+
+.pixora-credit { font-size: 12px; line-height: 1.5; margin: 10px 0 16px; color: inherit; }
+.pixora-credit a { color: inherit; text-underline-offset: 3px; }
