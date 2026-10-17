@@ -1,3 +1,8 @@
+# 1.2.11
+
+- Recover from transient read-only panel status failures with bounded checks. Never retry an uncertain display write.
+- Use confirmed panel dimensions for event checks instead of repeatedly polling the panel. Report event-check failures without incorrectly claiming playback continues after a connection failure.
+
 # 1.2.10
 
 - Show failed display actions with the display name and actual cause. Keep each affected display’s error visible instead of incorrectly reporting every failure as a group action.

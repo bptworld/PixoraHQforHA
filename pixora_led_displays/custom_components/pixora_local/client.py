@@ -43,6 +43,10 @@ class DisplayBusy(ValueError):
     """Panel explicitly rejected this write before accepting it."""
 
 
+class DisplayUnavailable(ValueError):
+    """A read-only status request failed at the transport layer."""
+
+
 class PriorityMessageActive(ValueError):
     """A deck frame was explicitly rejected because an HA message has priority."""
 
@@ -87,11 +91,17 @@ class DisplayClient:
                 return result
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             if payload is None:
-                raise ValueError('The display at '+self.host+' did not answer the status check. Check its power and current IP address.') from exc
+                raise DisplayUnavailable('The display at '+self.host+' did not answer the status check. Check its power and current IP address.') from exc
             raise ValueError('Could not confirm delivery. Check the display; the request was not retried.') from exc
 
     async def info(self):
-        info = await self.request('/api/info')
+        for attempt in range(3):
+            try:
+                info = await self.request('/api/info')
+                break
+            except DisplayUnavailable:
+                if attempt == 2: raise
+                await asyncio.sleep(1)
         if (not isinstance(info, dict) or not isinstance(info.get('id'), str) or not 1 <= len(info['id']) <= 80
                 or not isinstance(info.get('version'), str) or info.get('width') not in (64, 128) or info.get('height') != 32):
             raise ValueError('This display needs Pixora local-display firmware 2.0.14 or newer.')

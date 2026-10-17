@@ -320,8 +320,10 @@ class Studio:
                             path=self.store.path('addons/'+card['module']+'.py')
                             source=await asyncio.to_thread(path.read_text,encoding='utf-8-sig')
                             if not (any(token in source for token in ('_is_prefetch','deviceGraphic','_device_graphic','wallGraphic','_priority','_group_wall','maybe_score_alert','game_moment_alert','final_win_alert')) or ('_no_replay' in source and '_STATE' in source)):continue
-                            info=await self.selected(ident).info()
-                            request=await self.render(item,info['width'],device_id=ident,request_only=True,events=True)
+                            # Event rendering needs the confirmed panel width, not a
+                            # new network status poll for every card event check.
+                            width=next(d['width'] for d in self.displays() if d['id']==ident)
+                            request=await self.render(item,width,device_id=ident,request_only=True,events=True)
                             state_key=hashlib.sha256(json.dumps({'device':ident,'item':{'id':item['id'],'card':item['card'],'options':item.get('options',{})},'revision':self.store.catalog['commit']},sort_keys=True).encode()).hexdigest()
                             request['state_key']=state_key;request['event_state']=self.pipeline.data['states'].get(state_key,{})
                             for group in self.data['groups'].values():
@@ -332,7 +334,7 @@ class Studio:
                             except CardSkipped:pass
                             self.monitor_errors.pop(ident,None)
                         except asyncio.CancelledError:raise
-                        except Exception:self.monitor_errors[ident]='A card event check failed; regular deck playback continues.'
+                        except Exception:self.monitor_errors[ident]='A card event check failed; special graphics may be delayed.'
                 # Launch shake has a five-second trigger window; do not poll it every 15s.
                 await asyncio.sleep(1)
         except asyncio.CancelledError:raise
