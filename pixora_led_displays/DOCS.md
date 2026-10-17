@@ -1,5 +1,3 @@
-**IMPORTANT — This is the current app from PixoraHQ for Home Assistant.**
-
 **App repository: `https://github.com/bptworld/PixoraHQforHA`**
 
 Add this repository once in **Settings → Apps → App store → ⋮ → Repositories** to find all PixoraHQ Home Assistant apps and their updates.

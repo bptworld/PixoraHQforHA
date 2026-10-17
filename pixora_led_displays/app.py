@@ -107,6 +107,30 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         await client.show(payload.get('message'), payload.get('color', [255, 255, 255]), duration)
         return web.json_response({'accepted': True})
 
+    async def manage_display(request):
+        name = None
+        if request.method == 'PATCH':
+            payload = await object_payload(request)
+            name = payload.get('name')
+            if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
+                raise ValueError('Enter a display name from 1 to 80 characters.')
+            name = name.strip()
+        async with lock:
+            ident = request.match_info['display_id']
+            if not any(d['id'] == ident for d in state['displays']):
+                return web.json_response({'error': 'That display is no longer in the list.'}, status=404)
+            previous = state['displays']
+            if request.method == 'DELETE':
+                state['displays'] = [d for d in previous if d['id'] != ident]
+            else:
+                state['displays'] = [dict(d, name=name) if d['id'] == ident else d for d in previous]
+            try:
+                await asyncio.to_thread(persist)
+            except OSError:
+                state['displays'] = previous
+                raise
+        return web.json_response({'displays': public()})
+
     async def show_image(request):
         duration = int(request.query.get('duration', '10'))
         if not 1 <= duration <= 300:
@@ -146,6 +170,8 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app.router.add_get('/', index)
     app.router.add_get('/api/displays', listing)
     app.router.add_post('/api/displays', pair)
+    app.router.add_patch('/api/displays/{display_id}', manage_display)
+    app.router.add_delete('/api/displays/{display_id}', manage_display)
     app.router.add_post('/api/show', show)
     app.router.add_post('/api/image', show_image)
     app.router.add_post('/api/install-actions', install_actions)

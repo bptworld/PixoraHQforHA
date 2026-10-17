@@ -1,7 +1,7 @@
 name: Pixora LED Displays
-version: "1.0.2"
+version: "1.0.3"
 slug: pixora_led_displays
-description: "Current PixoraHQforHA app. See Information for setup and moving from older repositories. Brought to you by PixoraHQ.com."
+description: "Send cards directly to S3 LED panels over local Wi-Fi. Brought to you by PixoraHQ.com."
 arch: [aarch64, amd64, armv7]
 startup: application
 boot: auto

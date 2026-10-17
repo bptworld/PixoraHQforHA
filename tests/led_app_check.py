@@ -6,6 +6,7 @@ import io
 import json
 import sys
 import tempfile
+from unittest.mock import patch
 from pathlib import Path
 from aiohttp.test_utils import TestClient, TestServer
 from PIL import Image
@@ -76,6 +77,27 @@ async def checks():
         restarted = module.make_app(root / 'data', config, Panel, ingress_peer='127.0.0.1')
         async with TestClient(TestServer(restarted)) as client:
             assert (await (await client.get('/api/displays')).json())['displays'][0]['name'] == 'Kitchen'
+            response = await client.patch('/api/displays/panel1', json={'name': ' Left display '})
+            assert response.status == 200
+            assert (await response.json())['displays'][0]['name'] == 'Left display'
+            assert 'key' not in (await (await client.get('/api/displays')).json())['displays'][0]
+            for name in ['', '  ', 'x' * 81, None]:
+                assert (await client.patch('/api/displays/panel1', json={'name': name})).status == 400
+            assert (await client.patch('/api/displays/missing', json={'name': 'Other'})).status == 404
+            assert (await client.delete('/api/displays/missing')).status == 404
+            assert (await client.delete('/api/displays/panel1', headers={'Sec-Fetch-Site': 'cross-site'})).status == 403
+            before = json.loads((root / 'data/displays.json').read_text())
+            with patch.object(module.os, 'replace', side_effect=OSError('Disk unavailable')):
+                assert (await client.patch('/api/displays/panel1', json={'name': 'Lost name'})).status == 400
+                assert (await client.delete('/api/displays/panel1')).status == 400
+            assert (await (await client.get('/api/displays')).json())['displays'][0]['name'] == 'Left display'
+            assert json.loads((root / 'data/displays.json').read_text()) == before
+            assert (await client.delete('/api/displays/panel1')).status == 200
+            assert (await (await client.get('/api/displays')).json())['displays'] == []
+            assert (await client.post('/api/show', json={'id': 'panel1', 'message': 'No longer saved'})).status == 400
+        removed = module.make_app(root / 'data', config, Panel, ingress_peer='127.0.0.1')
+        async with TestClient(TestServer(removed)) as client:
+            assert (await (await client.get('/api/displays')).json())['displays'] == []
         async with TestClient(TestServer(module.make_app(root / 'data', config, Panel))) as client:
             assert (await client.get('/api/displays')).status == 403
 

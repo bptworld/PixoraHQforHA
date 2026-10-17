@@ -1,3 +1,11 @@
+# 1.0.3
+
+- Add Rename and Remove controls for saved displays, with removal confirmation and durable changes.
+
+- Show connection progress and a clear success/error message beside Connect display. Clear the name and IP only after success; keep them on failure and select the connected display for sending.
+
+- Remove the unnecessary Important notice and migration wording from this new app’s Information page.
+
 # 1.0.2
 
 **IMPORTANT — This is the current app from PixoraHQ for Home Assistant.**
