@@ -1,3 +1,8 @@
+# 1.0.8
+
+- Reconnect automatically after a one-click firmware update to restore saved pairing and the Waiting screen.
+- Confirm the running version after restart and refresh the installed-version text. Show an unverified outcome clearly without resending firmware.
+
 # 1.0.7
 
 - Load Home Assistant’s container environment before starting the app, restoring Supervisor discovery and the HA restart button.

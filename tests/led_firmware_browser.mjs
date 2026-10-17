@@ -14,7 +14,7 @@ try{
   if(url.pathname==='/api/firmware')return route.fulfill({json:{current:'2.0.14',latest:'2.0.18',available:true,preview:true}});
   if(url.pathname==='/api/firmware/update'){
    updates++;assert.equal(url.searchParams.get('id'),'left');assert.deepEqual(route.request().postDataJSON(),{version:'2.0.18'});
-   return fail?route.fulfill({status:400,json:{error:'Update outcome is uncertain.'}}):route.fulfill({json:{updated:true,message:'Firmware 2.0.18 confirmed. The display is restarting.'}});
+   return fail?route.fulfill({status:400,json:{error:'Update outcome is uncertain.'}}):route.fulfill({json:{updated:true,verified:true,current:'2.0.18',message:'Firmware 2.0.18 confirmed running. Display reconnected and ready.'}});
   }
   throw Error('Unexpected request '+url.pathname);
  });
@@ -23,6 +23,7 @@ try{
  assert.equal(await page.locator('#restartHA').isVisible(),false);
  assert.match(await page.locator('#firmwareInfo').innerText(),/2.0.18 \(preview\)/);
  await page.locator('#autoUpdate').click();await page.locator('#firmwareStatus').filter({hasText:'confirmed'}).waitFor();
+ assert.equal(await page.locator('#firmwareInfo').innerText(),'Installed: 2.0.18. Up to date.');
  assert.equal(updates,1);assert.equal(await page.locator('#autoUpdate').isVisible(),false);
  await page.locator('#checkFirmware').click();await page.locator('#autoUpdate').waitFor({state:'visible'});fail=true;
  await page.locator('#autoUpdate').click();await page.locator('#firmwareStatus.error').waitFor();

@@ -11,7 +11,7 @@ from PIL import Image, ImageOps
 sys.path.insert(0, str(Path(__file__).parent / 'custom_components' / 'pixora_local'))
 from client import DisplayClient
 from automation import HomeAssistantSetup
-from firmware_updates import FirmwareUpdates, version
+from firmware_updates import FirmwareUpdates, version, verify_restart
 
 
 def image_payload(body, width, height, duration):
@@ -178,7 +178,12 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
                 return web.json_response({'updated':False, 'message':'This display is already up to date.'})
             body = await updates.download(release)
             await client.update_firmware(body)
-            return web.json_response({'updated':True,'message':'Firmware '+release['version']+' confirmed. The display is restarting; keep it powered on.'})
+            verified = await verify_restart(client, info['id'], release['version'])
+            if verified:
+                return web.json_response({'updated':True,'verified':True,'current':verified['version'],
+                    'message':'Firmware '+verified['version']+' confirmed running. Display reconnected and ready.'})
+            return web.json_response({'updated':True,'verified':False,
+                'message':'Firmware transfer accepted, but the restarted display could not be verified. Keep it powered on and use Check for updates. Firmware was not resent.'})
 
     async def install_actions(request):
         async with lock:

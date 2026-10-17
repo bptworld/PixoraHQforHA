@@ -81,3 +81,17 @@ class FirmwareUpdates:
             raise ValueError('Too many firmware download redirects.')
         except (aiohttp.ClientError,asyncio.TimeoutError) as exc:
             raise ValueError('Firmware download failed. The panel was not changed.') from exc
+
+async def verify_restart(client, device_id, expected, wait=asyncio.sleep):
+    """Bounded, read-only verification after a user-requested OTA; never resend firmware."""
+    for delay in (3, 5, 8):
+        await wait(delay)
+        try:
+            info = await client.info()
+        except ValueError:
+            continue
+        if info['id'] != device_id:
+            raise ValueError('A different panel answered after the update. Check its address; firmware was not resent.')
+        if info['version'] == expected:
+            return info
+    return None

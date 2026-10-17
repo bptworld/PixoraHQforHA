@@ -5,10 +5,10 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from aiohttp.test_utils import TestClient, TestServer
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_led_displays'))
-from firmware_updates import FirmwareUpdates, MAX_SIZE
+from firmware_updates import FirmwareUpdates, MAX_SIZE, verify_restart
 from app import make_app
 
 async def check():
@@ -62,12 +62,27 @@ async def check():
             assert (await client.post('/api/displays',json={'host':'192.168.1.50'})).status==200
             result=await (await client.get('/api/firmware?id=panel')).json()
             assert result=={'current':'2.0.14','latest':'2.0.18','preview':True,'available':True}
-            assert (await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})).status==200 and len(sent)==1
+            with patch('app.verify_restart',AsyncMock(return_value={'id':'panel','version':'2.0.18'})) as reconnect:
+                response = await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})
+                assert response.status==200 and len(sent)==1 and (await response.json())['verified']
+                reconnect.assert_awaited_once()
             assert (await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})).status==400 and len(sent)==2
             app['firmware_updates'].download.side_effect=ValueError('Checksum mismatch')
             assert (await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})).status==400 and len(sent)==2
             assert (await client.post('/api/firmware/update?id=unknown')).status==400 and len(sent)==2
             async with app['firmware_updates'].update_lock:
                 assert (await client.post('/api/firmware/update?id=panel',json={'version':'2.0.18'})).status==400 and len(sent)==2
+    reconnect=AsyncMock()
+    reconnect.info.side_effect=[ValueError('restarting'),{'id':'panel','version':'2.0.17'},{'id':'panel','version':'2.0.18'}]
+    result=await verify_restart(reconnect,'panel','2.0.18',wait=AsyncMock())
+    assert result['version']=='2.0.18' and reconnect.info.await_count==3
+    reconnect.update_firmware.assert_not_called()
+    reconnect.info.side_effect=ValueError('offline')
+    assert await verify_restart(reconnect,'panel','2.0.18',wait=AsyncMock()) is None
+    reconnect.info.side_effect=None
+    reconnect.info.return_value={'id':'wrong','version':'2.0.18'}
+    try: await verify_restart(reconnect,'panel','2.0.18',wait=AsyncMock())
+    except ValueError: pass
+    else: raise AssertionError('Wrong panel confirmed after restart')
 asyncio.run(check())
 print('Firmware updates passed: release selection/cache, chunked download, checksum/size, redirect isolation, selected panel, update serialization and no retries.')
