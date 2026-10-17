@@ -19,6 +19,8 @@ def rgb(value):
 
 async def async_setup(hass, config):
     hass.data.setdefault(DOMAIN, {})
+    marker = Path(hass.config.path('.pixora-led-ha-version'))
+    await hass.async_add_executor_job(marker.write_text, '1.0.5')
 
     async def show_card(call):
         client = hass.data[DOMAIN].get(call.data['config_entry_id'])

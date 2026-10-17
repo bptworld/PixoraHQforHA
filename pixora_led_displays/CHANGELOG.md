@@ -1,3 +1,9 @@
+# 1.0.5
+
+- Install companion updates automatically at app startup.
+- Register connected displays with HA automatically using saved pairing details; update existing connections without duplicate entities.
+- Replace manual setup steps with clear status and a single explicit HA restart button when needed.
+
 # 1.0.4
 
 - Audit pairing, reconnecting, card acknowledgements, HA reconfiguration and safe companion installation.

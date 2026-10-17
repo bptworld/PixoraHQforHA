@@ -69,6 +69,7 @@ async def checks():
             assert (await client.post('/api/show', json={}, headers={'Sec-Fetch-Site': 'cross-site'})).status == 403
             assert (await client.post('/api/install-actions', json={})).status == 200
             assert (config / 'custom_components/pixora_local/manifest.json').is_file()
+            (config / 'custom_components/pixora_local/old.py').write_text('# obsolete')
             # Updates preserve unrelated HA integrations and back up the previous Pixora copy.
             sentinel = config / 'custom_components/other.txt'
             sentinel.write_text('keep')

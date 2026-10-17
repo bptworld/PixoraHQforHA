@@ -22,7 +22,9 @@
     },
     "abort": {
       "already_configured": "This display is already connected.",
-      "reconfigure_successful": "Display connection updated."
+      "reconfigure_successful": "Display connection updated.",
+      "invalid_discovery": "The app sent invalid display information. Reconnect the display in LED Displays.",
+      "panels_registered": "Connected displays have been registered automatically."
     }
   }
 }

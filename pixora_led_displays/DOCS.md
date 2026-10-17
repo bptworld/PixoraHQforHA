@@ -44,11 +44,9 @@ requirement. Firmware updates after installation are sent from this app's
 
 ## Automations
 
-Open **Use in HA automations** in this app and choose **Install automation
-actions**. This installs only the `pixora_local` custom integration into
-`/homeassistant/custom_components` and backs up any previous copy under app data.
-Restart Home Assistant, then add **Pixora LED (Local)** under Settings → Devices
-& services. Restart each panel before connecting it by IP address.
+Connecting a display also registers it with Home Assistant automatically, using its saved address and authorization. No second pairing or manual integration setup is needed. The app installs and updates its companion automatically at startup, changing only its own integration folder.
+
+If Home Assistant needs to load new companion code, the app shows **Restart Home Assistant to finish setup**. Choose this when convenient: it restarts all of HA and briefly interrupts automations. Displays are registered after HA starts. No restart is needed just to add another display once the companion is loaded.
 
 Each paired panel becomes a native HA `notify` entity. In an automation choose
 **Send a notification message** (`notify.send_message`) and select your panel.
@@ -87,6 +85,8 @@ one S3 user-OTA image; the existing saved panel target selects the width.
 
 Brought to you by [PixoraHQ.com](https://pixorahq.com/).
 
-### Updating an existing connection
+### Updates and connection changes
 
-After an app update, choose **Install automation actions** again and restart Home Assistant to update the companion integration. If a panel IP changes, open **Settings > Devices & services > Pixora LED (Local) > Reconfigure**. This preserves its existing entity and automation references. Enter the same panel new address. On firmware 2.0.18 or newer, authorized reconnects do not need a panel restart. A new HA connection still needs the two-minute pairing window.
+App updates prepare companion updates automatically. If needed, use the single **Restart Home Assistant to finish setup** button in the app. Reconnect a saved display at its new address and HA updates that same display without replacing its entity or automation references. Manual **Reconfigure** in HA remains available for troubleshooting.
+
+If automatic preparation fails, the app keeps your saved panels and shows the reason. Open **Setup troubleshooting > Retry HA setup** after fixing it. This never resends cards or restarts HA automatically.

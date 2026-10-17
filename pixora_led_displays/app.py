@@ -4,14 +4,13 @@ import base64
 import io
 import json
 import os
-import shutil
 import sys
-import uuid
 from pathlib import Path
 from aiohttp import web, ClientSession
 from PIL import Image, ImageOps
 sys.path.insert(0, str(Path(__file__).parent / 'custom_components' / 'pixora_local'))
 from client import DisplayClient
+from automation import HomeAssistantSetup
 
 
 def image_payload(body, width, height, duration):
@@ -103,7 +102,8 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
             except OSError:
                 state['displays'] = previous
                 raise
-        return web.json_response({'displays': public()})
+        automation = await app['automation'].sync(list(state['displays']))
+        return web.json_response({'displays': public(), 'automation':automation})
 
     async def show(request):
         payload = await object_payload(request)
@@ -136,7 +136,8 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
             except OSError:
                 state['displays'] = previous
                 raise
-        return web.json_response({'displays': public()})
+        automation = await app['automation'].sync(list(state['displays']))
+        return web.json_response({'displays': public(), 'automation':automation})
 
     async def show_image(request):
         duration = int(request.query.get('duration', '10'))
@@ -154,37 +155,21 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         return web.json_response({'updated': True})
 
     async def install_actions(request):
-        source = Path(__file__).parent / 'custom_components' / 'pixora_local'
-        target = config_root / 'custom_components' / 'pixora_local'
-        if not config_root.is_dir():
-            raise ValueError('Home Assistant configuration folder is unavailable.')
-        def install():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            stage = target.with_name('.pixora-stage-' + uuid.uuid4().hex)
-            old = target.with_name('.pixora-old-' + uuid.uuid4().hex)
-            try:
-                shutil.copytree(source, stage, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-                if target.exists():
-                    backup = root / 'action-backups' / uuid.uuid4().hex
-                    shutil.copytree(target, backup)
-                    target.rename(old)
-                try:
-                    stage.rename(target)
-                except OSError:
-                    if old.exists():
-                        old.rename(target)
-                    raise
-                if old.exists():
-                    shutil.rmtree(old)
-            finally:
-                if stage.exists():
-                    shutil.rmtree(stage)
         async with lock:
-            await asyncio.to_thread(install)
-        return web.json_response({'message': 'Actions installed. Restart Home Assistant, then add the Pixora LED (Local) integration under Devices & services. Restart the panel before connecting it.'})
+            result = await app['automation'].sync(list(state['displays']))
+        return web.json_response({'automation':result, 'message':'HA setup prepared automatically. Restart Home Assistant if requested below.'})
+
+    async def automation_status(request):
+        return web.json_response(await app['automation'].status())
+
+    async def restart_ha(request):
+        await app['automation'].restart()
+        return web.json_response({'message':'Home Assistant restart requested. Wait for HA to reconnect.'})
 
     async def startup(app):
         app['session'] = ClientSession()
+        app['automation'] = HomeAssistantSetup(app['session'], root, config_root)
+        await app['automation'].sync(list(state['displays']))
 
     async def cleanup(app):
         await app['session'].close()
@@ -199,6 +184,8 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app.router.add_post('/api/show', show)
     app.router.add_post('/api/image', show_image)
     app.router.add_post('/api/install-actions', install_actions)
+    app.router.add_get('/api/automation-status', automation_status)
+    app.router.add_post('/api/restart-ha', restart_ha)
     app.router.add_post('/api/update', update_firmware)
     return app
 

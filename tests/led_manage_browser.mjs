@@ -11,6 +11,7 @@ try{
  await page.route('http://led.test/**',async route=>{
   const url=new URL(route.request().url()),method=route.request().method();
   if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:html});
+  if(url.pathname==='/api/automation-status')return route.fulfill({json:{restart_required:true,error:''}});
   if(url.pathname==='/api/displays')return route.fulfill({json:{displays:items}});
   assert.equal(url.pathname,'/api/displays/left');
   if(method==='DELETE')deletes++;

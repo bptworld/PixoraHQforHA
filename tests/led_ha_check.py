@@ -3,6 +3,7 @@ import asyncio
 import importlib
 import sys
 import types
+import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -17,6 +18,10 @@ sys.modules['homeassistant.helpers.aiohttp_client'].async_get_clientsession = la
 class Flow:
     def __init_subclass__(cls, **kwargs): pass
     def async_show_form(self, **kwargs): return kwargs
+    def async_abort(self, **kwargs): return kwargs
+    async def async_set_unique_id(self, ident): self.unique_id=ident
+    def _abort_if_unique_id_configured(self): pass
+    def async_create_entry(self, **kwargs): return kwargs
     def _get_reconfigure_entry(self): return self.entry
     def async_update_reload_and_abort(self, entry, **kwargs): return {'entry':entry, **kwargs}
 sys.modules['homeassistant.config_entries'].ConfigFlow = Flow
@@ -30,7 +35,9 @@ async def check():
     class Services:
         def async_register(self, domain, name, callback, schema): callbacks[name] = (callback, schema)
     panel = types.SimpleNamespace(show=AsyncMock(), request=AsyncMock(), info=AsyncMock(return_value={'id':'stable','width':64,'height':32}))
-    hass = types.SimpleNamespace(data={'pixora_local': {'entry1':panel}}, services=Services())
+    async def executor(fn,*args): return fn(*args)
+    temp=tempfile.TemporaryDirectory()
+    hass = types.SimpleNamespace(config=types.SimpleNamespace(path=lambda p:str(Path(temp.name)/p)),async_add_executor_job=executor,data={'pixora_local': {'entry1':panel}}, services=Services())
     await integration.async_setup(hass, {})
     callback,schema = callbacks['show_card']
     data=schema({'config_entry_id':'entry1','message':'Washer finished'})
@@ -57,6 +64,20 @@ async def check():
     ident='another-panel'
     result=await flow.async_step_reconfigure({'host':'192.168.1.61'})
     assert result['errors']['base']=='cannot_connect'
+    entry.unique_id='stable';entry.source='user'
+    manager=types.SimpleNamespace(async_entries=lambda domain:[entry],async_update_entry=lambda entry,**kwargs:setattr(entry,'data',kwargs['data']),async_reload=AsyncMock(),flow=types.SimpleNamespace(async_init=AsyncMock()))
+    hass.config_entries=manager
+    result=await flow.async_step_integration_discovery({'id':'stable','key':'b'*32,'host':'192.168.1.70','name':'App name'})
+    assert result['reason']=='already_configured' and entry.data['host']=='192.168.1.70' and entry.title=='Kitchen'
+    manager.async_reload.assert_awaited_once_with('entry1')
+    result=await flow.async_step_integration_discovery({'id':'new','key':'c'*32,'host':'192.168.1.71','name':'New panel'})
+    assert result['title']=='New panel' and result['data']['device_id']=='new'
+    result=await flow.async_step_integration_discovery({'id':'bad','key':'secret','host':'192.168.1.71'})
+    assert result['reason']=='invalid_discovery'
+    result=await flow.async_step_hassio(types.SimpleNamespace(config={'displays':[{'id':'stable'}]}))
+    assert result['reason']=='panels_registered'
+    manager.flow.async_init.assert_awaited_once_with('pixora_local',context={'source':'integration_discovery'},data={'id':'stable'})
+    assert Path(temp.name,'.pixora-led-ha-version').read_text()=='1.0.5'
     entity=notify_module.PixoraDisplay(panel,entry)
     try: await entity.async_send_message('Done')
     except HAError: pass
