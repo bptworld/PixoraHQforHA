@@ -23,6 +23,7 @@ def celebration(team,kind):
  return [Image.new('RGB',(team['_width'],32),'blue'),Image.new('RGB',(team['_width'],32),'green')],[70,350]
 def render(options):
  print('Card diagnostic output')
+ if options.get('failPrefetch') and options['_is_prefetch']:raise ValueError('Ordinary provider failed')
  if options.get('skip'):return None
  if options['_is_prefetch']:return {'body':frame('red',options['_width']),'dwell_secs':10}
  key=(options['_device_id'],'game');score=options.get('score',0);old=_SCORE_STATE.get(key)
@@ -50,6 +51,8 @@ def render(options):
         assert times==[70,350],times
     request['event_state']=scored['state']
     assert run(request)['event'] is None,'Celebration replayed after renderer restart'
+    failed_ordinary=run({**request,'options':{'score':2,'failPrefetch':True}})
+    assert failed_ordinary['event'] and failed_ordinary['skip'] and failed_ordinary['state'],'An ordinary-card failure discarded a valid special event'
     preview=run({**request,'events':False,'options':{'score':2}})
     assert preview['event'] is None and preview['state']=={},'Preview consumed event history'
     wall=run({**request,'wall_width':192,'options':{'score':2,'wall':True}})
@@ -84,5 +87,61 @@ def render(options):
     real_request.update(event_state=baseline['state'],options={'favoriteTeam':'TEST','score':7})
     touchdown=run(real_request);assert touchdown['event'] is not None and touchdown['event']['once']
     real_request['event_state']=touchdown['state'];assert run(real_request)['event'] is None
+
+    # NCAA delegates detection to a shared helper, rather than NFL's inline logic.
+    (root/'addons/probe.py').write_text("""import importlib.util,sys,io
+from PIL import Image
+sys.path[:0]=[SOURCE,SOURCE+'/addons']
+spec=importlib.util.spec_from_file_location('actual_cfb',SOURCE+'/addons/college_football.py');cfb=importlib.util.module_from_spec(spec);spec.loader.exec_module(cfb)
+import _sports_breaking as breaking
+_SCORE_STATE=cfb._SCORE_STATE
+def render(options):
+ out=io.BytesIO();Image.new('RGB',(64,32),'blue').save(out,'PNG');body=out.getvalue()
+ competitor={'score':str(options.get('score',0)),'team':{'abbreviation':'ALA','displayName':'Alabama'}}
+ event={'id':'alabama-game','competitions':[{'status':{'type':{'state':'in'}},'competitors':[competitor]}]}
+ breaking.fetch_sport_scoreboard=lambda *args,**kwargs:{'events':[event]}
+ breaking.pick_sport_event=lambda *args:event
+ breaking.warm_priority_graphic=lambda *args:None
+ breaking.cached_priority_graphic=lambda key,renderer:renderer()
+ cfb._render_score_animation=lambda *args:body
+ cfb.render_sport_card=lambda *args:body
+ return cfb.render(options)
+""".replace('SOURCE',repr(str(source).replace(chr(92),'/'))))
+    real_request={**request,'event_state':{},'options':{'favoriteTeam':'ALA','score':0}}
+    baseline=run(real_request);assert baseline['event'] is None and baseline['state']
+    real_request.update(event_state=baseline['state'],options={'favoriteTeam':'ALA','score':7})
+    touchdown=run(real_request);assert touchdown['event'] and touchdown['event']['once']
+    real_request['event_state']=touchdown['state'];assert run(real_request)['event'] is None
+
+    # Flight snapshot refreshes must finish in this process; landing identity survives it.
+    (root/'addons/flight_track.py').write_text("""import io
+from PIL import Image
+_SNAPSHOT_CACHE={}
+_LANDED_FLIGHT_EVENTS={}
+def _refresh_snapshot(key,options):
+ new=key not in _LANDED_FLIGHT_EVENTS
+ _LANDED_FLIGHT_EVENTS[key]=123
+ _SNAPSHOT_CACHE[key]={'welcome':new}
+def _queue_snapshot_refresh(key,options):return None
+def render(options):
+ out=io.BytesIO();Image.new('RGB',(64,32),'blue').save(out,'PNG');body=out.getvalue()
+ if options['_is_prefetch']:return body
+ snapshot=_queue_snapshot_refresh('landed-flight',options)
+ if snapshot and snapshot['welcome']:return {'body':body,'_priority_graphic':True}
+ return body
+""")
+    flight_request={**request,'module':'flight_track','event_state':{},'options':{}}
+    landed=run(flight_request);assert landed['event'] and '_LANDED_FLIGHT_EVENTS' in landed['state']
+    assert run({**flight_request,'event_state':landed['state']})['event'] is None
+
+    # Movie slideshows use no_replay for their ordinary animation, not a new event.
+    (root/'addons/slideshow.py').write_text("""import io
+from PIL import Image
+def render(options):
+ out=io.BytesIO();Image.new('RGB',(64,32),'red').save(out,'PNG')
+ return {'body':out.getvalue(),'dwell_secs':12,'_no_replay':True}
+""")
+    slideshow=run({**request,'module':'slideshow','events':False,'options':{}})
+    assert slideshow['body'] and not slideshow['skip'] and slideshow['event'] is None
 
 print('Event worker passed: structured results, persistent typed history, no replay, clean regular cache, 70/350ms timing, preview isolation, wall canvas and intentional skips.')

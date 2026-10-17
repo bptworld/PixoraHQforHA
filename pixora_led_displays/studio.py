@@ -299,6 +299,7 @@ class Studio:
             return out.getvalue()
 
     async def monitor(self,ident):
+        next_checks={}
         try:
             while self.data['devices'].get(ident,{}).get('playing'):
                 cfg=self.data['devices'][ident]
@@ -306,14 +307,16 @@ class Studio:
                     for item in self.data['decks'].get(cfg.get('deck'),{}).get('items',[]):
                         if not item.get('enabled') or 'card' not in item:continue
                         card=self.store.cards[item['card']]
-                        # Event producers are discovered from downloaded source, not private Cloud code.
-                        path=self.store.path('addons/'+card['module']+'.py')
-                        source=await asyncio.to_thread(path.read_text,encoding='utf-8-sig')
-                        if not any(token in source for token in ('_is_prefetch','deviceGraphic','wallGraphic','_priority','_group_wall')):continue
+                        if next_checks.get(item['id'],0)>time.monotonic():continue
+                        next_checks[item['id']]=time.monotonic()+(1 if card['id']=='launch_countdown' else 15)
                         try:
+                            # Event producers are discovered from downloaded source, not private Cloud code.
+                            path=self.store.path('addons/'+card['module']+'.py')
+                            source=await asyncio.to_thread(path.read_text,encoding='utf-8-sig')
+                            if not (any(token in source for token in ('_is_prefetch','deviceGraphic','_device_graphic','wallGraphic','_priority','_group_wall','maybe_score_alert','game_moment_alert','final_win_alert')) or ('_no_replay' in source and '_STATE' in source)):continue
                             info=await self.selected(ident).info()
                             request=await self.render(item,info['width'],device_id=ident,request_only=True,events=True)
-                            state_key=hashlib.sha256(json.dumps({'device':ident,'item':item,'revision':self.store.catalog['commit']},sort_keys=True).encode()).hexdigest()
+                            state_key=hashlib.sha256(json.dumps({'device':ident,'item':{'id':item['id'],'card':item['card'],'options':item.get('options',{})},'revision':self.store.catalog['commit']},sort_keys=True).encode()).hexdigest()
                             request['state_key']=state_key;request['event_state']=self.pipeline.data['states'].get(state_key,{})
                             for group in self.data['groups'].values():
                                 if ident in group['members']:
@@ -324,7 +327,8 @@ class Studio:
                             self.monitor_errors.pop(ident,None)
                         except asyncio.CancelledError:raise
                         except Exception:self.monitor_errors[ident]='A card event check failed; regular deck playback continues.'
-                await asyncio.sleep(15)
+                # Launch shake has a five-second trigger window; do not poll it every 15s.
+                await asyncio.sleep(1)
         except asyncio.CancelledError:raise
         except Exception:self.monitor_errors[ident]='Event monitoring stopped. Check the deck, then press Play.'
 

@@ -68,6 +68,12 @@ def run(request):
         card_utils._settings_value=lambda key,default='':settings.get(key,default)
         if callable(getattr(card_utils,'use_runtime_settings',None)):card_utils.use_runtime_settings(settings)
     spec.loader.exec_module(module)
+    if request['module']=='flight_track':
+        # An isolated worker must finish the snapshot instead of returning 'Updating'.
+        def flight_snapshot(key,options):
+            module._refresh_snapshot(key,options)
+            return module._SNAPSHOT_CACHE.get(key)
+        module._queue_snapshot_refresh=flight_snapshot
     if request['module'] in ('disney','disney_park_hours'):
         def park_asset(filename):
             if not filename or Path(filename).name!=filename:return None
@@ -75,7 +81,7 @@ def run(request):
             return path if path.is_file() else None
         module._asset_path=park_asset
     for name,value in request.get('event_state',{}).items():
-        if isinstance(getattr(module,name,None),dict) and ('STATE' in name or name in ('_LAST_SEEN','_LAST_FLIGHT_POS')):
+        if isinstance(getattr(module,name,None),dict) and ('STATE' in name or name in ('_LAST_SEEN','_LAST_FLIGHT_POS','_LANDED_FLIGHT_EVENTS')):
             getattr(module,name).update(unpack(value))
     if request['module']=='home_assistant_entity':
         state=request.get('ha_state')
@@ -87,7 +93,7 @@ def run(request):
     result=module.render(options);event=None;state={}
     if request.get('events'):
         for name,value in vars(module).items():
-            if isinstance(value,dict) and ('STATE' in name or name in ('_LAST_SEEN','_LAST_FLIGHT_POS')):
+            if isinstance(value,dict) and ('STATE' in name or name in ('_LAST_SEEN','_LAST_FLIGHT_POS','_LANDED_FLIGHT_EVENTS')):
                 try:state[name]=pack(value)
                 except ValueError:continue
     duration=request.get('dwell',15);body=result
@@ -95,7 +101,7 @@ def run(request):
         body=result.get('body');duration=result.get('dwell_secs') or duration
         wall=result.get('wallGraphic') or result.get('_group_wall')
         device=result.get('deviceGraphic') or result.get('_device_graphic') or {}
-        special=bool(wall or device or any(result.get(k) for k in ('_priority','_priority_graphic','_no_replay','_stay')))
+        special=bool(wall or device or result.get('_priority') or result.get('_priority_graphic') or (request.get('events') and result.get('_no_replay')))
         if special and request.get('events'):
             width=request.get('wall_width',request['width']) if wall else request['width'];graphic_spec=wall or device
             timing=result.get('_frame_durations_ms')
@@ -105,14 +111,15 @@ def run(request):
             event={'body':base64.b64encode(artwork(event_body,width,timing,True)).decode(),'duration':max(1,min(300,int(graphic_spec.get('dwell_secs') or duration))),
                 'kind':str(graphic_spec.get('kind') or graphic_spec.get('type') or 'special'),'wall':bool(wall),'width':width,'once':True}
             # An event is never stored as ordinary deck artwork.
-            ordinary=module.render({**options,'_is_prefetch':True})
+            try:ordinary=module.render({**options,'_is_prefetch':True})
+            except Exception:ordinary=None  # Keep the already-rendered event and its history.
             body=ordinary.get('body') if isinstance(ordinary,dict) else ordinary
-            if isinstance(ordinary,dict) and (ordinary.get('deviceGraphic') or ordinary.get('wallGraphic') or ordinary.get('_group_wall') or ordinary.get('_priority') or ordinary.get('_priority_graphic') or ordinary.get('_no_replay') or ordinary.get('_stay')):body=None
+            if isinstance(ordinary,dict) and (ordinary.get('deviceGraphic') or ordinary.get('_device_graphic') or ordinary.get('wallGraphic') or ordinary.get('_group_wall') or ordinary.get('_priority') or ordinary.get('_priority_graphic') or ordinary.get('_no_replay') or ordinary.get('_stay')):body=None
             duration=ordinary.get('dwell_secs',request.get('dwell',15)) if isinstance(ordinary,dict) else request.get('dwell',15)
         elif special:
             ordinary=module.render({**options,'_is_prefetch':True})
             body=ordinary.get('body') if isinstance(ordinary,dict) else ordinary
-            if isinstance(ordinary,dict) and (ordinary.get('deviceGraphic') or ordinary.get('wallGraphic') or ordinary.get('_group_wall') or ordinary.get('_priority') or ordinary.get('_priority_graphic') or ordinary.get('_no_replay') or ordinary.get('_stay')):body=None
+            if isinstance(ordinary,dict) and (ordinary.get('deviceGraphic') or ordinary.get('_device_graphic') or ordinary.get('wallGraphic') or ordinary.get('_group_wall') or ordinary.get('_priority') or ordinary.get('_priority_graphic') or ordinary.get('_no_replay') or ordinary.get('_stay')):body=None
     normal=None if body is None else artwork(body,request['width'],result.get('_frame_durations_ms') if isinstance(result,dict) and not event else None)
     return {'body':base64.b64encode(normal).decode() if normal else None,'duration':max(1,min(300,int(duration))),
         'skip':normal is None,'event':event,'state':state}

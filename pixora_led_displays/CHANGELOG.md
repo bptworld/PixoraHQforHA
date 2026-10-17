@@ -1,3 +1,9 @@
+# 1.2.3
+
+- Audit all 27 special-event cards and panel/wall artwork variants. Preserve flight landing history, complete local flight snapshots, retain valid events when ordinary rendering fails, and keep event history when only deck duration changes.
+- Keep ordinary movie slideshows playable when they use the no-replay flag; poll launch events frequently enough for the short countdown window.
+- Monitor scoring animations for cards that delegate event detection to shared helpers, including NCAA Football, CFL and UFL.
+
 # 1.2.2
 
 - Clear the HA restart notice automatically when setup is ready.
