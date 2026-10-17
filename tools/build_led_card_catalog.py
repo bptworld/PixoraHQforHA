@@ -12,6 +12,16 @@ def dependencies(path,seen):
   names=[a.name.split('.')[0] for a in node.names] if isinstance(node,ast.Import) else [node.module.split('.')[0]] if isinstance(node,ast.ImportFrom) and node.module else []
   for name in names:
    if name in modules:dependencies(modules[name],seen)
+  # Several public sports cards load a sibling animation module by file path.
+  if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='with_name' and node.args and isinstance(node.args[0],ast.Constant):
+   sibling=node.args[0].value
+   if isinstance(sibling,str) and sibling.endswith('.py'):
+    target=path.with_name(sibling)
+    if target.parent!=path.parent or not target.is_file():raise ValueError('Missing or invalid sibling dependency '+sibling)
+    dependencies(target,seen)
+  if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='import_module' and node.args and isinstance(node.args[0],ast.Constant):
+   name=str(node.args[0].value).split('.')[0]
+   if name in modules:dependencies(modules[name],seen)
 for card in registry['cards']:
  name=card['url'].rsplit('/',1)[-1];path=cards/'addons'/name
  if not path.is_file():raise ValueError('Missing public card '+name)

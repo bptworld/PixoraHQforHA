@@ -1,3 +1,7 @@
+# 1.2.1
+
+- Download dynamically loaded sibling animation modules for College Football, CFL, UFL, College Baseball, College Softball and NCAA Hockey. Fix first-use rendering without requiring another sports card to be installed.
+
 # 1.2.0
 
 - Add hub-local event history, structured card results, special-graphic queues, play-once event delivery and interruption-aware deck resumption. Route HA notifications through the hub queue.
