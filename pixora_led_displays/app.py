@@ -12,7 +12,7 @@ from PIL import Image, ImageOps
 sys.path.insert(0, str(Path(__file__).parent / 'custom_components' / 'pixora_local'))
 from client import DisplayClient
 from automation import HomeAssistantSetup
-from firmware_updates import FirmwareUpdates, version, verify_restart
+from firmware_updates import FirmwareUpdates, version, verify_restart, verify_panel_size
 from studio import Studio
 
 
@@ -156,6 +156,32 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         automation = await app['automation'].sync(list(state['displays']))
         return web.json_response({'displays': public(), 'automation':automation})
 
+    async def panel_size(request):
+        payload=await object_payload(request);width=payload.get('width');ident=request.match_info['display_id']
+        if type(width)is not int or width not in (64,128):raise ValueError('Choose 64×32 or 128×32.')
+        async with lock:
+            client=selected(ident);info=await client.info()
+            if info['id']!=ident:raise ValueError('A different display answered. Panel size was not changed.')
+            if not info.get('panelConfiguration'):raise ValueError('Update this display to firmware 2.0.20 or newer, then save its panel size.')
+            if studio.pipeline.signals(ident)[0].is_set():raise ValueError('Wait for the current notification or group graphic to finish, then save the size.')
+            was_playing=studio.data['devices'].get(ident,{}).get('playing',False)
+            changed=info['width']!=width
+            if changed:
+                await studio.stop(ident)
+                result=await client.request('/api/panel',{'width':width})
+                if result.get('accepted') is not True:raise ValueError('The display did not confirm its size. It was not retried.')
+                info=await verify_panel_size(client,ident,width)
+                if info is None:return web.json_response({'verified':False,'displays':public(),'message':'Size change accepted, but the restarted display could not be verified. Keep it powered on and reconnect it to refresh its size. The change was not resent.'})
+            previous=state['displays']
+            state['displays']=[dict(d,width=info['width'],height=info['height'],version=info['version']) if d['id']==ident else d for d in previous]
+            try:await asyncio.to_thread(persist)
+            except OSError:
+                state['displays']=previous;raise ValueError('The panel changed size, but its updated details could not be saved. Reconnect it to refresh the app; do not resend the size change.')
+        automation=await app['automation'].sync(list(state['displays']))
+        resume=changed and was_playing and ident not in studio.pipeline.blocked and ident not in studio.pipeline.errors
+        if resume:await studio.play(ident)
+        return web.json_response({'verified':True,'displays':public(),'automation':automation,'message':'Panel confirmed as '+str(width)+'×32.'+(' Deck playback resumed.' if resume else '')})
+
     async def show_image(request):
         duration = int(request.query.get('duration', '10'))
         if not 1 <= duration <= 300:
@@ -258,6 +284,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app.router.add_get('/tools', tools)
     app.router.add_get('/api/displays', listing)
     app.router.add_post('/api/displays', pair)
+    app.router.add_post('/api/displays/{display_id}/panel',panel_size)
     app.router.add_patch('/api/displays/{display_id}', manage_display)
     app.router.add_delete('/api/displays/{display_id}', manage_display)
     app.router.add_post('/api/show', show)

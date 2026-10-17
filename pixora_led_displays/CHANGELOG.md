@@ -1,3 +1,7 @@
+# 1.2.6
+
+- Add Panel size under Displays & firmware → Display settings. Correct a 128×32 panel that reports 64×32 without resetting Wi-Fi, pairing, names or decks. Requires panel firmware 2.0.20. Verify the restart before updating saved dimensions.
+
 # 1.2.5
 
 - Compare Cloud wall timing with local delivery. Wait for every group member to finish prior messages and prepare artwork before starting one shared timeline.

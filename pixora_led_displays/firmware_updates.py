@@ -95,3 +95,14 @@ async def verify_restart(client, device_id, expected, wait=asyncio.sleep):
         if info['version'] == expected:
             return info
     return None
+
+
+async def verify_panel_size(client,device_id,width,wait=asyncio.sleep):
+    """Read-only checks after one accepted size change; never resend the write."""
+    for delay in (3,5,8):
+        await wait(delay)
+        try:info=await client.info()
+        except ValueError:continue
+        if info['id']!=device_id:raise ValueError('A different display answered after restart. Panel size was not resent.')
+        if info['width']==width and info['height']==32:return info
+    return None
