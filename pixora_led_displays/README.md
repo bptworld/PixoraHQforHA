@@ -1,4 +1,4 @@
-# Pixora LED Displays
+# Pixora LED Studio
 
 Build decks on your Home Assistant hub and serve them straight to MatrixPortal S3 **64×32** and **128×32** displays over local Wi-Fi. No Pixora Cloud account or rendering server is used.
 

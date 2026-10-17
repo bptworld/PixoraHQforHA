@@ -106,7 +106,7 @@ class Studio:
 
     async def ha(self,path):
         token=os.environ.get('SUPERVISOR_TOKEN')
-        if not token:raise ValueError('Home Assistant API is unavailable. Restart the LED Displays app after updating it.')
+        if not token:raise ValueError('Home Assistant API is unavailable. Restart the Pixora LED Studio app after updating it.')
         async with self.app['session'].get('http://supervisor/core/api/'+path,headers={'Authorization':'Bearer '+token},allow_redirects=False,timeout=ClientTimeout(total=10)) as response:
             if response.status!=200:raise ValueError('Could not read Home Assistant. Check the entity or HA connection.')
             return await response.json()

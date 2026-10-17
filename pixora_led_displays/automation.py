@@ -45,7 +45,7 @@ class HomeAssistantSetup:
     async def supervisor(self, path, payload):
         token = os.environ.get('SUPERVISOR_TOKEN')
         if not token:
-            raise ValueError('Home Assistant API access is unavailable. Update LED Displays to 1.0.7 or newer and restart the LED Displays app. Your saved displays are kept.')
+            raise ValueError('Home Assistant API access is unavailable. Update Pixora LED Studio to 1.0.7 or newer and restart the Pixora LED Studio app. Your saved displays are kept.')
         try:
             async with self.session.post('http://supervisor/' + path, json=payload,
                     headers={'Authorization':'Bearer ' + token}, allow_redirects=False,

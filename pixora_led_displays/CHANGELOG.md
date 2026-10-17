@@ -1,3 +1,12 @@
+# 1.1.1
+
+- Add remembered Light (blue) and Dark (Planner Midnight) themes across Studio and display tools.
+- Browse, search and add cards directly inside Decks.
+- Show immediate action progress, visible card-dialog errors and sticky completion feedback.
+
+- Reduce header height and spacing on desktop and tablets.
+- Rename the app and HA sidebar entry to Pixora LED Studio. Existing app identity, displays, decks and settings are preserved.
+
 # 1.1.0
 
 - Redesign the local app around a 142-card catalog, editable saved decks, per-display playback and previews.
