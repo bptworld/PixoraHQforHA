@@ -175,9 +175,14 @@ def install(selected):
             # Preserve the flight/impact sequence. Caption reveal follows it.
             if kind not in ('goal','hat_trick','win','wins','winner','final_win'):return result
             color=wall.hex_color(team.get('color'),(117,231,214)) if hasattr(wall,'hex_color') else (117,231,214)
+            alt=wall.readable_accent(color,wall.hex_color(team.get('alternateColor'),(255,255,255)))
             for index,image in enumerate(frames):
                 if index<20:continue
-                ImageDraw.Draw(image).rectangle((27,3,width-28,29),fill=(2,8,12))
+                # Erase the original caption with the arena, not a wall-wide dark
+                # rectangle. Only the replacement caption panel should hide it.
+                arena=Image.new('RGBA',(width,32),(0,0,0,255))
+                wall._draw_generic_arena_frame(arena,ImageDraw.Draw(arena),width,sport,index,color,alt)
+                image.paste(arena.crop((27,3,width-27,30)).convert('RGB'),(27,3))
                 lane=124 if width>=256 else 60;left=(width-lane)//2
                 name=str(team.get('playerName') or '').split()
                 lines=(name[-1], 'HAT TRICK' if kind=='hat_trick' else 'GOAL') if name and kind in ('goal','hat_trick') else ('WINS',team.get('abbreviation','TEAM'))

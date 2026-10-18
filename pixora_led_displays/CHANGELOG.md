@@ -1,3 +1,7 @@
+# 1.2.28
+
+- Preserve the court or field beside wall celebration captions when the text appears. Keep caption size, side artwork and animation timing unchanged.
+
 # 1.2.27
 
 - Recover local Studio loading after failed or timed-out read requests. Slow HA setup checks run separately and do not disable the interface. Commands remain single-attempt.
