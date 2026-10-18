@@ -19,7 +19,7 @@ from client import PriorityMessageActive,DisplayUnavailable
 class Studio:
     def __init__(self,app,root,selected,displays):
         self.app,self.root,self.selected,self.displays=app,root,selected,displays
-        self.file=root/'studio.json';self.lock=asyncio.Lock();self.io_lock=asyncio.Lock();self.jobs={};self.runtime={};self.cache={};self.refresh_jobs={};self.renderer_revision=hashlib.sha256(b''.join(Path(__file__).with_name(name).read_bytes() for name in ('card_worker.py','special_graphics.py','graphic_cache.py'))).hexdigest()
+        self.file=root/'studio.json';self.lock=asyncio.Lock();self.io_lock=asyncio.Lock();self.jobs={};self.runtime={};self.cache={};self.refresh_jobs={};self.renderer_revision=hashlib.sha256(b''.join(Path(__file__).with_name(name).read_bytes() for name in ('card_worker.py','special_graphics.py','graphic_cache.py','standings.py'))).hexdigest()
         self.data=json.loads(self.file.read_text(encoding='utf-8')) if self.file.exists() else {'decks':{},'devices':{},'groups':{},'graphics':{},'settings':{'timezone':os.environ.get('TZ','UTC'),'timeFormat':'12','temperatureUnits':'F'}}
         self.store=CardStore(app['session'],root/'downloaded-cards')
         self.pipeline=Pipeline(root,self);self.monitors={};self.monitor_errors={};self.card_timing={};self.artwork_timing={};self.skipped={}
@@ -639,6 +639,57 @@ class Studio:
                 prepared.cancel()
                 await asyncio.gather(prepared,return_exceptions=True)
 
+    async def standings_groups(self,payload):
+        from standings import endpoint,choices,group_id,legacy_match
+        card=self.store.cards.get(payload.get('card'))
+        if not card or not card.get('standingsBrowser'):raise ValueError('Choose a standings card.')
+        previous=self.data['decks'].get(payload.get('deck'))
+        item=self.validate_deck({'name':'Standings groups','items':[{'id':payload.get('item') or 'groups','card':card['id'],'options':payload.get('options',{}),'duration':10}]},previous)['items'][0]
+        options=item['options']
+        if card['standingsBrowser']=='fantasy':
+            if card['id']=='yahoo_fantasy_standings':
+                if not options.get('leagueKey') or not options.get('accessToken'):raise ValueError('Enter your Yahoo league key and access token first.')
+            elif not options.get('leagueId'):raise ValueError('Enter your fantasy league ID first.')
+            request=await self.render(item,64,request_only=True)
+            request['standings_groups']=True
+            async with self.lock:
+                try:return await self.run_worker(request)
+                finally:await self.store.collect(self.used())
+        url=endpoint(card,options)
+        async def fetch(url):
+            if not hasattr(self,'standings_cache'):self.standings_cache={}
+            cached=self.standings_cache.get(url)
+            if cached and time.monotonic()-cached[0]<3600:return cached[1]
+            async with self.app['session'].get(url,allow_redirects=False,timeout=ClientTimeout(total=15)) as response:
+                if response.status!=200:raise ValueError('The standings provider is unavailable. Try loading divisions again.')
+                body=bytearray()
+                async for chunk in response.content.iter_chunked(65536):
+                    body.extend(chunk)
+                    if len(body)>5*1024*1024:raise ValueError('Standings response exceeds the hub limit.')
+                data=json.loads(body)
+            if len(self.standings_cache)>=80:self.standings_cache.pop(next(iter(self.standings_cache)))
+            self.standings_cache[url]=(time.monotonic(),data)
+            return data
+        selected=str(payload.get('group') or '')
+        selection=None
+        if selected and selected!='auto':
+            if selected.startswith('espn:'):ident=group_id(selected)
+            else:
+                root=await fetch(url);node=legacy_match(root.get('children',[]),selected)
+                if node is None and selected.startswith(('al_','nl_')):
+                    parent=legacy_match(root.get('children',[]),selected[:2])
+                    if parent:
+                        child=await fetch(url+'?group='+str(parent['id']))
+                        node=legacy_match(child.get('children',[]),selected[3:])
+                if node is None:raise ValueError('The saved standings group is unavailable. Choose another conference or division.')
+                ident=str(node['id'])
+            data=await fetch(url+'?group='+ident)
+            if str(data.get('id'))!=ident:raise ValueError('This standings group is unavailable.')
+            selection={'value':'espn:'+ident,'label':str(data.get('name') or ident)}
+        else:data=await fetch(url)
+        groups=choices(data,include_root=selection is None)
+        return {'groups':groups,'selection':selection,'message':'' if groups else 'No further divisions are available from this provider.' if selection else 'No standings groups are available from this provider right now.'}
+
     def graphic_group(self,ident,target):
         if target.startswith('group:'):
             group=self.data['groups'].get(target[6:])
@@ -719,6 +770,7 @@ class Studio:
             if not isinstance(data,dict):raise ValueError('Use a valid form.')
             return data
         async def state(request):return web.json_response(self.public())
+        async def standings_groups(request):return web.json_response(await self.standings_groups(await object_data(request)))
         async def prepare_graphic(request):return web.json_response(await self.test_graphic(await object_data(request),prepare=True))
         async def test_graphic(request):return web.json_response(await self.test_graphic(await object_data(request)))
         async def deck_save(request):
@@ -849,6 +901,7 @@ class Studio:
             await self.mutate(lambda:self.data['graphics'].pop(ident,None));(self.root/'graphics'/ident).unlink(missing_ok=True);return web.json_response(self.public())
         routes.add_post('/api/studio/test-graphic',test_graphic)
         routes.add_post('/api/studio/prepare-graphic',prepare_graphic)
+        routes.add_post('/api/studio/standings-groups',standings_groups)
         routes.add_get('/api/studio',state);routes.add_post('/api/studio/decks',deck_save);routes.add_delete('/api/studio/decks/{ident}',deck_delete)
         routes.add_post('/api/studio/ha-action',ha_action);routes.add_post('/api/studio/devices/{ident}',device_save);routes.add_post('/api/studio/action',action);routes.add_get('/api/studio/preview',preview)
         routes.add_get('/api/studio/entities',entities);routes.add_post('/api/studio/settings',settings)

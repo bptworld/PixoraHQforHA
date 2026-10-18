@@ -8,6 +8,8 @@ class CardStore:
         self.session,self.root=session,root
         self.catalog=json.loads(Path(__file__).with_name('card_catalog.json').read_text(encoding='utf-8'))
         self.cards={c['id']:c for c in self.catalog['cards']}
+        from standings import configure
+        configure(self.cards)
         self.lock=asyncio.Lock()
         self.root.mkdir(parents=True,exist_ok=True)
 

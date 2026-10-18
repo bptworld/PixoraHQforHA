@@ -67,7 +67,7 @@ async def check():
    class WallPanel:
     def __init__(self,ident):self.ident=ident
     async def info(self):return {'width':64 if self.ident=='panel' else 128}
-   with patch.object(studio,'selected',side_effect=lambda ident:WallPanel(ident)),patch.object(studio.pipeline,'start'):
+   with patch.object(studio,'selected',side_effect=lambda ident:WallPanel(ident)),patch.object(studio,'displays',return_value=[{'id':'panel','name':'Left','width':64,'height':32,'version':'2.0.27'},{'id':'right','name':'Right','width':128,'height':32,'version':'2.0.27'}]),patch.object(studio.pipeline,'start'):
     response=await client.post('/api/studio/test-graphic',json={'display':'panel','card':'college_football','option':'scoreAnimationTarget','options':{'favoriteTeam':'ALA','scoreAnimationTarget':'group_wall'}})
     assert response.status==200,await response.text()
     left=studio.pipeline.data['queues']['panel'][-1];right=studio.pipeline.data['queues']['right'][-1]

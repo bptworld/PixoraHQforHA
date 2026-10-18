@@ -1,3 +1,11 @@
+# 1.2.18
+
+- Apply the new controls to already downloaded cards and existing decks automatically, including cards whose original metadata had no group selector. No card removal or redownload is needed.
+
+- Load actual provider conferences and divisions for all public sports standings cards, with drill-down through nested groups and exact saved group rendering.
+- Add provider division discovery and filtering for Sleeper, ESPN Fantasy and Yahoo Fantasy standings. Leagues without divisions keep their league table.
+- Keep older selections readable, preserve saved private-league credentials on the hub and do not substitute another division when a selection is unavailable.
+
 # 1.2.17
 
 - Show a neutral No active content preview for temporarily inactive cards instead of a broken-preview error. Keep retry controls below error text.

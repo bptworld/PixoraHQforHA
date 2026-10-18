@@ -12,7 +12,7 @@ const displayButton=page.locator('#devices button').first();
 for(let repeat=0;repeat<3;repeat++){
  await displayButton.click();await page.waitForFunction(()=>!document.querySelector('#devices button').hasAttribute('aria-busy'));
  assert.equal(await displayButton.locator('small').count(),1);
- assert.equal(await displayButton.locator('small').innerText(),'64\u00d732');
+ assert.equal(await displayButton.locator('small').innerText(),'64\u00d732 \u00b7 Paused');
  assert.equal(await displayButton.locator('small').evaluate(e=>getComputedStyle(e).display),'block');
  assert.match(await displayButton.innerText(),/Left-64\s+64\u00d732/);
 }
