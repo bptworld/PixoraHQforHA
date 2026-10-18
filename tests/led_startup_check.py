@@ -14,7 +14,7 @@ async def main():
         class Client:
             async def info(self):
                 if offline:raise ValueError('offline')
-                return {'id':'panel','localDecks':True,'bootId':boot,'width':128}
+                return {'id':'panel','localDecks':True,'bootId':boot,'width':128,'active':False}
         studio=Studio({'session':object()},root,lambda ident:Client(),lambda:[])
         studio.data['decks']['deck']={'items':[{'enabled':True}]}
         studio.data['devices']['panel']={'deck':'deck','playing':True,'bootId':boot}
@@ -55,34 +55,35 @@ async def main():
             boot='2'*16
             await studio.recover_display('panel',await Client().info());await asyncio.sleep(0)
             assert len(starts)==2 and studio.data['devices']['panel']['bootId']==boot
-            # An uncertain deck write stays blocked on the same boot.
+            # A saved uncertain deck write reconciles before recovering on the same boot.
             await studio.stop('panel',remember=False)
             studio.data['devices']['panel']['playing']=False
             studio.pipeline.errors['panel']='Deck delivery could not be confirmed. It was not retried.'
             studio.pipeline.blocked.add('panel')
-            await studio.recover_display('panel',await Client().info());assert len(starts)==2
-            boot='3'*16
             await studio.recover_display('panel',await Client().info());await asyncio.sleep(0)
             assert len(starts)==3 and 'panel' not in studio.pipeline.errors
+            boot='3'*16
+            await studio.recover_display('panel',await Client().info());await asyncio.sleep(0)
+            assert len(starts)==4 and 'panel' not in studio.pipeline.errors
             # Priority-message uncertainty is retained even across a reboot.
             await studio.stop('panel',remember=False)
             studio.data['devices']['panel']['playing']=False
             studio.pipeline.errors['panel']='Previous priority delivery was interrupted; it was not resent.'
             boot='4'*16
             await studio.recover_display('panel',await Client().info())
-            assert len(starts)==3 and 'panel' in studio.pipeline.errors
+            assert len(starts)==4 and 'panel' in studio.pipeline.errors
             studio.pipeline.errors.clear();studio.pipeline.blocked.clear()
             await studio.stop('panel')
             boot='5'*16
             await studio.recover_display('panel',await Client().info())
-            assert len(starts)==3 and not studio.data['devices']['panel']['resume_on_boot']
+            assert len(starts)==4 and not studio.data['devices']['panel']['resume_on_boot']
             # Pause during a slow preflight must win over startup recovery.
             gate=asyncio.Event();entered=asyncio.Event()
             async def slow_info():entered.set();await gate.wait();return {'id':'panel','localDecks':True,'bootId':boot}
             with patch.object(Client,'info',lambda self:slow_info()):
                 pending=asyncio.create_task(studio.play('panel'));await entered.wait()
                 await studio.stop('panel');gate.set();await pending
-            assert len(starts)==3 and not studio.data['devices']['panel']['playing']
+            assert len(starts)==4 and not studio.data['devices']['panel']['playing']
             await studio.save()
             saved=json.loads(studio.file.read_text());assert saved['devices']['panel']['resume_on_boot'] is False
         await studio.shutdown()

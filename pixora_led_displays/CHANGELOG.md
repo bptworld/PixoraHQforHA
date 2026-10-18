@@ -1,3 +1,7 @@
+# 1.2.21
+
+- Recover running decks automatically after an uncertain card delivery. Reconnect using read-only status checks, let any accepted frame expire, then continue with the next card without resending the uncertain frame. Manual pauses and priority-message delivery errors remain respected.
+
 # 1.2.20
 
 - Replace cards with a local dim clock during Quiet Hours, using the selected timezone and time format. Existing zero-brightness quiet schedules now use 10% so the clock stays visible.

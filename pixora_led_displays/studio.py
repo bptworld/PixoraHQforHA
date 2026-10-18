@@ -41,6 +41,11 @@ class Studio:
         # messages, or clear their delivery errors as part of deck recovery.
         priority_error=error and not error.startswith('Deck delivery could not be confirmed.')
         running=ident in self.jobs and not self.jobs[ident].done()
+        if desired and error.startswith('Deck delivery could not be confirmed.') and not running:
+            cfg['playing']=True
+            await self.recover_deck_delivery(ident,self.selected(ident),saved_error=True)
+            if cfg.get('resume_on_boot',False) and cfg.get('playing'):await self.play(ident)
+            return
         if desired and not priority_error and (changed or (cfg.get('playing') and not running and not error and ident not in self.pipeline.blocked and ident not in self.restarting)):
             if changed:
                 await self.stop(ident,remember=False)
@@ -470,6 +475,30 @@ class Studio:
         if ident:await self.pipeline.write(ident,write)
         else:await write()
 
+    async def recover_deck_delivery(self,ident,client,saved_error=False):
+        """Resolve a lost response with reads; never resend the uncertain frame."""
+        while self.data['devices'].get(ident,{}).get('playing'):
+            self.runtime[ident]={'playing':True,'status':'Reconnecting · checking the last card…'}
+            info=await self.playback_info(ident,client)
+            if not self.data['devices'].get(ident,{}).get('playing'):raise asyncio.CancelledError
+            if info.get('id')!=ident or type(info.get('active')) is not bool:
+                raise ValueError('Could not verify the display playback state.')
+            # Let a possibly accepted deck frame expire before advancing. Priority
+            # messages keep their own queue/confirmation rules and are never replayed.
+            if info['active'] and info.get('owner')=='deck':
+                await asyncio.sleep(1)
+                continue
+            async with self.pipeline.lock:
+                error=self.pipeline.errors.get(ident,'')
+                if error:
+                    if not saved_error or not error.startswith('Deck delivery could not be confirmed.'):raise ValueError(error)
+                    self.pipeline.errors.pop(ident,None)
+                    await self.pipeline.commit()
+                self.pipeline.blocked.discard(ident)
+            self.runtime[ident]={'playing':True,'status':'Connection restored · continuing to the next card…'}
+            return
+        raise asyncio.CancelledError
+
     async def deliver(self,client,body,width,duration,owner='deck',ident=None,once=False,wire_ident=None,synchronize=None,group_check=None):
         frames=await self.prepared_frames(body,width)
         if synchronize:
@@ -487,7 +516,12 @@ class Studio:
             step=min(remaining,240 if len(frames)==1 or final else delay)
             lease=min(300,max(1,__import__('math').ceil(remaining+(60 if owner=='deck' else 0))))
             started=time.monotonic()
-            await self.send_frame(client,pixels,width,lease,owner=owner,ident=ident or wire_ident)
+            try:
+                await self.send_frame(client,pixels,width,lease,owner=owner,ident=ident or wire_ident)
+            except DisplayWriteUnconfirmed:
+                if owner!='deck' or not ident:raise
+                await self.recover_deck_delivery(ident,client)
+                return
             elapsed=time.monotonic()-started
             wait=max(0,step-elapsed)
             left=await self.pipeline.delay(ident,wait) if ident else 0
