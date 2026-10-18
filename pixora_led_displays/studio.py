@@ -202,7 +202,7 @@ class Studio:
         if 'graphic' in item:return (self.root/'graphics'/item['graphic']).read_bytes()
         card=self.store.cards[item['card']]
         options=dict(item.get('options',{}));options['_target']='matrixportal-s3-'+str(width)+'x32'
-        request={'root':str(self.store.root.resolve()),'module':card['module'],'width':width,'options':options,'settings':self.data['settings'],'revision':self.store.catalog['commit'],'renderer':self.renderer_revision,'identity_options':item.get('options',{}),'card_id':card['id'],'protocol':2,'device_id':device_id,'dwell':item.get('duration',15),'events':events,'graphic_cache':str(self.root/'render-cache'/'priority')}
+        request={'root':str(self.store.root.resolve()),'module':card['module'],'width':width,'options':options,'settings':self.data['settings'],'revision':self.store.catalog['commit']+card.get('sourceHash',''),'renderer':self.renderer_revision,'identity_options':item.get('options',{}),'card_id':card['id'],'protocol':2,'device_id':device_id,'dwell':item.get('duration',15),'events':events,'graphic_cache':str(self.root/'render-cache'/'priority')}
         if card['id']=='home_assistant_entity':
             entity=options.get('entityId','')
             if not isinstance(entity,str) or not all(c.isalnum() or c in '._' for c in entity):raise ValueError('Choose a Home Assistant entity.')
@@ -973,6 +973,35 @@ class Studio:
             if ident not in self.data['graphics']:raise ValueError('Graphic not found.')
             if any(i.get('graphic')==ident for d in self.data['decks'].values() for i in d['items']):raise ValueError('Remove this graphic from saved decks first.')
             await self.mutate(lambda:self.data['graphics'].pop(ident,None));(self.root/'graphics'/ident).unlink(missing_ok=True);return web.json_response(self.public())
+        async def custom_upload(request):
+            if request.headers.get('X-Pixora-Trust-Code')!='yes':raise ValueError('Confirm that you trust this Python code before importing it.')
+            from custom_cards import describe,MAX_SOURCE
+            body=bytearray()
+            async for chunk in request.content.iter_chunked(16384):
+                body.extend(chunk)
+                if len(body)>MAX_SOURCE:raise ValueError('Choose a Python card file smaller than 256 KB.')
+            card=describe(bytes(body))
+            async with self.lock:
+                if card['id'] in self.used():raise ValueError('Remove this app from saved decks before replacing it.')
+                await self.store.import_custom(bytes(body))
+            return web.json_response(self.public())
+        async def custom_delete(request):
+            ident=request.match_info['ident']
+            async with self.lock:
+                if ident in self.used():raise ValueError('Remove this app from saved decks before deleting it.')
+                await self.store.delete_custom(ident)
+            return web.json_response(self.public())
+        async def custom_download(request):
+            card=self.store.cards.get(request.match_info['ident'])
+            if not card or not card.get('custom'):raise ValueError('Custom app not found.')
+            return web.FileResponse(self.store.custom_root/(card['id']+'.py'),headers={'Content-Disposition':'attachment; filename="'+card['module']+'.py"'})
+        async def creator_brief(request):return web.FileResponse(Path(__file__).with_name('Pixora-Codex-Card-Brief.md'),headers={'Content-Disposition':'attachment; filename="Pixora-Codex-Card-Brief.md"'})
+        async def custom_starter(request):return web.FileResponse(Path(__file__).with_name('custom_card_starter.py'),headers={'Content-Disposition':'attachment; filename="custom_card_starter.py"'})
+        routes.add_post('/api/studio/custom-apps',custom_upload)
+        routes.add_delete('/api/studio/custom-apps/{ident}',custom_delete)
+        routes.add_get('/api/studio/custom-apps/{ident}',custom_download)
+        routes.add_get('/api/studio/creator-brief',creator_brief)
+        routes.add_get('/api/studio/custom-starter',custom_starter)
         routes.add_post('/api/studio/test-graphic',test_graphic)
         routes.add_post('/api/studio/prepare-graphic',prepare_graphic)
         routes.add_post('/api/studio/standings-groups',standings_groups)

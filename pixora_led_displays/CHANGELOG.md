@@ -1,3 +1,7 @@
+# 1.2.24
+
+- Import trusted custom Python cards in My Apps, configure them and add them to normal decks. Download the HA AI creator brief, starter and original custom source. Keep imported apps across restarts and unused-card cleanup; protect apps referenced by saved decks from replacement or deletion.
+
 # 1.2.22
 
 - Add Do not show to scoring-animation targets, including basketball baskets, goals and runs. Disabled scoring events keep score history current and ordinary cards updating without interrupting playback. Available for already downloaded cards; Test is disabled for a hidden graphic.

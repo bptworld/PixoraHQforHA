@@ -1,5 +1,6 @@
 """Download only cards referenced by local decks; shared helpers remain installed."""
-import asyncio,hashlib,json,os,shutil,uuid
+import asyncio,hashlib,json,os,shutil,uuid,logging
+from custom_cards import describe
 from pathlib import Path,PurePosixPath
 import aiohttp
 
@@ -14,6 +15,44 @@ class CardStore:
         configure_scoring_choices(self.cards)
         self.lock=asyncio.Lock()
         self.root.mkdir(parents=True,exist_ok=True)
+        self.custom_root=self.root.parent/'custom-cards'
+        self.custom_root.mkdir(parents=True,exist_ok=True)
+        for path in self.custom_root.glob('custom_*.py'):
+            try:
+                body=path.read_bytes();card=describe(body)
+                if path.stem!=card['id']:raise ValueError('Custom card ID does not match its filename.')
+                self.register_custom(card,body)
+            except (ValueError,OSError):logging.warning('Could not load custom card %s; reimport the original file.',path.name)
+
+    def register_custom(self,card,body):
+        if card['id'] in self.cards and not self.cards[card['id']].get('custom'):raise ValueError('A custom app cannot replace a library card.')
+        name='addons/'+card['module']+'.py'
+        card['files']=sorted(set(self.catalog.get('shared_files',[]))|{name})
+        self.cards[card['id']]=card
+        self.catalog['files'][name]={'sha256':hashlib.sha256(body).hexdigest(),'size':len(body),'custom':True}
+
+    async def import_custom(self,body):
+        card=describe(body)
+        async with self.lock:
+            if card['id'] in self.cards and not self.cards[card['id']].get('custom'):raise ValueError('A custom app cannot replace a library card.')
+            if card['id'] not in self.cards and sum(bool(c.get('custom')) for c in self.cards.values())>=50:
+                raise ValueError('Up to 50 custom apps are supported.')
+            path=self.custom_root/(card['id']+'.py');temp=path.with_suffix('.tmp')
+            try:
+                temp.write_bytes(body);os.chmod(temp,0o600);os.replace(temp,path)
+            finally:temp.unlink(missing_ok=True)
+            self.register_custom(card,body)
+        return card['id']
+
+    async def delete_custom(self,ident):
+        async with self.lock:
+            card=self.cards.get(ident)
+            if not card or not card.get('custom'):raise ValueError('Custom app not found.')
+            (self.custom_root/(card['id']+'.py')).unlink(missing_ok=True)
+            self.path('addons/'+card['module']+'.py').unlink(missing_ok=True)
+            self.catalog['files'].pop('addons/'+card['module']+'.py',None)
+            del self.cards[ident]
+
 
     def required(self, ids):
         if any(i not in self.cards for i in ids):raise ValueError('Choose a card from the library.')
@@ -31,6 +70,12 @@ class CardStore:
                 for name in sorted(self.required(ids)):
                     path=self.path(name);meta=self.catalog['files'][name]
                     if path.is_file() and await asyncio.to_thread(lambda:hashlib.sha256(path.read_bytes()).hexdigest())==meta['sha256']:continue
+                    if meta.get('custom'):
+                        body=(self.custom_root/Path(name).name).read_bytes()
+                        if hashlib.sha256(body).hexdigest()!=meta['sha256']:raise ValueError('Custom app changed on disk. Reimport it in My Apps.')
+                        path.parent.mkdir(parents=True,exist_ok=True)
+                        temp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp');temp.write_bytes(body);staged.append((temp,path))
+                        continue
                     source=meta.get('source_path','cards/'+name)
                     if PurePosixPath(source).is_absolute() or '..' in PurePosixPath(source).parts:raise ValueError('Invalid public card source.')
                     url='https://raw.githubusercontent.com/bptworld/pixora/'+self.catalog['commit']+'/'+source

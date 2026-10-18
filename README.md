@@ -49,3 +49,5 @@ This repository is the primary location for future HA app development/releases.
 Each app has its own changelog and version. Changes to one app do not require
 releasing the others. Public contents are limited to these HA apps and their
 supporting documentation/tests and compiled USB installers; private server code and firmware source stay out.
+
+Create your own LED cards: see the [Home Assistant AI creator brief](https://github.com/bptworld/PixoraHQforHA/blob/main/pixora_led_displays/Pixora-Codex-Card-Brief.md) and import trusted Python files in LED Studio’s **My Apps** tab (1.2.24+).
