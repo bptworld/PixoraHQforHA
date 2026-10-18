@@ -1,3 +1,9 @@
+# 1.2.20
+
+- Replace cards with a local dim clock during Quiet Hours, using the selected timezone and time format. Existing zero-brightness quiet schedules now use 10% so the clock stays visible.
+- Resume the deck at the next card after Quiet Hours without saving a pause. Suppress queued sports/card events during quiet schedules and respect the schedule boundary for long cards.
+- Preserve playing and paused states when display settings are saved. Reconcile an uncertain brightness response using reported panel state instead of treating it as a failed card delivery.
+
 # 1.2.19
 
 - Fit special-graphic text to measured pixel bounds at 64x32 and 128x32, with separate portrait, logo and caption lanes. Correct clipped sports captions, long fighter/player names, order totals and weather labels.

@@ -47,6 +47,10 @@ class DisplayUnavailable(ValueError):
     """A read-only status request failed at the transport layer."""
 
 
+class DisplayWriteUnconfirmed(ValueError):
+    """Transport failed after a write; read state before any further action."""
+
+
 class PriorityMessageActive(ValueError):
     """A deck frame was explicitly rejected because an HA message has priority."""
 
@@ -92,7 +96,7 @@ class DisplayClient:
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             if payload is None:
                 raise DisplayUnavailable('The display at '+self.host+' did not answer the status check. Check its power and current IP address.') from exc
-            raise ValueError('Could not confirm delivery. Check the display; the request was not retried.') from exc
+            raise DisplayWriteUnconfirmed('Could not confirm delivery. Check the display; the request was not retried.') from exc
 
     async def info(self):
         for attempt in range(3):

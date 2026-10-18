@@ -14,6 +14,11 @@ WALL_START_LEAD=.15
 
 class WallNotReady(ValueError):pass
 
+def quiet_card(studio,ident,payload):
+    if payload.get('source')!='event' or not hasattr(studio,'quiet'):return False
+    members=payload.get('wall_members') or [ident]
+    return any(studio.quiet(studio.data.get('devices',{}).get(member,{})) for member in members)
+
 def normalize_image(body,width):
     if not body or len(body)>5*1024*1024:raise ValueError('Choose an image smaller than 5 MB.')
     with Image.open(io.BytesIO(body)) as image:
@@ -169,6 +174,9 @@ class Pipeline:
                 start=payload.get('start_at',0)
                 wall=bool(payload.get('wall_members'))
                 try:
+                    if quiet_card(self.studio,ident,payload):
+                        if wall:self.abort_wall(payload,'Card graphic skipped during quiet hours.')
+                        raise WallNotReady('Card graphic skipped during quiet hours.')
                     client=self.studio.selected(ident)
                     try:
                         info=await client.info()
@@ -197,7 +205,12 @@ class Pipeline:
                     else:
                         body=base64.b64decode(payload['body'],validate=True)
                         options={'synchronize':lambda:self.ready_wall(ident,payload),'group_check':lambda:self.check_wall(payload)} if wall else {}
-                        await self.studio.deliver(client,body,info['width'],payload['duration'],owner='message',once=payload.get('once',False),wire_ident=ident,**options)
+                        duration=payload['duration']
+                        if payload.get('source')=='event' and hasattr(self.studio,'quiet_remaining'):
+                            if quiet_card(self.studio,ident,payload):raise WallNotReady('Card graphic skipped during quiet hours.')
+                            members=payload.get('wall_members') or [ident]
+                            duration=min(self.studio.quiet_remaining(self.studio.data['devices'].get(member,{}),duration) for member in members)
+                        await self.studio.deliver(client,body,info['width'],duration,owner='message',once=payload.get('once',False),wire_ident=ident,**options)
                 except WallNotReady as exc:
                     self.studio.runtime.setdefault(ident,{})['warning']=str(exc)
                 except BaseException:
