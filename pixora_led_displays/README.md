@@ -1,11 +1,11 @@
 # Pixora LED Studio
 
 <p>
-  <a href="../docs/images/led-panel-weather.png"><img src="../docs/images/led-panel-weather.png" alt="LED panel displaying weather graphics" width="300"></a>
-  <a href="../docs/images/led-panel-sports.png"><img src="../docs/images/led-panel-sports.png" alt="LED panel displaying a live sports scoreboard" width="300"></a>
+  <a href="../docs/images/led-panel-clock-lifestyle.png"><img src="../docs/images/led-panel-clock-lifestyle.png" alt="AI lifestyle illustration of a clock and weather LED display on a cabinet" width="300"></a>
+  <a href="../docs/images/led-panel-sports-lifestyle.png"><img src="../docs/images/led-panel-sports-lifestyle.png" alt="AI lifestyle illustration of a sports LED display on a desk" width="300"></a>
 </p>
 
-*LED panels in action — click either image to enlarge.*
+*LED display lifestyle illustrations (AI-generated) — click either image to enlarge.*
 
 Build decks on your Home Assistant hub and serve them straight to MatrixPortal S3 **64×32** and **128×32** displays over local Wi-Fi. No Pixora Cloud account or rendering server is used.
 
