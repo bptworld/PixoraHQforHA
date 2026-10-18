@@ -22,7 +22,7 @@ installed automatically. Each app keeps its own configuration, version and data.
 
 Home Control and Locator retain their existing Pixora service connections.
 LED Displays runs locally on the HA hub and supports S3 64x32/128x32 only.
-Building your own LED display? See the [parts list for 64×32 and 128×32 displays](pixora_led_displays/README.md#build-your-own-display).
+Building your own LED display? **No soldering is needed with the example Adafruit parts—just plug in the panel connections and a couple of cables.** See the [parts list for 64×32 and 128×32 displays](pixora_led_displays/README.md#build-your-own-display).
 
 For a new LED controller, download the [USB first-install firmware](https://github.com/bptworld/PixoraHQforHA/raw/refs/heads/main/firmware/usb/2.0.27/pixora-v2.0.27-s3-first-install-usb.bin) and follow the [USB flashing and Wi-Fi setup instructions](firmware/usb/2.0.27/README.md).
 The same file supports MatrixPortal S3 64×32 and 128×32. **First installation erases existing Wi-Fi and pairing settings.** Use Studio's normal firmware updates afterward. The combined first-install image has passed binary checks. Firmware source is private.

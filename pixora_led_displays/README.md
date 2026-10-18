@@ -14,6 +14,8 @@ Brought to you by [PixoraHQ.com](https://pixorahq.com/).
 
 ## Build your own display
 
+**No soldering needed with the example Adafruit parts below.** Assembly is simply plugging in the panel connections and a couple of cables, including USB-C for power. For a 128×32 display, connect the second panel with the ribbon and power cables.
+
 The products linked below are examples of parts you can buy, not a required shopping list or an endorsement. PixoraHQ is not affiliated with, sponsored by, or endorsed by Adafruit. Product names and trademarks belong to their respective owners. Purchases, warranties, returns and hardware support are handled by the seller. Check compatibility before choosing alternatives; Pixora firmware currently supports MatrixPortal S3 controllers with 64×32 or 128×32 displays.
 
 | Part | 64×32 display | 128×32 display |
