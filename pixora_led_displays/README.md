@@ -12,12 +12,12 @@ The products linked below are examples of parts you can buy, not a required shop
 | --- | --- | --- |
 | [Adafruit Matrix Portal S3 — product 5778](https://www.adafruit.com/product/5778) | 1 controller | 1 controller |
 | [64×32 RGB LED Matrix, 4 mm pitch — product 2278](https://www.adafruit.com/product/2278) | 1 panel | 2 panels, side by side |
-| USB-C **data** cable for flashing | 1 | 1 |
-| Regulated 5 V power supply and suitable power wiring | Sized for 1 panel | Sized for 2 panels |
-| HUB75/IDC ribbon and panel power cables | Panel connections | Panel connections plus a ribbon between panels |
+| USB-C **data** cable for flashing and power | 1 | 1 |
+| USB power supply suitable for the display | 1 | 1, sized for both panels |
+| HUB75/IDC ribbon and panel power cables | Included with the Adafruit panel | Included with the Adafruit panels |
 | Mounting hardware or enclosure | As needed | As needed for both panels |
 
-Adafruit lists an IDC ribbon and power cable with each panel. Check the supplied cables and lengths before ordering extras. The controller and panel are separate purchases; the controller does not include a USB-C power supply.
+The display is powered through the Matrix Portal S3's USB-C connection. The Adafruit panels include the required ribbon and panel power cables; panels from other sellers may not, so check what is included before ordering extras. The controller and panels are separate purchases; a USB-C power supply is not included with the controller.
 
 For 128×32, connect the first panel's **OUT** to the second panel's **IN**, power both panels, and select **128×32** during Wi-Fi setup. Both sizes use the same controller and Pixora firmware. Follow [Adafruit's MatrixPortal S3 assembly guide](https://learn.adafruit.com/adafruit-matrixportal-s3) for connector orientation and power wiring. Adafruit specifies up to **4 A at 5 V per panel**; size the power supply and wiring for the number of panels. See the [panel power requirements](https://www.adafruit.com/product/2278) before choosing a supply.
 
