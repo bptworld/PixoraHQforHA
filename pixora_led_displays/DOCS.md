@@ -11,7 +11,7 @@ Brought to you by [PixoraHQ.com](https://pixorahq.com/).
 3. In **Card Library**, find a card and choose **Options & add to deck**. Choose its options, then **Save in deck & download**.
 4. The first deck is assigned to an unassigned selected display automatically. Choose a different **Active deck** if wanted, then press **Play deck**. Use **Save display settings** for brightness and quiet-hour changes.
 
-The hub continues playback with the page closed. Each display has its own assigned deck. A confirmed playback error pauses the deck; uncertain writes are not retried automatically. Playback that was running normally can resume when the app restarts.
+The hub continues playback with the page closed. Each display has its own assigned deck. A confirmed playback error pauses the deck; uncertain writes are not retried automatically. Playback that was running normally resumes when the app restarts, including when a panel takes longer to reconnect. With panel firmware **2.0.26 or newer**, a running deck also resumes automatically after the display reboots, as soon as it reconnects. Press Play once after updating to establish the startup identifier. Explicitly paused decks stay paused. An uncertain deck write stays blocked until a new panel boot is confirmed; uncertain priority messages are never replayed.
 
 ## Cards and helper files
 
@@ -25,7 +25,7 @@ Cards render on the HA hub. Clocks and local graphics work without an internet c
 
 ## Decks and previews
 
-Create, rename, duplicate and delete decks. Reorder cards, change duration and options, or disable individual cards. Saving an edited deck pauses its playback so changes can be reviewed before pressing Play. A deck must be unassigned from displays before deletion.
+Create, rename, duplicate and delete decks. Reorder cards, change duration and options, or disable individual cards. Saving an edited deck keeps running decks playing and paused decks paused. A deck must be unassigned from displays before deletion.
 
 Saved cards have locally rendered previews at the selected panel width. Animated card output is preserved and played at a bounded rate over the LAN. The browser preview is approximate; fonts and cropping depend on each card’s output.
 

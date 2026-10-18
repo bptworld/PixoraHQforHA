@@ -108,6 +108,8 @@ class DisplayClient:
         version = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)', info['version'])
         if not version or tuple(map(int, version.groups())) < (2, 0, 14):
             raise ValueError('This display needs Pixora local-display firmware 2.0.14 or newer.')
+        if 'bootId' in info and (not isinstance(info['bootId'],str) or not re.fullmatch(r'[0-9a-f]{16}',info['bootId'])):
+            raise ValueError('The display returned an invalid startup identifier.')
         return info
 
     async def pair(self):

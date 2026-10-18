@@ -20,6 +20,48 @@ class Studio:
         self.store=CardStore(app['session'],root/'downloaded-cards')
         self.pipeline=Pipeline(root,self);self.monitors={};self.monitor_errors={};self.card_timing={};self.artwork_timing={};self.skipped={}
         self.runtime={ident:{'playing':False,'error':cfg['last_error']} for ident,cfg in self.data['devices'].items() if cfg.get('last_error')}
+        self.recovery_jobs={};self.recovery_task=None;self.starting=set();self.restarting=set();self.play_generation={}
+
+    async def recover_display(self,ident,info):
+        cfg=self.data['devices'].get(ident)
+        if not cfg or info.get('id')!=ident or ident in self.starting:return
+        boot=info.get('bootId');previous=cfg.get('bootId')
+        changed=bool(boot and previous and boot!=previous)
+        error=self.pipeline.errors.get(ident,'')
+        desired=cfg.get('resume_on_boot',cfg.get('playing',False))
+        # A new boot ends the old deck lease. Never replay uncertain priority
+        # messages, or clear their delivery errors as part of deck recovery.
+        priority_error=error and not error.startswith('Deck delivery could not be confirmed.')
+        running=ident in self.jobs and not self.jobs[ident].done()
+        if desired and not priority_error and (changed or (cfg.get('playing') and not running and not error and ident not in self.pipeline.blocked and ident not in self.restarting)):
+            if changed:
+                await self.stop(ident,remember=False)
+            await self.play(ident)
+        elif boot and (not previous or not desired):
+            cfg['bootId']=boot;await self.save()
+
+    async def watch_display(self,ident):
+        try:
+            while ident in self.data['devices']:
+                cfg=self.data['devices'][ident]
+                if cfg.get('resume_on_boot',cfg.get('playing',False)):
+                    try:await self.recover_display(ident,await self.selected(ident).info())
+                    except asyncio.CancelledError:raise
+                    except ValueError:
+                        if ident not in self.jobs or self.jobs[ident].done():
+                            self.runtime[ident]={'playing':False,'status':'Waiting for display to reconnect…'}
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:raise
+
+    async def recovery_loop(self):
+        try:
+            while True:
+                if (self.root/'.cleanup-started').exists():return
+                for ident in list(self.data['devices']):
+                    if ident not in self.recovery_jobs or self.recovery_jobs[ident].done():
+                        self.recovery_jobs[ident]=asyncio.create_task(self.watch_display(ident))
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:raise
 
     def persist(self,body=None):
         self.root.mkdir(parents=True,exist_ok=True);temp=self.file.with_suffix('.tmp')
@@ -50,6 +92,7 @@ class Studio:
         return result
 
     async def stop(self,ident,remember=True):
+        self.play_generation[ident]=self.play_generation.get(ident,0)+1
         monitor=getattr(self,'monitors',{}).pop(ident,None)
         if monitor:monitor.cancel();await asyncio.gather(monitor,return_exceptions=True)
         task=self.jobs.pop(ident,None)
@@ -65,9 +108,13 @@ class Studio:
                     self.pipeline.data['queues'][ident]=remaining;await self.pipeline.commit()
         if remember and ident in self.data['devices']:
             self.data['devices'][ident]['playing']=False
+            self.data['devices'][ident]['resume_on_boot']=False
             await self.save()
 
     async def shutdown(self):
+        recovery=[task for task in [self.recovery_task,*self.recovery_jobs.values()] if task]
+        for task in recovery:task.cancel()
+        await asyncio.gather(*recovery,return_exceptions=True)
         for ident in list(self.jobs):await self.stop(ident,remember=False)
         tasks=list(self.refresh_jobs.values())
         for task in tasks:task.cancel()
@@ -114,7 +161,9 @@ class Studio:
                 await self.store.ensure(self.used(candidate))
                 # Preserve a playback pause/failure that occurred while downloads were in progress.
                 for ident,cfg in candidate['devices'].items():
-                    if ident in current['devices']:cfg['playing']=current['devices'][ident].get('playing',False)
+                    if ident in current['devices']:
+                        for key in ('playing','resume_on_boot','bootId'):
+                            if key in current['devices'][ident]:cfg[key]=current['devices'][ident][key]
                 self.data=candidate
                 await self.save()
             except BaseException:
@@ -419,17 +468,29 @@ class Studio:
         return start<=current<end if start<end else current>=start or current<end
 
     async def play(self,ident):
+        if ident in self.starting:raise ValueError('Playback is already starting for this display.')
+        self.starting.add(ident)
+        try:await self._play(ident)
+        finally:self.starting.discard(ident)
+
+    async def _play(self,ident):
         await self.stop(ident,remember=False)
+        generation=self.play_generation[ident]
         cfg=self.data['devices'].get(ident,{})
         if cfg.get('deck') not in self.data['decks']:raise ValueError('Choose and save a deck for this display first.')
         if not any(i['enabled'] for i in self.data['decks'][cfg['deck']]['items']):raise ValueError('Add at least one enabled card.')
         client=self.selected(ident);info=await client.info()
+        if self.play_generation.get(ident)!=generation:return
         if not info.get('localDecks'):raise ValueError('Update this panel to firmware 2.0.19 or newer before starting local decks.')
         self.data['devices'][ident].pop('last_error',None)
         self.data['devices'][ident]['playing']=True
+        self.data['devices'][ident]['resume_on_boot']=True
+        self.restarting.discard(ident)
+        if info.get('bootId'):self.data['devices'][ident]['bootId']=info['bootId']
         await self.save()
         async with self.pipeline.lock:
             self.pipeline.errors.pop(ident,None);self.pipeline.blocked.discard(ident);await self.pipeline.commit()
+        if self.play_generation.get(ident)!=generation:return
         self.runtime[ident]={'playing':True,'status':'Preparing the first card…'}
         self.jobs[ident]=asyncio.create_task(self.player(ident))
         self.monitors[ident]=asyncio.create_task(self.monitor(ident))
@@ -605,7 +666,8 @@ class Studio:
                 if data['action']=='play':await self.play(target)
                 elif data['action']=='stop':await self.stop(target)
                 else:
-                    await self.stop(target);await self.selected(target).request('/api/reboot',{})
+                    self.restarting.add(target)
+                    await self.stop(target,remember=False);await self.selected(target).request('/api/reboot',{})
             outcomes=await asyncio.gather(*(perform(target) for target in targets),return_exceptions=True)
             failures=[]
             names={d['id']:d['name'] for d in self.displays()}

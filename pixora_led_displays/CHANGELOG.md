@@ -1,3 +1,12 @@
+# 1.2.13
+
+- Add a Show display preview checkbox that remembers its choice in this browser and stops loading previews while hidden.
+
+- Keep display names and sizes on separate lines after clicking a display button.
+
+- Resume running decks when a display restarts, using firmware 2.0.26 startup identifiers. Explicitly paused decks stay paused; uncertain priority messages are never replayed.
+- Wait for displays that are still offline when the HA app starts, without permanently pausing their saved playback.
+
 # 1.2.12
 
 - Preserve an edited panel-size choice when a background firmware check finishes, including after focus moves to Save.

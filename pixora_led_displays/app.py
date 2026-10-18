@@ -319,13 +319,8 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         if not (root/'.cleanup-started').exists():
             for ident,queue in studio.pipeline.data['queues'].items():
                 if queue and ident not in studio.pipeline.errors:studio.pipeline.start(ident)
-        for ident,cfg in list(studio.data['devices'].items()):
-            if cfg.get('playing') and not (root/'.cleanup-started').exists() and ident not in studio.pipeline.errors:
-                try:await studio.play(ident)
-                except ValueError as exc:
-                    cfg['playing']=False
-                    studio.runtime[ident]={'playing':False,'error':str(exc)}
-                    await studio.save()
+        if not (root/'.cleanup-started').exists():
+            studio.recovery_task=asyncio.create_task(studio.recovery_loop())
 
     async def cleanup(app):
         await studio.shutdown()
