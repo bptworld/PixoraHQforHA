@@ -107,13 +107,19 @@ def run(request):
         device=result.get('deviceGraphic') or result.get('_device_graphic') or {}
         special=bool(wall or device or result.get('_priority') or result.get('_priority_graphic') or (request.get('events') and result.get('_no_replay')))
         if special and request.get('events'):
-            width=request.get('wall_width',request['width']) if wall else request['width'];graphic_spec=wall or device
+            graphic_spec=wall or device;members=None
+            if wall and 'wall_groups' in request:
+                from special_graphics import event_group
+                members=event_group(graphic_spec,options,request.get('card_metadata',{}),request['wall_groups'])
+            width=sum(w for _,w in members) if members else request.get('wall_width',request['width']) if wall else request['width']
+            if wall:graphic_spec={**graphic_spec,'team':{**graphic_spec.get('team',{}),'_wall':True}}
             timing=result.get('_frame_durations_ms')
             event_body=body
             if wall or not isinstance(event_body,(bytes,bytearray)):
                 event_body,timing=renderer_body(module,graphic_spec,width)
             event={'body':base64.b64encode(artwork(event_body,width,timing,True)).decode(),'duration':max(1,min(300,int(graphic_spec.get('dwell_secs') or duration))),
                 'kind':str(graphic_spec.get('kind') or graphic_spec.get('type') or 'special'),'wall':bool(wall),'width':width,'once':True}
+            if members:event['wall_members']=members
             # An event is never stored as ordinary deck artwork.
             try:ordinary=module.render({**options,'_is_prefetch':True})
             except Exception:ordinary=None  # Keep the already-rendered event and its history.

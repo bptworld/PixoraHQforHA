@@ -312,7 +312,7 @@ class Studio:
         key=request['state_key'];event=result.get('event');entries=[]
         if event and self.data['devices'].get(request['device_id'],{}).get('playing'):
             event_id=hashlib.sha256((key+json.dumps(request.get('event_state',{}),sort_keys=True)+json.dumps(result.get('state',{}),sort_keys=True)+event['body']).encode()).hexdigest()
-            group=request.get('wall_members',[]) if event.get('wall') else []
+            group=event.get('wall_members',request.get('wall_members',[])) if event.get('wall') else []
             if group:
                 owners=[]
                 for member,_ in group:
@@ -375,6 +375,8 @@ class Studio:
                             request=await self.render(item,width,device_id=ident,request_only=True,events=True)
                             state_key=hashlib.sha256(json.dumps({'device':ident,'item':{'id':item['id'],'card':item['card'],'options':item.get('options',{})},'revision':self.store.catalog['commit']},sort_keys=True).encode()).hexdigest()
                             request['state_key']=state_key;request['event_state']=self.pipeline.data['states'].get(state_key,{})
+                            request['wall_groups']={gid:[(m,next(d['width'] for d in self.displays() if d['id']==m)) for m in g['members']] for gid,g in self.data['groups'].items() if ident in g['members']}
+                            request['card_metadata']=card
                             for group in self.data['groups'].values():
                                 if ident in group['members']:
                                     members=[(m,next(d['width'] for d in self.displays() if d['id']==m)) for m in group['members']]
@@ -589,6 +591,15 @@ class Studio:
                 prepared.cancel()
                 await asyncio.gather(prepared,return_exceptions=True)
 
+    def graphic_group(self,ident,target):
+        if target.startswith('group:'):
+            group=self.data['groups'].get(target[6:])
+            if not group or ident not in group['members']:raise ValueError('Choose an available group containing this display.')
+            return group
+        groups=[g for g in self.data['groups'].values() if ident in g['members']]
+        if len(groups)!=1:raise ValueError('Choose a specific display group for this special graphic.')
+        return groups[0]
+
     async def test_graphic(self,payload):
         ident=payload.get('display');self.selected(ident)
         card=self.store.cards.get(payload.get('card'))
@@ -598,8 +609,7 @@ class Studio:
         options=validated['options'];group=None
         target=str(options.get(key,'device'))
         if target in ('group','group_wall','wall') or target.startswith('group:'):
-            group=next((g for g in self.data['groups'].values() if ident in g['members']),None)
-            if not group:raise ValueError('Add this display to a device group before testing a group graphic.')
+            group=self.graphic_group(ident,target)
         targets=group['members'] if group else [ident]
         widths=[]
         for member in targets:
@@ -625,7 +635,7 @@ class Studio:
             ready_at=time.time()+WALL_START_LEAD
             for _,payload in entries:payload['start_at']=ready_at
         await self.pipeline.submit(entries)
-        return {'queued':True,'render_ms':render_ms,'displays':len(widths),'message':'Test graphic queued'+(' for the group' if group else '')+'. The deck continues with the next card after the interrupt.'}
+        return {'queued':True,'render_ms':render_ms,'displays':len(widths),'message':'Test graphic queued'+(' for the group' if group else '')+'. '+(event.get('warning','')+' ' if event.get('warning') else '')+'The deck continues with the next card after the interrupt.'}
 
     def register(self):
         routes=self.app.router

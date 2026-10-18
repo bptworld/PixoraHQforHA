@@ -23,6 +23,7 @@ async def check():
     checked=[]
     async def info():return {'width':64}
     studio.selected=lambda ident:SimpleNamespace(info=info)
+    studio.displays=lambda:[{'id':'panel','width':64}]
     async def render(item,width,**kwargs):
         assert kwargs['events'] and kwargs['request_only']
         return {'card_id':item['card']}

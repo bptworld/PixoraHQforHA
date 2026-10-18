@@ -1,4 +1,28 @@
 """Allowlisted local graphic tests; never execute arbitrary browser renderer names."""
+
+def test_team(module,card,options,width):
+    from urllib.parse import urlsplit,urlunsplit,quote
+    from card_utils import fetch_json_request
+    favorite=str(options.get('favoriteTeam') or 'TEST')
+    label=next((choice['label'] for option in card.get('options',[]) if option['key']=='favoriteTeam'
+                for choice in option.get('choices',[]) if isinstance(choice,dict) and choice.get('value')==favorite),favorite)
+    team={'_width':width,'abbreviation':favorite,'displayName':label,'color':'668CFF','alternateColor':'FFFFFF',
+          'winnerName':'Test Winner','playerName':'Test Player','roundNumber':2,'destination':'Destination','event':'Weather Alert'}
+    warning=''
+    source=urlsplit(str(getattr(module,'_URL','')))
+    if any(option['key']=='favoriteTeam' for option in card.get('options',[])):
+        if source.hostname=='site.api.espn.com' and source.path.endswith('/scoreboard'):
+            url=urlunsplit(('https',source.hostname,source.path.removesuffix('/scoreboard')+'/teams/'+quote(favorite,safe=''),'',''))
+            try:
+                data=fetch_json_request(url,seconds=86400).get('team',{})
+                if not isinstance(data,dict) or not data:raise ValueError('No team artwork')
+                team.update({key:data[key] for key in ('id','abbreviation','displayName','shortDisplayName','color','alternateColor','logos') if key in data})
+                logos=data.get('logos') or []
+                team['logo']=data.get('logo') or next((logo.get('href') for logo in logos if isinstance(logo,dict) and logo.get('href')),'')
+                if not team['logo']:warning='Team logo was unavailable; the test uses fallback artwork.'
+            except Exception:warning='Team artwork could not be loaded from its provider; the test uses fallback artwork.'
+        else:warning='Team artwork is unavailable for this test; fallback artwork is used.'
+    return team,warning
 def tests_for(card):
     ident=card['id'];result={}
     football=ident in ('nfl','college_football','cfl','ufl')
@@ -34,16 +58,38 @@ def render_test(module,card,key,options,width):
     import base64
     test=tests_for(card).get(key)
     if not test:raise ValueError('Choose a special graphic for this card.')
-    favorite=options.get('favoriteTeam','TEST');label=str(favorite)
-    for option in card.get('options',[]):
-        if option['key']=='favoriteTeam':
-            for choice in option.get('choices',[]):
-                if isinstance(choice,dict) and choice.get('value')==favorite:label=choice['label'];break
-    team={'_width':width,'abbreviation':favorite,'displayName':label,'color':'668CFF','alternateColor':'FFFFFF','winnerName':'Test Winner','playerName':'Test Player','roundNumber':2,'destination':'Destination','event':'Weather Alert'}
+    team,warning=test_team(module,card,options,width)
+    if str(options.get(key,'device')) in ('group','group_wall','wall') or str(options.get(key,'')).startswith('group:'):
+        team['_wall']=True
     if key=='landingGraphicTarget' and str(options.get(key,'device'))=='device':body=module._landing_animation_body(width);timing=None
     elif test['renderer']=='etsy_order':body=module._new_order_animation({'newest_total':12.5,'newest_currency':'USD'},options);timing=None
     elif test['renderer']=='flight_alert':
         import io
         image=module._draw_alert('TEST ALERT','AA123',test['label'],width=width);out=io.BytesIO();image.save(out,'PNG');body=out.getvalue();timing=None
     else:body,timing=renderer_body(module,{**test,'team':team},width)
-    return {'body':base64.b64encode(artwork(body,width,timing,True)).decode(),'duration':6,'kind':test['kind'],'once':True}
+    return {'body':base64.b64encode(artwork(body,width,timing,True)).decode(),'duration':6,'kind':test['kind'],'once':True,**({'warning':warning} if warning else {})}
+
+
+def event_group(spec,options,card,groups):
+    """Resolve a wall event to its saved group; never pick an arbitrary group."""
+    kind=str(spec.get('kind') or spec.get('type') or '')
+    matches=[key for key,test in tests_for(card).items() if test['kind']==kind]
+    if not matches:
+        aliases={'field_goal':'scoreAnimationTarget','safety':'scoreAnimationTarget','score':'scoreAnimationTarget',
+                 'bucket':'scoreAnimationTarget','free_throw':'scoreAnimationTarget','grand_slam':'homeRunAnimationTarget',
+                 'inning_start':'gameStartAnimationTarget','quarter_start':'startPeriodAnimationTarget',
+                 'quarter_end':'endPeriodAnimationTarget','period_start':'startPeriodAnimationTarget',
+                 'period_end':'endPeriodAnimationTarget','shake':'launchAnimationTarget'}
+        key=aliases.get(kind)
+        if key in options:matches=[key]
+    targets={str(options[key]) for key in matches if key in options}
+    if spec.get('groupId'):targets={'group:'+str(spec['groupId'])}
+    if not targets:
+        targets={str(value) for value in options.values() if str(value).startswith('group:')}
+    if len(targets)!=1:raise ValueError('Choose a specific display group for this special graphic.')
+    target=targets.pop()
+    if target.startswith('group:'):
+        if target[6:] not in groups:raise ValueError('The selected graphic group is unavailable for this display.')
+        return groups[target[6:]]
+    if target in ('group','group_wall','wall') and len(groups)==1:return next(iter(groups.values()))
+    raise ValueError('Choose a specific display group for this special graphic.')

@@ -1,3 +1,11 @@
+# 1.2.15
+
+- Include the selected team's provider logo and colors in special-graphic tests, and use the full wall scenes for group tests. Report when provider artwork is unavailable.
+
+- List each assigned display group by name in special-graphic targets. Save the selected group ID and route tests and automatic events to that group; ambiguous older targets require a specific choice.
+
+- Show numbered left-to-right positions when creating and viewing display groups. Arrange displays with Move left and Move right before saving, and preserve pending selections during other refreshes.
+
 # 1.2.14
 
 - Keep running decks waiting through temporary read-only Wi-Fi status failures instead of permanently pausing them. Uncertain writes remain blocked and are never retried on the same startup.
