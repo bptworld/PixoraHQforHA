@@ -804,7 +804,8 @@ class Studio:
             if item is None:raise ValueError('Save this card in a deck first.')
             width=int(request.query.get('width','64'))
             if width not in (64,128):raise ValueError('Choose S3 64 or 128.')
-            body=await self.render(item,width)
+            try:body=await self.render(item,width)
+            except CardSkipped:return web.Response(status=204,headers={'Cache-Control':'no-store'})
             return web.Response(body=body,content_type='image/png' if body.startswith(b'\x89PNG') else 'image/webp',headers={'Cache-Control':'no-store'})
         async def entities(request):
             states=await self.ha('states')

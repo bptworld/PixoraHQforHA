@@ -1,3 +1,9 @@
+# 1.2.17
+
+- Show a neutral No active content preview for temporarily inactive cards instead of a broken-preview error. Keep retry controls below error text.
+
+- Make paused displays and decks stand out with a red status badge, red selected-display border and red device-picker outline in both themes. Show Paused instead of a stale card title after playback stops.
+
 # 1.2.16
 
 - Keep priority animation bodies, provider data and public image assets warm on the hub between isolated card workers, with bounded storage and provider freshness limits.
