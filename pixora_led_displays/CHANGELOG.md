@@ -1,3 +1,7 @@
+# 1.2.22
+
+- Add Do not show to scoring-animation targets, including basketball baskets, goals and runs. Disabled scoring events keep score history current and ordinary cards updating without interrupting playback. Available for already downloaded cards; Test is disabled for a hidden graphic.
+
 # 1.2.21
 
 - Recover running decks automatically after an uncertain card delivery. Reconnect using read-only status checks, let any accepted frame expire, then continue with the next card without resending the uncertain frame. Manual pauses and priority-message delivery errors remain respected.

@@ -10,6 +10,8 @@ class CardStore:
         self.cards={c['id']:c for c in self.catalog['cards']}
         from standings import configure
         configure(self.cards)
+        from special_graphics import configure_scoring_choices
+        configure_scoring_choices(self.cards)
         self.lock=asyncio.Lock()
         self.root.mkdir(parents=True,exist_ok=True)
 

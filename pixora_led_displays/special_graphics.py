@@ -95,3 +95,25 @@ def event_group(spec,options,card,groups):
         return groups[target[6:]]
     if target in ('group','group_wall','wall') and len(groups)==1:return next(iter(groups.values()))
     raise ValueError('Choose a specific display group for this special graphic.')
+
+
+SCORING_TARGETS={'scoreAnimationTarget','goalAnimationTarget','runAnimationTarget',
+                 'scoringPlayAnimationTarget','homeRunAnimationTarget','walkOffAnimationTarget'}
+
+def configure_scoring_choices(cards):
+    for card in cards.values():
+        for option in card.get('options',[]):
+            if option['key'] in SCORING_TARGETS:
+                choices=option.setdefault('choices',[])
+                if not any((c if isinstance(c,str) else c.get('value'))=='none' for c in choices):
+                    choices.insert(0,{'value':'none','label':'Do not show'})
+
+def scoring_disabled(card,options,spec):
+    if not card:return False
+    kind=str(spec.get('kind') or spec.get('type') or '')
+    keys=[key for key,test in tests_for(card).items() if test['kind']==kind]
+    aliases={'score':'scoreAnimationTarget','field_goal':'scoreAnimationTarget','safety':'scoreAnimationTarget',
+             'bucket':'scoreAnimationTarget','free_throw':'scoreAnimationTarget','two':'scoreAnimationTarget',
+             'grand_slam':'homeRunAnimationTarget'}
+    if not keys and kind in aliases:keys=[aliases[kind]]
+    return any(key in SCORING_TARGETS and options.get(key)=='none' for key in keys)

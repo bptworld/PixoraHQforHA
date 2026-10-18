@@ -782,6 +782,9 @@ class Studio:
         validated=self.validate_deck({'name':'Graphic test','items':[{'id':'test','card':card['id'],'options':payload.get('options',{}),'duration':6}]})['items'][0]
         options=validated['options'];group=None
         target=str(options.get(key,'device'))
+        if target=='none':
+            if prepare:return {'prepared':False}
+            raise ValueError('This graphic is set to Do not show. Choose a display or group to test it.')
         if target in ('group','group_wall','wall') or target.startswith('group:'):
             group=self.graphic_group(ident,target)
         targets=group['members'] if group else [ident]

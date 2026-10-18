@@ -126,7 +126,11 @@ def run(request):
         if cache and cache.asset_failures:result['event']['warning']='Some provider images could not load; fallback artwork is shown. Try again after the connection recovers.'
         if cache and not result['event'].get('warning'):cache.put('test',test_key,json.dumps(result).encode())
         return result
-    result=module.render(options);event=None;state={}
+    from special_graphics import SCORING_TARGETS,scoring_disabled
+    # Legacy downloaded cards lack a disabled target. Request their descriptor
+    # envelope so disabled events can be consumed without queueing any artwork.
+    render_options={**options,**{key:'group_wall' for key in SCORING_TARGETS if options.get(key)=='none'}}
+    result=module.render(render_options);event=None;state={}
     if request.get('events'):
         for name,value in vars(module).items():
             if isinstance(value,dict) and ('STATE' in name or name in ('_LAST_SEEN','_LAST_FLIGHT_POS','_LANDED_FLIGHT_EVENTS')):
@@ -138,7 +142,8 @@ def run(request):
         wall=result.get('wallGraphic') or result.get('_group_wall')
         device=result.get('deviceGraphic') or result.get('_device_graphic') or {}
         special=bool(wall or device or result.get('_priority') or result.get('_priority_graphic') or (request.get('events') and result.get('_no_replay')))
-        if special and request.get('events'):
+        suppressed=scoring_disabled(request.get('card_metadata',{}),options,wall or device) if special else False
+        if special and request.get('events') and not suppressed:
             graphic_spec=wall or device;members=None
             if wall and 'wall_groups' in request:
                 from special_graphics import event_group

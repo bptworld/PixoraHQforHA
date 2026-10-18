@@ -6,6 +6,7 @@ const {chromium}=require('playwright');
 const html=readFileSync(new URL('../pixora_led_displays/studio.html',import.meta.url),'utf8');
 const catalog=JSON.parse(readFileSync(new URL('../pixora_led_displays/card_catalog.json',import.meta.url),'utf8'));
 const card={installed:true,...catalog.cards.find(c=>c.id==='college_football'),specialTests:{scoreAnimationTarget:{label:'Score Animation'}}};
+card.options.find(o=>o.key==='scoreAnimationTarget').choices.unshift({value:'none',label:'Do not show'});
 const state={cards:[card],decks:{},devices:{},groups:{wall:{name:'3way',members:['left']},second:{name:'Desk pair',members:['left']}},graphics:{},settings:{},runtime:{},displays:[{id:'left',name:'Left-64',width:64,height:32,version:'2.0.19'}]};
 let requests=0,prepares=0,fail=false,release;
 const browser=await chromium.launch();
@@ -50,6 +51,10 @@ try{
  assert.equal(await page.getByLabel('Score Animation',{exact:true}).getByRole('option',{name:'Main wall',exact:true}).count(),1);
  state.groups={};await page.reload();await page.getByRole('button',{name:'Options & add to deck',exact:true}).click();
  assert.equal(await page.getByLabel('Score Animation',{exact:true}).getByRole('option',{name:'No group assigned',exact:true}).evaluate(e=>e.disabled),true);
+ await page.getByLabel('Score Animation',{exact:true}).selectOption('none');
+ assert.equal(await page.getByRole('button',{name:'Test Score Animation',exact:true}).isDisabled(),true);
+ await page.getByLabel('Score Animation',{exact:true}).selectOption('device');
+ assert.equal(await page.getByRole('button',{name:'Test Score Animation',exact:true}).isDisabled(),false);
  assert.deepEqual(errors,[]);
  console.log('Graphic Test browser passed: adjacent accessible button, current options, busy feedback, success/error, no implicit save, retained fields and tablet layout.');
 }finally{await browser.close()}

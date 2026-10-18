@@ -58,6 +58,11 @@ def render(options):
     wall=run({**request,'wall_width':192,'options':{'score':2,'wall':True}})
     with Image.open(io.BytesIO(base64.b64decode(wall['event']['body']))) as image:assert image.size==(192,32)
     skipped=run({**request,'options':{'skip':True}});assert skipped['skip'] and skipped['body'] is None
+    # Disabled scoring still consumes history and retains regular card artwork.
+    hidden={**request,'card_metadata':{'id':'nhl','options':[{'key':'goalAnimationTarget','label':'Goal Animation'}]},'options':{'score':2,'goalAnimationTarget':'none'}}
+    suppressed=run(hidden)
+    assert suppressed['event'] is None and suppressed['body'] and suppressed['state']
+    assert run({**hidden,'event_state':suppressed['state'],'options':{'score':2,'goalAnimationTarget':'device'}})['event'] is None
     # Exercise the actual public NFL score-transition logic, replacing only provider/artwork I/O.
     source=Path('D:/planner/.build-tmp/led-public-card-source/cards')
     (root/'addons/probe.py').write_text("""import importlib.util,sys,io
@@ -112,6 +117,32 @@ def render(options):
     real_request.update(event_state=baseline['state'],options={'favoriteTeam':'ALA','score':7})
     touchdown=run(real_request);assert touchdown['event'] and touchdown['event']['once']
     real_request['event_state']=touchdown['state'];assert run(real_request)['event'] is None
+
+    # Actual basketball scorer: disabled baskets advance history without interrupts.
+    (root/'addons/probe.py').write_text("""import sys,io
+from PIL import Image
+sys.path[:0]=[SOURCE,SOURCE+'/addons']
+import _sports_breaking as breaking
+_SCORE_STATE={}
+def render(options):
+ out=io.BytesIO();Image.new('RGB',(64,32),'blue').save(out,'PNG');body=out.getvalue()
+ competitor={'score':str(options.get('score',0)),'team':{'abbreviation':'BOS'}}
+ event={'id':'nba-game','competitions':[{'status':{'type':{'state':'in'}},'competitors':[competitor]}]}
+ breaking.fetch_sport_scoreboard=lambda *args,**kwargs:{'events':[event]}
+ breaking.pick_sport_event=lambda *args:event
+ breaking.animation_competitors=lambda *args:[competitor]
+ breaking.warm_priority_graphic=lambda *args:None
+ breaking.cached_priority_graphic=lambda key,renderer:renderer()
+ return breaking.maybe_score_alert(options,'nba','fake',{},_SCORE_STATE,sport='basketball',render=lambda *args:body) or body
+""".replace('SOURCE',repr(str(source).replace(chr(92),'/'))))
+    basketball={**request,'event_state':{},'card_metadata':{'id':'nba','options':[{'key':'scoreAnimationTarget','label':'Score Animation'}]},'options':{'favoriteTeam':'BOS','score':0,'scoreAnimationTarget':'none'}}
+    initial=run(basketball)
+    hidden=run({**basketball,'event_state':initial['state'],'options':{**basketball['options'],'score':2}})
+    assert hidden['event'] is None and hidden['body'] and hidden['state']
+    enabled={**basketball,'event_state':hidden['state'],'options':{'favoriteTeam':'BOS','score':2,'scoreAnimationTarget':'device'}}
+    assert run(enabled)['event'] is None,'Disabled basket replayed when enabled'
+    fresh=run({**enabled,'options':{**enabled['options'],'score':5}})
+    assert fresh['event'] and fresh['body'],'New scoring event stopped working'
 
     # Flight snapshot refreshes must finish in this process; landing identity survives it.
     (root/'addons/flight_track.py').write_text("""import io
