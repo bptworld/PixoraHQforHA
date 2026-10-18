@@ -1,9 +1,9 @@
 # Pixora LED Studio
 
 <p>
-  <a href="../docs/images/led-panel-clock-lifestyle.png"><img src="../docs/images/led-panel-clock-lifestyle.png" alt="AI lifestyle illustration of a clock and weather LED display on a cabinet" width="300"></a>
-  <a href="../docs/images/led-panel-sports-lifestyle.png"><img src="../docs/images/led-panel-sports-lifestyle.png" alt="AI lifestyle illustration of a sports LED display on a desk" width="300"></a>
-  <a href="../docs/images/led-studio-decks.png"><img src="../docs/images/led-studio-decks.png" alt="Pixora LED Studio decks and display controls in Home Assistant" width="300"></a>
+  <a href="https://raw.githubusercontent.com/bptworld/PixoraHQforHA/main/docs/images/led-panel-clock-lifestyle.png"><img src="https://raw.githubusercontent.com/bptworld/PixoraHQforHA/main/docs/images/led-panel-clock-lifestyle.png" alt="AI lifestyle illustration of a clock and weather LED display on a cabinet" width="300"></a>
+  <a href="https://raw.githubusercontent.com/bptworld/PixoraHQforHA/main/docs/images/led-panel-sports-lifestyle.png"><img src="https://raw.githubusercontent.com/bptworld/PixoraHQforHA/main/docs/images/led-panel-sports-lifestyle.png" alt="AI lifestyle illustration of a sports LED display on a desk" width="300"></a>
+  <a href="https://raw.githubusercontent.com/bptworld/PixoraHQforHA/main/docs/images/led-studio-decks.png"><img src="https://raw.githubusercontent.com/bptworld/PixoraHQforHA/main/docs/images/led-studio-decks.png" alt="Pixora LED Studio decks and display controls in Home Assistant" width="300"></a>
 </p>
 
 *LED display lifestyle illustrations (AI-generated) and an LED Studio screenshot — click any image to enlarge.*
@@ -35,9 +35,9 @@ You also need a running Home Assistant installation with app support and a **2.4
 
 For a new MatrixPortal S3 controller, download the **[USB first-install firmware 2.0.27](https://github.com/bptworld/PixoraHQforHA/raw/refs/heads/main/firmware/usb/2.0.27/pixora-v2.0.27-s3-first-install-usb.bin)**. One file supports **64×32 and 128×32**.
 
-Follow the **[USB flashing and Wi-Fi setup instructions](../firmware/usb/2.0.27/README.md)**. Flash the complete image at **0x0**, join the panel's `Pixora-…` network using its displayed password, then open **http://192.168.4.1** to enter your **2.4 GHz** home Wi-Fi and select the panel size. Reconnect to home Wi-Fi and add the panel in Studio using its displayed IP address.
+Follow the **[USB flashing and Wi-Fi setup instructions](https://github.com/bptworld/PixoraHQforHA/blob/main/firmware/usb/2.0.27/README.md)**. Flash the complete image at **0x0**, join the panel's `Pixora-…` network using its displayed password, then open **http://192.168.4.1** to enter your **2.4 GHz** home Wi-Fi and select the panel size. Reconnect to home Wi-Fi and add the panel in Studio using its displayed IP address.
 
-**First installation erases existing Wi-Fi, pairing and panel settings.** This file is for USB installation, not Studio's firmware update button. Use normal OTA updates afterward to preserve settings. [SHA-256 checksum](../firmware/usb/2.0.27/SHA256SUMS.txt). The combined installer has passed binary checks.
+**First installation erases existing Wi-Fi, pairing and panel settings.** This file is for USB installation, not Studio's firmware update button. Use normal OTA updates afterward to preserve settings. [SHA-256 checksum](https://github.com/bptworld/PixoraHQforHA/blob/main/firmware/usb/2.0.27/SHA256SUMS.txt). The combined installer has passed binary checks.
 
 ## Start here
 
