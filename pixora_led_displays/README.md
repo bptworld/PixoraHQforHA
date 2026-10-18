@@ -4,6 +4,23 @@ Build decks on your Home Assistant hub and serve them straight to MatrixPortal S
 
 Brought to you by [PixoraHQ.com](https://pixorahq.com/).
 
+## Build your own display
+
+| Part | 64×32 display | 128×32 display |
+| --- | --- | --- |
+| [Adafruit Matrix Portal S3 — product 5778](https://www.adafruit.com/product/5778) | 1 controller | 1 controller |
+| [64×32 RGB LED Matrix, 4 mm pitch — product 2278](https://www.adafruit.com/product/2278) | 1 panel | 2 panels, side by side |
+| USB-C **data** cable for flashing | 1 | 1 |
+| Regulated 5 V power supply and suitable power wiring | Sized for 1 panel | Sized for 2 panels |
+| HUB75/IDC ribbon and panel power cables | Panel connections | Panel connections plus a ribbon between panels |
+| Mounting hardware or enclosure | As needed | As needed for both panels |
+
+Adafruit lists an IDC ribbon and power cable with each panel. Check the supplied cables and lengths before ordering extras. The controller and panel are separate purchases; the controller does not include a USB-C power supply.
+
+For 128×32, connect the first panel's **OUT** to the second panel's **IN**, power both panels, and select **128×32** during Wi-Fi setup. Both sizes use the same controller and Pixora firmware. Follow [Adafruit's MatrixPortal S3 assembly guide](https://learn.adafruit.com/adafruit-matrixportal-s3) for connector orientation and power wiring. Adafruit specifies up to **4 A at 5 V per panel**; size the power supply and wiring for the number of panels. See the [panel power requirements](https://www.adafruit.com/product/2278) before choosing a supply.
+
+You also need a running Home Assistant installation with app support and a **2.4 GHz Wi-Fi network** for the displays.
+
 ## First USB installation and Wi-Fi setup
 
 For a new MatrixPortal S3 controller, download the **[USB first-install firmware 2.0.27](https://github.com/bptworld/PixoraHQforHA/raw/refs/heads/main/firmware/usb/2.0.27/pixora-v2.0.27-s3-first-install-usb.bin)**. One file supports **64×32 and 128×32**.
