@@ -5,9 +5,8 @@ const require = createRequire(process.env.PLAYWRIGHT_PACKAGE || 'D:/planner/conn
 const { chromium } = require('playwright');
 const html = readFileSync(new URL('../pixora_led_displays/studio.html',import.meta.url),'utf8');
 const source = readFileSync(new URL('../pixora_led_displays/custom_card_starter.py',import.meta.url));
-const card = {id:'custom_my_message',name:'My Message',detail:'A custom card',category:'My Apps',custom:true,version:'1.0.0',options:[{key:'message',label:'Message',type:'text',default:'Hello Pixora'},{key:'bright',label:'Bright text',type:'checkbox',default:true},{key:'count',label:'Count',type:'number',default:2,min:0,max:10,step:2},{key:'decimal',label:'Decimal value',type:'number',default:0.5}]};
-let imports = 0, deletes = 0, saves = 0;
-let expectedSource=source;
+const card = {id:'custom_my_message',name:'My Message',detail:'A custom card',category:'My Apps',custom:true,version:'1.0.0',options:[{key:'message',label:'Message',type:'text',default:'Hello Pixora'},{key:'bright',label:'Bright text',type:'checkbox',default:true}]};
+let imports = 0, deletes = 0;
 const state = {cards:[],decks:{},devices:{},groups:{},graphics:{},settings:{},runtime:{},displays:[]};
 const browser = await chromium.launch();
 try {
@@ -18,14 +17,10 @@ try {
   if(u.pathname === '/') return route.fulfill({contentType:'text/html',body:html});
   if(u.pathname === '/api/studio/custom-apps' && route.request().method()==='POST') {
    assert.equal(route.request().headers()['x-pixora-trust-code'],'yes');
-   assert.deepEqual(route.request().postDataBuffer(),expectedSource);
-   imports++; state.cards=[{...card,version:imports===1?'1.0.0':'1.1.0'}];
+   assert.deepEqual(route.request().postDataBuffer(),source);
+   imports++; state.cards=[card];
   } else if(u.pathname === '/api/studio/custom-apps/custom_my_message' && route.request().method()==='DELETE') {
-   if(Object.values(state.decks).some(d=>d.items.some(i=>i.card===card.id)))return route.fulfill({status:400,json:{error:'Remove this app from saved decks before deleting it.'}});
    deletes++; state.cards=[];
-  } else if(u.pathname === '/api/studio/decks' && route.request().method()==='POST') {
-   const payload=route.request().postDataJSON();saves++;state.decks['my-deck']={name:payload.name,items:payload.items};
-   return route.fulfill({json:{id:'my-deck',state}});
   } else if(u.pathname === '/api/ha-setup') return route.fulfill({json:{ready:true}});
   return route.fulfill({json:state});
  });
@@ -42,26 +37,11 @@ try {
  await page.getByRole('heading',{name:'My Message',exact:true}).waitFor();
  assert.equal(imports,1);
  assert.equal(await page.getByLabel('I have reviewed this code and trust it to run on my HA hub.',{exact:true}).isChecked(),false);
- expectedSource=Buffer.from(source.toString().replace('1.0.0','1.1.0'));
- await page.getByLabel('Python card (.py, up to 256 KB)',{exact:true}).setInputFiles({name:'updated.py',mimeType:'text/x-python',buffer:expectedSource});
- await page.getByLabel('I have reviewed this code and trust it to run on my HA hub.',{exact:true}).check();
- await page.getByRole('button',{name:'Import app',exact:true}).click();
- await page.locator('#customApps').getByText('1.1.0',{exact:true}).waitFor();
- assert.equal(imports,2);
  await page.getByRole('button',{name:'Options & add to deck',exact:true}).filter({visible:true}).click();
  await page.getByRole('dialog').waitFor();
  assert.equal(await page.getByRole('dialog').getByLabel('Message',{exact:true}).inputValue(),'Hello Pixora');
  assert.equal(await page.getByLabel('Bright text',{exact:true}).isChecked(),true);
- assert.equal(await page.getByRole('dialog').getByLabel('Decimal value',{exact:true}).getAttribute('step'),'any');
- const count=page.getByRole('dialog').getByLabel('Count',{exact:true});
- assert.equal(await count.inputValue(),'2');
- for(const [key,value] of Object.entries({min:'0',max:'10',step:'2'}))assert.equal(await count.getAttribute(key),value);
- await page.getByRole('dialog').getByLabel('Message',{exact:true}).fill('Custom deck test');
- await page.getByRole('button',{name:'Save in deck & download',exact:true}).click();
- await page.getByRole('dialog').waitFor({state:'hidden'});
- assert.equal(saves,1);assert.equal(state.decks['my-deck'].items[0].card,card.id);
- assert.equal(state.decks['my-deck'].items[0].options.message,'Custom deck test');
- await page.getByRole('button',{name:'My Apps',exact:true}).click();
+ await page.locator('#cancelOptions').click();
  await page.evaluate(()=>window.scrollTo(0,0));
  await page.screenshot({path:'D:/planner/.build-tmp/led-custom-apps-desktop.png'});
  await page.setViewportSize({width:768,height:1024});
@@ -69,14 +49,7 @@ try {
  await page.screenshot({path:'D:/planner/.build-tmp/led-custom-apps-tablet.png'});
  page.on('dialog',dialog=>dialog.accept());
  await page.getByRole('button',{name:'Delete app',exact:true}).click();
- await page.getByRole('alert').filter({hasText:'Remove this app from saved decks'}).waitFor();
- assert.equal(deletes,0);
- await page.getByRole('button',{name:'Decks',exact:true}).click();
- await page.getByRole('button',{name:'Remove',exact:true}).click();
- await page.getByRole('button',{name:'Save deck',exact:true}).click();
- await page.getByRole('button',{name:'My Apps',exact:true}).click();
- await page.getByRole('button',{name:'Delete app',exact:true}).click();
  await page.getByText('No custom apps imported yet.',{exact:false}).waitFor();
  assert.equal(deletes,1); assert.deepEqual(errors,[]);
- console.log('Custom apps browser passed: tab isolation, trust gate, upload, source update, defaults, deck save, delete, no JS errors and tablet layout.');
+ console.log('Custom apps browser passed: tab isolation, trust gate, upload, defaults, delete, no JS errors and tablet layout.');
 } finally { await browser.close(); }

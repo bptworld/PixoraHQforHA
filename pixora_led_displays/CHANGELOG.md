@@ -1,6 +1,6 @@
-# 1.2.25
+# 1.2.26
 
-- Reject custom files that cannot compile, invalid render signatures and option limits/defaults that break the editor. Apply numeric limits in custom card forms. Audit import, replacement, real deck delivery, saved options and restart recovery for 64×32 and 128×32.
+- Restore the LED Studio 1.2.24 application code while investigating the local Home Assistant reload failure reported after 1.2.25. No cloud account is required. Saved decks, imported apps, settings and panel firmware are retained.
 
 # 1.2.24
 
