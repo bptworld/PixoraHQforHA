@@ -1,3 +1,8 @@
+# 1.2.12
+
+- Preserve an edited panel-size choice when a background firmware check finishes, including after focus moves to Save.
+- Show Preparing the first card after a successful Play request instead of displaying Paused while rendering begins.
+
 # 1.2.11
 
 - Recover from transient read-only panel status failures with bounded checks. Never retry an uncertain display write.

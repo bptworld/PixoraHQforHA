@@ -430,6 +430,7 @@ class Studio:
         await self.save()
         async with self.pipeline.lock:
             self.pipeline.errors.pop(ident,None);self.pipeline.blocked.discard(ident);await self.pipeline.commit()
+        self.runtime[ident]={'playing':True,'status':'Preparing the first card…'}
         self.jobs[ident]=asyncio.create_task(self.player(ident))
         self.monitors[ident]=asyncio.create_task(self.monitor(ident))
 
