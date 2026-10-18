@@ -1,5 +1,12 @@
 # Pixora LED Studio
 
+<p>
+  <a href="../docs/images/led-studio-dark.png"><img src="../docs/images/led-studio-dark.png" alt="Pixora LED Studio card library in the dark theme" width="300"></a>
+  <a href="../docs/images/led-studio-light.png"><img src="../docs/images/led-studio-light.png" alt="Pixora LED Studio card library in the light theme" width="300"></a>
+</p>
+
+*Dark and light themes — click either image to enlarge.*
+
 Build decks on your Home Assistant hub and serve them straight to MatrixPortal S3 **64×32** and **128×32** displays over local Wi-Fi. No Pixora Cloud account or rendering server is used.
 
 Brought to you by [PixoraHQ.com](https://pixorahq.com/).
