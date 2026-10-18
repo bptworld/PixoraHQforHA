@@ -1,3 +1,7 @@
+# 1.2.25
+
+- Reject custom files that cannot compile, invalid render signatures and option limits/defaults that break the editor. Apply numeric limits in custom card forms. Audit import, replacement, real deck delivery, saved options and restart recovery for 64×32 and 128×32.
+
 # 1.2.24
 
 - Import trusted custom Python cards in My Apps, configure them and add them to normal decks. Download the HA AI creator brief, starter and original custom source. Keep imported apps across restarts and unused-card cleanup; protect apps referenced by saved decks from replacement or deletion.

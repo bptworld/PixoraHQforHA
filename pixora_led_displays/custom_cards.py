@@ -2,9 +2,16 @@
 import ast
 import hashlib
 import json
+import math
 import re
 
 MAX_SOURCE = 256 * 1024
+
+
+def finite_number(value):
+    if type(value) not in (int,float):return False
+    try:return math.isfinite(value)
+    except OverflowError:return False
 
 
 def describe(body):
@@ -13,6 +20,7 @@ def describe(body):
     try:
         source = body.decode('utf-8-sig')
         tree = ast.parse(source)
+        compile(tree, "<custom-card>", "exec")  # Compile only; never run uploaded code.
     except (UnicodeError, SyntaxError, ValueError, RecursionError) as exc:
         raise ValueError('The card must be valid UTF-8 Python.') from exc
     values = {}
@@ -32,8 +40,13 @@ def describe(body):
         value = values.get(key, '' if key != 'CARD_NAME' else None)
         if not isinstance(value, str) or len(value) > limit or (key == 'CARD_NAME' and not value.strip()):
             raise ValueError(key + ' must be a short text value.')
-    if not any(isinstance(node, ast.FunctionDef) and node.name == 'render' for node in tree.body):
+    renderers = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'render']
+    if not renderers:
         raise ValueError('The card must define render(options=None).')
+    args = renderers[-1].args
+    positional = args.posonlyargs + args.args
+    if (not positional and not args.vararg) or len(positional)-len(args.defaults)>1 or any(value is None for value in args.kw_defaults):
+        raise ValueError('render must accept one positional options argument without other required arguments.')
     options = values.get('CARD_OPTIONS', [])
     if not isinstance(options, list) or len(options) > 30:
         raise ValueError('CARD_OPTIONS must be a list of up to 30 options.')
@@ -62,8 +75,27 @@ def describe(body):
             for choice in choices:
                 if not isinstance(choice, str) and not (isinstance(choice, dict) and isinstance(choice.get('value'), (str, int, float)) and isinstance(choice.get('label'), str)):
                     raise ValueError('Invalid select choice.')
-        if any(not isinstance(option[k], (int, float)) or isinstance(option[k], bool) for k in ('min', 'max', 'step', 'maxlength') if k in option):
-            raise ValueError('Option limits must be numbers.')
+        if any(not finite_number(option[k]) for k in ('min', 'max', 'step', 'maxlength') if k in option):
+            raise ValueError('Option limits must be finite numbers.')
+        if 'maxlength' in option and (type(option['maxlength']) is not int or not 1<=option['maxlength']<=4096):
+            raise ValueError('Text length limits must be whole numbers from 1 to 4096.')
+        if 'min' in option and 'max' in option and option['min']>option['max']:
+            raise ValueError('An option minimum cannot exceed its maximum.')
+        if 'step' in option and option['step']<=0:
+            raise ValueError('An option step must be greater than zero.')
+        if 'default' in option:
+            default=option['default']
+            if option['type']=='checkbox' and type(default) is not bool:
+                raise ValueError('Checkbox defaults must be true or false, not text.')
+            if option['type']=='number' and (not finite_number(default)):
+                raise ValueError('Number defaults must be finite numbers.')
+            if option['type']=='number':
+                if ('min' in option and default<option['min']) or ('max' in option and default>option['max']):
+                    raise ValueError('Number defaults must be within the option limits.')
+                if 'step' in option:
+                    steps=(default-option.get('min',0))/option['step']
+                    if not finite_number(steps) or not math.isclose(steps,round(steps),abs_tol=1e-8,rel_tol=0):
+                        raise ValueError('Number defaults must match the option step.')
     try:
         encoded = json.dumps(options, allow_nan=False)
     except (TypeError, ValueError) as exc:
