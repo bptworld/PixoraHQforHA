@@ -6,6 +6,8 @@ Brought to you by [PixoraHQ.com](https://pixorahq.com/).
 
 ## Build your own display
 
+The products linked below are examples of parts you can buy, not a required shopping list or an endorsement. PixoraHQ is not affiliated with, sponsored by, or endorsed by Adafruit. Product names and trademarks belong to their respective owners. Purchases, warranties, returns and hardware support are handled by the seller. Check compatibility before choosing alternatives; Pixora firmware currently supports MatrixPortal S3 controllers with 64×32 or 128×32 displays.
+
 | Part | 64×32 display | 128×32 display |
 | --- | --- | --- |
 | [Adafruit Matrix Portal S3 — product 5778](https://www.adafruit.com/product/5778) | 1 controller | 1 controller |
