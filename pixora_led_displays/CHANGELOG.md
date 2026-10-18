@@ -1,3 +1,8 @@
+# 1.2.27
+
+- Recover local Studio loading after failed or timed-out read requests. Slow HA setup checks run separately and do not disable the interface. Commands remain single-attempt.
+- Validate new custom-app uploads without executing them, and handle option limits safely. Preserve existing imported apps on upgrade.
+
 # 1.2.26
 
 - Restore the LED Studio 1.2.24 application code while investigating the local Home Assistant reload failure reported after 1.2.25. No cloud account is required. Saved decks, imported apps, settings and panel firmware are retained.

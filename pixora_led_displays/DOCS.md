@@ -87,3 +87,9 @@ Group walls wait until every member has finished prior messages and decoded its 
 Open **My Apps** in LED Studio to download the [AI card-creation brief](https://github.com/bptworld/PixoraHQforHA/blob/main/pixora_led_displays/Pixora-Codex-Card-Brief.md) and a [starter Python card](https://github.com/bptworld/PixoraHQforHA/blob/main/pixora_led_displays/custom_card_starter.py). Give the brief to your AI with your card idea, review the returned `.py` file, then import it in My Apps. Imported apps appear in the Card Library and can be configured and added to decks. Both 64×32 and 128×32 use the same file. Requires LED Studio 1.2.24 or later.
 
 Custom Python runs with LED Studio’s access to files and the network: only import code you trust. The single-file importer reads metadata without running the card; rendering executes it. Custom apps stay in the HA app’s persistent data across restarts and unused-card cleanup. Download your source from My Apps to edit or share it. Remove an app from saved decks before replacing or deleting it.
+
+New imports and replacements are checked for compilable Python, a render function that accepts the options argument, and valid option defaults and limits. These checks do not execute uploaded code. Existing imported apps stay available across an update, even if an older file needs corrections before it can be reimported.
+
+## Local page recovery
+
+Use your normal local Home Assistant address and sidebar; no cloud account is required. If the initial Studio read fails or times out, the page retries automatically with a bounded delay. HA setup checks run separately, so a slow check does not disable Studio. Rejected or expired HA ingress sessions require reopening Studio from the sidebar. Writes are never automatically repeated after a network failure; check the current state before trying again.

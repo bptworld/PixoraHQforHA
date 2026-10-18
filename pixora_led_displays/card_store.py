@@ -19,7 +19,7 @@ class CardStore:
         self.custom_root.mkdir(parents=True,exist_ok=True)
         for path in self.custom_root.glob('custom_*.py'):
             try:
-                body=path.read_bytes();card=describe(body)
+                body=path.read_bytes();card=describe(body,existing=True)
                 if path.stem!=card['id']:raise ValueError('Custom card ID does not match its filename.')
                 self.register_custom(card,body)
             except (ValueError,OSError):logging.warning('Could not load custom card %s; reimport the original file.',path.name)
