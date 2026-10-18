@@ -6,6 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'pixora_led_displays'))
 sys.path.insert(0,str(ROOT/'pixora_led_displays/custom_components/pixora_local'))
 from studio import Studio
+from client import DisplayUnavailable
 
 async def main():
     with tempfile.TemporaryDirectory() as folder:
@@ -34,6 +35,20 @@ async def main():
             await until(lambda:len(starts)==1)
             watcher.cancel();await asyncio.gather(watcher,return_exceptions=True)
             assert len(starts)==1
+            # A read-only outage on the same boot waits without saving a pause.
+            attempts=0
+            async def temporary_outage():
+                nonlocal attempts
+                attempts+=1
+                if attempts==1:raise DisplayUnavailable('temporary Wi-Fi loss')
+                return {'id':'panel','bootId':boot}
+            with patch.object(Client,'info',lambda self:temporary_outage()):
+                info=await studio.playback_info('panel',Client())
+            assert attempts==2 and info['bootId']==boot and studio.data['devices']['panel']['playing']
+            async def invalid_status():raise ValueError('invalid status')
+            with patch.object(Client,'info',lambda self:invalid_status()):
+                try:await studio.playback_info('panel',Client());assert False,'Invalid status was silently retried'
+                except ValueError:pass
             await studio.recover_display('panel',await Client().info());await asyncio.sleep(0)
             assert len(starts)==1,'A status check restarted a running deck'
             # A new boot replaces the old player, without requiring Play.

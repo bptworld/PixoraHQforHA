@@ -10,7 +10,7 @@ from special_graphics import tests_for
 from pipeline import Pipeline,normalize_image,WALL_START_LEAD
 
 class CardSkipped(ValueError):pass
-from client import PriorityMessageActive
+from client import PriorityMessageActive,DisplayUnavailable
 
 class Studio:
     def __init__(self,app,root,selected,displays):
@@ -495,6 +495,16 @@ class Studio:
         self.jobs[ident]=asyncio.create_task(self.player(ident))
         self.monitors[ident]=asyncio.create_task(self.monitor(ident))
 
+    async def playback_info(self,ident,client):
+        # These are read-only checks. A temporarily unavailable panel must not
+        # turn a running deck into a permanently saved pause.
+        while self.data['devices'].get(ident,{}).get('playing'):
+            try:return await client.info()
+            except DisplayUnavailable:
+                self.runtime[ident]={'playing':True,'status':'Waiting for display to reconnect…'}
+                await asyncio.sleep(1)
+        raise asyncio.CancelledError
+
     async def player(self,ident):
         position=0;last_brightness=None;prepared=None;prepare_key=None;failed={};inactive=set();writing=False;deck_snapshot=None
         try:
@@ -511,7 +521,7 @@ class Studio:
                     self.runtime[ident]={'playing':True,'status':'No active cards; checking again shortly'}
                     await asyncio.sleep(15);inactive.clear();continue
                 if hasattr(self,'pipeline'):await self.pipeline.wait_ready(ident)
-                client=self.selected(ident);info=await client.info()
+                client=self.selected(ident);info=await self.playback_info(ident,client)
                 brightness=cfg.get('quietBrightness',0) if self.quiet(cfg) else cfg.get('brightness',60)
                 if brightness!=last_brightness:
                     writing=True
@@ -547,7 +557,7 @@ class Studio:
                         'warning':'Skipped broken cards: '+', '.join(failed.values())+'. Fix them, then press Play to try them again.'}
                     continue
                 # Re-read after potentially slow provider rendering: never overwrite a new HA message.
-                current=await client.info()
+                current=await self.playback_info(ident,client)
                 if current.get('active') and current.get('owner')!='deck':position-=1;continue
                 name=self.store.cards[item['card']]['name'] if 'card' in item else self.data['graphics'][item['graphic']]['name']
                 self.runtime[ident]={'playing':True,'status':name,'item':item['id'],**({'warning':'Skipped broken cards: '+', '.join(failed.values())+'. Fix them, then press Play to try them again.'} if failed else {})}

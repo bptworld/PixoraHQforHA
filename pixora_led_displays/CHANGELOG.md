@@ -1,3 +1,8 @@
+# 1.2.14
+
+- Keep running decks waiting through temporary read-only Wi-Fi status failures instead of permanently pausing them. Uncertain writes remain blocked and are never retried on the same startup.
+- Pair with firmware 2.0.27, which keeps retrying saved Wi-Fi at startup and uses a true 8 MHz panel output on both 64x32 and 128x32.
+
 # 1.2.13
 
 - Add a Show display preview checkbox that remembers its choice in this browser and stops loading previews while hidden.
