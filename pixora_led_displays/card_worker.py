@@ -113,7 +113,8 @@ def run(request):
         module._state=lambda *_:state
         request['options'].update({'host':'local','token':'local'})
     options=dict(request['options']);options.update({'_pixora_target':'pixora-s3-wide' if request['width']==128 else 'pixora-s3','_settings':settings,'_width':request['width'],'_device_id':request.get('device_id','preview'),
-        '_dwell':request.get('dwell',15),'_is_prefetch':not request.get('events',False)})
+        '_dwell':request.get('dwell',15),'_is_prefetch':not request.get('events',False),
+        '_local_frame_stream':request.get('protocol')==2})
     if request['module'].endswith('_standings') or request['module']=='sports_standings':
         from standings import install
         install(module,request['module'],options)

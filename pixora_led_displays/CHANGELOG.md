@@ -1,3 +1,7 @@
+# 1.2.30
+
+- Restore animated Pixel Aquarium on 64×32 and 128×32 displays, with independent randomized swimming paths, smooth turns and working speed choices. Refresh existing downloaded copies through the verified card catalog. No panel firmware update is needed.
+
 # 1.2.29
 
 - Preserve baseball backgrounds beside inning captions, the full soccer pitch beside winner captions, and UFC backdrops beside result captions. Audit sports wall events across both panel sizes and multi-display walls without changing text sizes or timing.
