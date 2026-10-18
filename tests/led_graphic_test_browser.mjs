@@ -5,9 +5,9 @@ const require=createRequire(process.env.PLAYWRIGHT_PACKAGE||new URL('../haflow/p
 const {chromium}=require('playwright');
 const html=readFileSync(new URL('../pixora_led_displays/studio.html',import.meta.url),'utf8');
 const catalog=JSON.parse(readFileSync(new URL('../pixora_led_displays/card_catalog.json',import.meta.url),'utf8'));
-const card={...catalog.cards.find(c=>c.id==='college_football'),specialTests:{scoreAnimationTarget:{label:'Score Animation'}}};
+const card={installed:true,...catalog.cards.find(c=>c.id==='college_football'),specialTests:{scoreAnimationTarget:{label:'Score Animation'}}};
 const state={cards:[card],decks:{},devices:{},groups:{wall:{name:'3way',members:['left']},second:{name:'Desk pair',members:['left']}},graphics:{},settings:{},runtime:{},displays:[{id:'left',name:'Left-64',width:64,height:32,version:'2.0.19'}]};
-let requests=0,fail=false,release;
+let requests=0,prepares=0,fail=false,release;
 const browser=await chromium.launch();
 try{
  const page=await browser.newPage({viewport:{width:768,height:1024}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -17,6 +17,7 @@ try{
   if(path==='/api/studio')return route.fulfill({json:state});
   if(path==='/api/displays/left/status')return route.fulfill({json:{display:state.displays[0]}});
   if(path==='/api/automation-status')return route.fulfill({json:{restart_required:false}});
+  if(path==='/api/studio/prepare-graphic'){prepares++;return route.fulfill({json:{prepared:true}})}
   if(path==='/api/studio/test-graphic'){
    requests++;const payload=route.request().postDataJSON();
    assert.equal(payload.display,'left');assert.equal(payload.card,'college_football');assert.equal(payload.option,'scoreAnimationTarget');
@@ -34,6 +35,8 @@ try{
  assert.equal(await page.getByRole('option',{name:'Group Wall',exact:true}).count(),0);
  assert.equal(await page.getByLabel('Score Animation',{exact:true}).getByRole('option',{name:'3way',exact:true}).count(),1);
  await page.locator('#optionsDialog').screenshot({path:'D:/planner/.build-tmp/led-graphic-group-name.png'});
+ await page.waitForResponse(r=>r.url().endsWith('/api/studio/prepare-graphic'));
+ assert.ok(prepares>0);assert.equal(requests,0,'Preparation sent a Test');
  const test=page.getByRole('button',{name:'Test Score Animation',exact:true});
  await test.click();await page.waitForFunction(()=>document.querySelector('#optionsFeedback').textContent.includes('Rendering test'));
  assert.equal(await test.isDisabled(),true);release();

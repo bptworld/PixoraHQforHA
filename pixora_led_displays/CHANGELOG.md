@@ -1,3 +1,10 @@
+# 1.2.16
+
+- Keep priority animation bodies, provider data and public image assets warm on the hub between isolated card workers, with bounded storage and provider freshness limits.
+- Warm configured wall scenes during live card checks. Prepare installed-card tests and their display slices before Test is pressed; share in-progress preparation and reuse confirmed display sizes.
+- Cache finished wall slices and ready-to-send RGB frames. Decode off the event loop and remove the PNG encode/decode round trip before each frame upload.
+- Preserve fresh scorer/player artwork and one-shot interrupt history. Cache entries contain artwork only and never replay deliveries.
+
 # 1.2.15
 
 - Include the selected team's provider logo and colors in special-graphic tests, and use the full wall scenes for group tests. Report when provider artwork is unavailable.

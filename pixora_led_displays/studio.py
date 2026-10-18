@@ -9,17 +9,22 @@ from card_store import CardStore
 from special_graphics import tests_for
 from pipeline import Pipeline,normalize_image,WALL_START_LEAD
 
+class PanelFrame:
+    __slots__=('rgb',)
+    def __init__(self,rgb):self.rgb=rgb
+
 class CardSkipped(ValueError):pass
 from client import PriorityMessageActive,DisplayUnavailable
 
 class Studio:
     def __init__(self,app,root,selected,displays):
         self.app,self.root,self.selected,self.displays=app,root,selected,displays
-        self.file=root/'studio.json';self.lock=asyncio.Lock();self.io_lock=asyncio.Lock();self.jobs={};self.runtime={};self.cache={};self.refresh_jobs={};self.renderer_revision=hashlib.sha256(Path(__file__).with_name('card_worker.py').read_bytes()).hexdigest()
+        self.file=root/'studio.json';self.lock=asyncio.Lock();self.io_lock=asyncio.Lock();self.jobs={};self.runtime={};self.cache={};self.refresh_jobs={};self.renderer_revision=hashlib.sha256(b''.join(Path(__file__).with_name(name).read_bytes() for name in ('card_worker.py','special_graphics.py','graphic_cache.py'))).hexdigest()
         self.data=json.loads(self.file.read_text(encoding='utf-8')) if self.file.exists() else {'decks':{},'devices':{},'groups':{},'graphics':{},'settings':{'timezone':os.environ.get('TZ','UTC'),'timeFormat':'12','temperatureUnits':'F'}}
         self.store=CardStore(app['session'],root/'downloaded-cards')
         self.pipeline=Pipeline(root,self);self.monitors={};self.monitor_errors={};self.card_timing={};self.artwork_timing={};self.skipped={}
         self.runtime={ident:{'playing':False,'error':cfg['last_error']} for ident,cfg in self.data['devices'].items() if cfg.get('last_error')}
+        self.graphic_jobs={};self.graphic_prepared={};self.frame_prepared={};self.slice_prepared={}
         self.recovery_jobs={};self.recovery_task=None;self.starting=set();self.restarting=set();self.play_generation={}
 
     async def recover_display(self,ident,info):
@@ -116,7 +121,7 @@ class Studio:
         for task in recovery:task.cancel()
         await asyncio.gather(*recovery,return_exceptions=True)
         for ident in list(self.jobs):await self.stop(ident,remember=False)
-        tasks=list(self.refresh_jobs.values())
+        tasks=list(self.refresh_jobs.values())+list(self.graphic_jobs.values())
         for task in tasks:task.cancel()
         await asyncio.gather(*tasks,return_exceptions=True)
         self.refresh_jobs.clear()
@@ -189,7 +194,7 @@ class Studio:
         if 'graphic' in item:return (self.root/'graphics'/item['graphic']).read_bytes()
         card=self.store.cards[item['card']]
         options=dict(item.get('options',{}));options['_target']='matrixportal-s3-'+str(width)+'x32'
-        request={'root':str(self.store.root.resolve()),'module':card['module'],'width':width,'options':options,'settings':self.data['settings'],'revision':self.store.catalog['commit'],'renderer':self.renderer_revision,'identity_options':item.get('options',{}),'card_id':card['id'],'protocol':2,'device_id':device_id,'dwell':item.get('duration',15),'events':events}
+        request={'root':str(self.store.root.resolve()),'module':card['module'],'width':width,'options':options,'settings':self.data['settings'],'revision':self.store.catalog['commit'],'renderer':self.renderer_revision,'identity_options':item.get('options',{}),'card_id':card['id'],'protocol':2,'device_id':device_id,'dwell':item.get('duration',15),'events':events,'graphic_cache':str(self.root/'render-cache'/'priority')}
         if card['id']=='home_assistant_entity':
             entity=options.get('entityId','')
             if not isinstance(entity,str) or not all(c.isalnum() or c in '._' for c in entity):raise ValueError('Choose a Home Assistant entity.')
@@ -310,6 +315,12 @@ class Studio:
 
     async def accept_event(self,request,result):
         key=request['state_key'];event=result.get('event');entries=[]
+        if not event:
+            for graphic in result.get('warm_graphics',[])[:1]:
+                try:
+                    body=base64.b64decode(graphic['body'],validate=True)
+                    if len(body)<=5*1024*1024:await self.prepared_slices(body,graphic['members'])
+                except Exception:logging.debug('Could not prepare a warm wall scene; event rendering remains available.')
         if event and self.data['devices'].get(request['device_id'],{}).get('playing'):
             event_id=hashlib.sha256((key+json.dumps(request.get('event_state',{}),sort_keys=True)+json.dumps(result.get('state',{}),sort_keys=True)+event['body']).encode()).hexdigest()
             group=event.get('wall_members',request.get('wall_members',[])) if event.get('wall') else []
@@ -333,14 +344,53 @@ class Studio:
                     return value
                 signature=json.dumps(shared_state(result.get('state',{})),sort_keys=True)
                 event_id=hashlib.sha256((json.dumps(group)+request['module']+signature+event['body']).encode()).hexdigest()
-                body=base64.b64decode(event['body']);offset=0;start=0
-                for ident,width in group:
-                    sliced=self.slice_artwork(body,offset,width);offset+=width
-                    entries.append((ident,{**event,'body':base64.b64encode(sliced).decode(),'event_id':event_id,'source':'event','start_at':start,'wall_members':[member for member,_ in group],'wall_width':width}))
+                body=base64.b64decode(event['body'])
+                slices=await self.prepared_slices(body,group)
+                for ident,width,sliced in slices:
+                    entries.append((ident,{**event,'body':sliced,'event_id':event_id,'source':'event','start_at':0,'wall_members':[member for member,_ in group],'wall_width':width}))
                 ready_at=time.time()+WALL_START_LEAD
                 for _,payload in entries:payload['start_at']=ready_at
             else:entries.append((request['device_id'],{**event,'event_id':event_id,'source':'event'}))
         await self.pipeline.submit(entries,key,result.get('state',{}))
+
+    async def prepared_frames(self,body,width):
+        key=(hashlib.sha256(body).hexdigest(),width)
+        if not hasattr(self,'frame_prepared'):self.frame_prepared={}
+        if key in self.frame_prepared:return self.frame_prepared[key]
+        def decode():
+            frames=[];size=0
+            with Image.open(io.BytesIO(body)) as image:
+                for index,frame in enumerate(ImageSequence.Iterator(image)):
+                    if index>=2048:raise ValueError('Animation exceeds 2048 frames.')
+                    rgb=ImageOps.pad(ImageOps.exif_transpose(frame).convert('RGB'),(width,32),color='black')
+                    pixels=base64.b64encode(rgb.tobytes()).decode();size+=len(pixels)
+                    if size>32*1024*1024:raise ValueError('Decoded animation exceeds the hub limit.')
+                    frames.append((PanelFrame(pixels),max(.02,min(60,frame.info.get('duration',100)/1000))))
+            return frames,size
+        frames,size=await asyncio.to_thread(decode)
+        while self.frame_prepared and (len(self.frame_prepared)>=8 or size+sum(sum(len(frame.rgb) for frame,_ in value) for value in self.frame_prepared.values())>32*1024*1024):
+            self.frame_prepared.pop(next(iter(self.frame_prepared)))
+        self.frame_prepared[key]=frames
+        return frames
+
+    async def prepared_slices(self,body,widths):
+        key=hashlib.sha256(body+json.dumps(widths).encode()).hexdigest()
+        if not hasattr(self,'slice_prepared'):self.slice_prepared={}
+        slices=self.slice_prepared.get(key)
+        if slices is None:
+            def crop():
+                offset=0;result=[]
+                for member,width in widths:
+                    result.append((member,width,base64.b64encode(self.slice_artwork(body,offset,width)).decode()));offset+=width
+                return result
+            slices=await asyncio.to_thread(crop)
+            size=sum(len(value) for _,_,value in slices)
+            while self.slice_prepared and (len(self.slice_prepared)>=8 or size+sum(sum(len(value) for _,_,value in rows) for rows in self.slice_prepared.values())>16*1024*1024):
+                self.slice_prepared.pop(next(iter(self.slice_prepared)))
+            if size<=16*1024*1024:self.slice_prepared[key]=slices
+        # Decode before queueing so every panel reaches the wall barrier ready to send.
+        await asyncio.gather(*(self.prepared_frames(base64.b64decode(value),width) for _,width,value in slices))
+        return slices
 
     def slice_artwork(self,body,left,width):
         with Image.open(io.BytesIO(body)) as image:
@@ -405,9 +455,12 @@ class Studio:
         await self.pipeline.submit([(ident,{'body':base64.b64encode(artwork).decode(),'duration':duration,'source':'ha','once':False})])
 
     async def send_frame(self,client,body,width,duration,owner='deck',ident=None):
-        with Image.open(io.BytesIO(body)) as image:
-            image=ImageOps.pad(ImageOps.exif_transpose(image).convert('RGB'),(width,32),color='black')
-            payload={'rgb':base64.b64encode(image.tobytes()).decode(),'width':width,'height':32,'duration':duration,'owner':owner}
+        if isinstance(body,PanelFrame):rgb=body.rgb
+        else:
+            with Image.open(io.BytesIO(body)) as image:
+                image=ImageOps.pad(ImageOps.exif_transpose(image).convert('RGB'),(width,32),color='black')
+                rgb=base64.b64encode(image.tobytes()).decode()
+        payload={'rgb':rgb,'width':width,'height':32,'duration':duration,'owner':owner}
         async def write():
             if ident and owner=='deck' and self.pipeline.signals(ident)[0].is_set():raise PriorityMessageActive('A local priority graphic is ready.')
             return await client.request('/api/frame',payload)
@@ -415,12 +468,7 @@ class Studio:
         else:await write()
 
     async def deliver(self,client,body,width,duration,owner='deck',ident=None,once=False,wire_ident=None,synchronize=None,group_check=None):
-        with Image.open(io.BytesIO(body)) as image:
-            frames=[]
-            for index,frame in enumerate(ImageSequence.Iterator(image)):
-                if index>=2048:raise ValueError('Animation exceeds 2048 frames.')
-                out=io.BytesIO();frame.convert('RGB').save(out,'PNG')
-                frames.append((out.getvalue(),max(.02,min(60,frame.info.get('duration',100)/1000))))
+        frames=await self.prepared_frames(body,width)
         if synchronize:
             # All wall slices are decoded before the barrier releases any panel.
             start=await synchronize()
@@ -600,10 +648,11 @@ class Studio:
         if len(groups)!=1:raise ValueError('Choose a specific display group for this special graphic.')
         return groups[0]
 
-    async def test_graphic(self,payload):
+    async def test_graphic(self,payload,prepare=False):
         ident=payload.get('display');self.selected(ident)
         card=self.store.cards.get(payload.get('card'))
         key=payload.get('option')
+        if prepare and (not card or not self.store.installed(card['id'])):return {'prepared':False}
         if not card or key not in tests_for(card):raise ValueError('Choose a special graphic for this card.')
         validated=self.validate_deck({'name':'Graphic test','items':[{'id':'test','card':card['id'],'options':payload.get('options',{}),'duration':6}]})['items'][0]
         options=validated['options'];group=None
@@ -611,26 +660,52 @@ class Studio:
         if target in ('group','group_wall','wall') or target.startswith('group:'):
             group=self.graphic_group(ident,target)
         targets=group['members'] if group else [ident]
-        widths=[]
+        known={d['id']:d for d in self.displays()};widths=[]
         for member in targets:
-            info=await self.selected(member).info();widths.append((member,info['width']))
+            self.selected(member)
+            info=known.get(member)
+            if not info or info.get('width') not in (64,128):raise ValueError('Refresh the display status before testing a graphic.')
+            widths.append((member,info['width']))
         width=sum(w for _,w in widths)
         if width>512:raise ValueError('Test graphics support a group up to 512 pixels wide.')
         request=await self.render(validated,width,device_id=ident,request_only=True)
         request.update(test_graphic=key,card_metadata=card)
         started=time.monotonic()
-        # Serialize temporary test downloads with deck saves; remove unused card files afterward.
-        async with self.lock:
-            try:result=await self.run_worker(request)
-            finally:await self.store.collect(self.used())
-        event=result.get('event')
-        if not event or not event.get('body'):raise ValueError('This test graphic could not render. Nothing was sent.')
+        cache_key=hashlib.sha256(json.dumps([request,widths],sort_keys=True).encode()).hexdigest()
+        cached=self.graphic_prepared.get(cache_key)
+        if cached and time.monotonic()-cached[0]<900:event,slices=cached[1:]
+        else:
+            task=self.graphic_jobs.get(cache_key)
+            if task is None:
+                async def build():
+                    # Share preparation with an arriving Test; never send from this task.
+                    async with self.lock:
+                        try:result=await self.run_worker(request)
+                        finally:await self.store.collect(self.used())
+                    event=result.get('event')
+                    if not event or not event.get('body'):raise ValueError('This test graphic could not render. Nothing was sent.')
+                    body=base64.b64decode(event['body'],validate=True)
+                    if group:slices=await self.prepared_slices(body,widths)
+                    else:
+                        await self.prepared_frames(body,width)
+                        slices=[(ident,width,event['body'])]
+                    if not event.get('warning'):
+                        size=len(event['body'])+sum(len(body) for _,_,body in slices)
+                        while self.graphic_prepared and (len(self.graphic_prepared)>=8 or size+sum(len(value[1]['body'])+sum(len(body) for _,_,body in value[2]) for value in self.graphic_prepared.values())>32*1024*1024):
+                            self.graphic_prepared.pop(next(iter(self.graphic_prepared)))
+                        if size<=32*1024*1024:self.graphic_prepared[cache_key]=(time.monotonic(),event,slices)
+                    return event,slices
+                task=asyncio.create_task(build());self.graphic_jobs[cache_key]=task
+                def finished(completed):
+                    if self.graphic_jobs.get(cache_key) is completed:self.graphic_jobs.pop(cache_key,None)
+                    if not completed.cancelled():completed.exception()
+                task.add_done_callback(finished)
+            event,slices=await asyncio.shield(task)
+        if prepare:return {'prepared':True}
         render_ms=round((time.monotonic()-started)*1000)
-        body=base64.b64decode(event['body'],validate=True);offset=0;entries=[]
-        start=0;event_id='test-'+uuid.uuid4().hex
-        for member,member_width in widths:
-            artwork=self.slice_artwork(body,offset,member_width) if group else body;offset+=member_width
-            entries.append((member,{**event,'body':base64.b64encode(artwork).decode(),'source':'test','event_id':event_id,'start_at':start,**({'wall_members':targets,'wall_width':member_width} if group else {})}))
+        entries=[];event_id='test-'+uuid.uuid4().hex
+        for member,member_width,body in slices:
+            entries.append((member,{**event,'body':body,'source':'test','event_id':event_id,'start_at':0,**({'wall_members':targets,'wall_width':member_width} if group else {})}))
         if group:
             ready_at=time.time()+WALL_START_LEAD
             for _,payload in entries:payload['start_at']=ready_at
@@ -644,6 +719,7 @@ class Studio:
             if not isinstance(data,dict):raise ValueError('Use a valid form.')
             return data
         async def state(request):return web.json_response(self.public())
+        async def prepare_graphic(request):return web.json_response(await self.test_graphic(await object_data(request),prepare=True))
         async def test_graphic(request):return web.json_response(await self.test_graphic(await object_data(request)))
         async def deck_save(request):
             payload=await object_data(request);ident=payload.get('id') or uuid.uuid4().hex
@@ -771,6 +847,7 @@ class Studio:
             if any(i.get('graphic')==ident for d in self.data['decks'].values() for i in d['items']):raise ValueError('Remove this graphic from saved decks first.')
             await self.mutate(lambda:self.data['graphics'].pop(ident,None));(self.root/'graphics'/ident).unlink(missing_ok=True);return web.json_response(self.public())
         routes.add_post('/api/studio/test-graphic',test_graphic)
+        routes.add_post('/api/studio/prepare-graphic',prepare_graphic)
         routes.add_get('/api/studio',state);routes.add_post('/api/studio/decks',deck_save);routes.add_delete('/api/studio/decks/{ident}',deck_delete)
         routes.add_post('/api/studio/ha-action',ha_action);routes.add_post('/api/studio/devices/{ident}',device_save);routes.add_post('/api/studio/action',action);routes.add_get('/api/studio/preview',preview)
         routes.add_get('/api/studio/entities',entities);routes.add_post('/api/studio/settings',settings)

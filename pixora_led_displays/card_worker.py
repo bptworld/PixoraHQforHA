@@ -48,27 +48,47 @@ def renderer_body(module,spec,width):
     if not callable(renderer) and spec.get('renderer')=='_render_score_alert_frames':renderer=getattr(module,'render_score_alert_frames',None)
     if not callable(renderer):raise ValueError('Special graphic renderer is unavailable.')
     team=dict(spec.get('team') or {});team['_width']=width
+    cache=getattr(module,'_hub_graphic_cache',None)
+    cache_key={'renderer':spec.get('renderer'),'kind':spec.get('kind') or spec.get('type') or 'score','team':team,'width':width}
+    cached=cache.get('renderer',cache_key) if cache else None
+    if cached:return cached,None
+    failures=cache.asset_failures if cache else 0
     result=renderer(team,str(spec.get('kind') or spec.get('type') or 'score'))
-    if isinstance(result,(bytes,bytearray)):return result,None
+    if isinstance(result,(bytes,bytearray)):
+        if cache and cache.asset_failures==failures:cache.put('renderer',cache_key,result)
+        return result,None
     if isinstance(result,tuple) and len(result)>=2 and result[0]:
         frames=result[0];timing=result[1];output=io.BytesIO()
         frames[0].save(output,'WEBP',save_all=True,append_images=frames[1:],duration=timing,loop=1,lossless=True,method=0)
-        return output.getvalue(),timing
+        body=output.getvalue()
+        if cache and cache.asset_failures==failures:cache.put('renderer',cache_key,body)
+        return body,timing
     raise ValueError('Special graphic renderer returned no artwork.')
 
 
 def run(request):
     root=Path(request['root']).resolve();os.chdir(root);sys.path[:0]=[str(root),str(root/'addons')];sys.dont_write_bytecode=True
+    cache=None;warm_teams=[];warm_graphic=None
+    if request.get('graphic_cache'):
+        from graphic_cache import GraphicCache
+        cache=GraphicCache(request['graphic_cache'],[request.get('revision'),request.get('renderer')])
+        cache.install_images()
+    test_key={k:request.get(k) for k in ('module','width','options','settings','test_graphic')}
+    if cache and request.get('test_graphic'):
+        hit=cache.get('test',test_key)
+        if hit:return json.loads(hit)
     spec=importlib.util.spec_from_file_location('selected_card',root/'addons'/(request['module']+'.py'))
     module=importlib.util.module_from_spec(spec);settings=request.get('settings',{})
     if (root/'card_utils.py').is_file():
         import card_utils
+        if cache:warm_teams=cache.install(card_utils)
         original_text=getattr(card_utils,'render_text_webp',None)
         if callable(original_text) and 'width' not in inspect.signature(original_text).parameters:
             card_utils.render_text_webp=lambda text,color,width=64:card_utils.fallback_frame(text,width=width,color=color)
         card_utils._settings_value=lambda key,default='':settings.get(key,default)
         if callable(getattr(card_utils,'use_runtime_settings',None)):card_utils.use_runtime_settings(settings)
     spec.loader.exec_module(module)
+    if cache:module._hub_graphic_cache=cache
     if request['module']=='flight_track':
         # An isolated worker must finish the snapshot instead of returning 'Updating'.
         def flight_snapshot(key,options):
@@ -93,7 +113,10 @@ def run(request):
         '_dwell':request.get('dwell',15),'_is_prefetch':not request.get('events',False)})
     if request.get('test_graphic'):
         from special_graphics import render_test
-        return {'event':render_test(module,request['card_metadata'],request['test_graphic'],options,request['width']),'state':{},'body':None,'skip':True,'duration':6}
+        result={'event':render_test(module,request['card_metadata'],request['test_graphic'],options,request['width']),'state':{},'body':None,'skip':True,'duration':6}
+        if cache and cache.asset_failures:result['event']['warning']='Some provider images could not load; fallback artwork is shown. Try again after the connection recovers.'
+        if cache and not result['event'].get('warning'):cache.put('test',test_key,json.dumps(result).encode())
+        return result
     result=module.render(options);event=None;state={}
     if request.get('events'):
         for name,value in vars(module).items():
@@ -130,9 +153,48 @@ def run(request):
             ordinary=module.render({**options,'_is_prefetch':True})
             body=ordinary.get('body') if isinstance(ordinary,dict) else ordinary
             if isinstance(ordinary,dict) and (ordinary.get('deviceGraphic') or ordinary.get('_device_graphic') or ordinary.get('wallGraphic') or ordinary.get('_group_wall') or ordinary.get('_priority') or ordinary.get('_priority_graphic') or ordinary.get('_no_replay') or ordinary.get('_stay')):body=None
+    if cache and request.get('events'):
+        team_key=[request['module'],request.get('device_id'),request.get('identity_options',request['options'])]
+        if warm_teams:cache.put('live-teams',team_key,json.dumps(warm_teams,default=str).encode())
+        else:
+            saved=cache.get('live-teams',team_key,21600)
+            if saved:
+                try:warm_teams=json.loads(saved)
+                except ValueError:pass
+    if cache and warm_teams and request.get('events') and not event:
+        # Warm one missing wall scene per live check, leaving score history untouched.
+        from special_graphics import tests_for,event_group
+        prepared=False
+        for key,test in tests_for(request.get('card_metadata',{})).items():
+            target=str(options.get(key,''))
+            if target not in ('group','group_wall','wall') and not target.startswith('group:'):continue
+            try:members=event_group(test,options,request.get('card_metadata',{}),request.get('wall_groups',{}))
+            except ValueError:continue
+            wall_width=sum(w for _,w in members)
+            if not 64<=wall_width<=512:continue
+            for team in warm_teams:
+                spec={**test,'team':{**team,'_wall':True,'_width':wall_width}}
+                cache_key={'renderer':spec['renderer'],'kind':spec['kind'],'team':spec['team'],'width':wall_width}
+                cached=cache.get('renderer',cache_key)
+                if cached:
+                    if warm_graphic is None:warm_graphic=(cached,None,wall_width,members)
+                    continue
+                failures=cache.asset_failures
+                try:
+                    warmed,timing=renderer_body(module,spec,wall_width)
+                    if cache.asset_failures==failures:warm_graphic=(warmed,timing,wall_width,members)
+                except Exception:pass  # Warm failures do not consume or suppress a real event.
+                prepared=True;break
+            if prepared:break
     normal=None if body is None else artwork(body,request['width'],result.get('_frame_durations_ms') if isinstance(result,dict) and not event else None)
+    warmed=[]
+    if warm_graphic:
+        try:
+            body,timing,width,members=warm_graphic
+            warmed=[{'body':base64.b64encode(artwork(body,width,timing,True)).decode(),'members':members}]
+        except Exception:pass
     return {'body':base64.b64encode(normal).decode() if normal else None,'duration':max(1,min(300,int(duration))),
-        'skip':normal is None,'event':event,'state':state}
+        'skip':normal is None,'event':event,'state':state,'warm_graphics':warmed}
 
 
 if __name__=='__main__':

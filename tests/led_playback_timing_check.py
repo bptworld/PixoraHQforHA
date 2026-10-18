@@ -30,7 +30,7 @@ async def check():
         assert abs(elapsed-duration)<.01 and writes==(2 if duration==300 else 1)
 
     items=[{'id':n,'card':n,'duration':10,'enabled':True} for n in ('first','second')]
-    studio.data={'devices':{'panel':{'deck':'deck'}},'decks':{'deck':{'items':items}}}
+    studio.data={'devices':{'panel':{'deck':'deck','playing':True}},'decks':{'deck':{'items':items}}}
     studio.card_timing={};studio.runtime={};studio.store=SimpleNamespace(cards={n:{'name':n} for n in ('first','second')})
     studio.quiet=lambda cfg:False
     class Panel:
@@ -47,6 +47,7 @@ async def check():
         if len(delivered)==3:raise ValueError('End isolated timing check')
     async def save():pass
     studio.render=render;studio.deliver=deliver;studio.save=save
+    studio.data['devices']['panel']['playing']=True
     await studio.player('panel')
     assert delivered==['first','second','first']
     # A save during delivery must invalidate prefetched artwork with old options.
@@ -62,6 +63,7 @@ async def check():
             studio.data['decks']['deck']={'items':[items[0],{**items[1],'options':{'label':'new'}}]}
         else:raise ValueError('End edited deck check')
     studio.data['decks']['deck']={'items':items};studio.render=edited_render;studio.deliver=edited_deliver
+    studio.data['devices']['panel']['playing']=True
     await studio.player('panel')
     assert delivered==['first','second']
     assert ('second',{'label':'old'}) in rendered and ('second',{'label':'new'}) in rendered
@@ -77,6 +79,7 @@ async def check():
         if len(sequence)==1:raise PriorityMessageActive('Test graphic queued')
         if len(sequence)==3:raise asyncio.CancelledError()
     studio.render=render;studio.deliver=interrupted_deliver
+    studio.data['devices']['panel']['playing']=True
     try:await studio.player('panel')
     except asyncio.CancelledError:pass
     assert sequence==['first','second','third'],sequence

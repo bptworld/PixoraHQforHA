@@ -21,6 +21,7 @@ async def check():
         async def ensure(ids):pass
         def instance():
             studio=Studio.__new__(Studio)
+            studio.recovery_task=None;studio.recovery_jobs={};studio.graphic_jobs={};studio.graphic_prepared={}
             studio.root=root;studio.cache={};studio.refresh_jobs={};studio.jobs={};studio.card_timing={}
             studio.renderer_revision=hashlib.sha256((APP/'card_worker.py').read_bytes()).hexdigest()
             studio.data={'settings':{}}

@@ -24,7 +24,13 @@ async def check():
     out=io.BytesIO();frames[0].save(out,'WEBP',save_all=True,append_images=frames[1:],duration=[70,350],lossless=True,loop=1)
     event={'body':base64.b64encode(out.getvalue()).decode(),'duration':6,'wall':True,'kind':'score','once':True}
     request={'state_key':'left-history','device_id':'left','module':'sport','card_id':'sport','identity_options':{},'wall_members':[('left',64),('right',128)]}
+    await studio.accept_event(request,{'event':None,'state':{'score':0},'warm_graphics':[{'body':event['body'],'members':request['wall_members']}]})
+    assert calls[-1][0]==[],'Warming sent an interrupt'
+    original_slice=studio.slice_artwork
+    def no_slice(*args):raise AssertionError('A warmed live event repeated its slicing')
+    studio.slice_artwork=no_slice
     await studio.accept_event(request,{'event':event,'state':{'score':1}})
+    studio.slice_artwork=original_slice
     entries=calls[-1][0];assert [i for i,_ in entries]==['left','right']
     assert entries[0][1]['event_id']==entries[1][1]['event_id']
     assert entries[0][1]['start_at']==entries[1][1]['start_at']
