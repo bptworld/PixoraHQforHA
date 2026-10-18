@@ -32,5 +32,4 @@ HA apps repository: https://github.com/bptworld/PixoraHQforHA
 
 Verification: application bytes match the existing tested 2.0.27 OTA image.
 Boot components/offsets, blank settings partition and SHA-256 checked locally.
-This combined first-install image has not yet been flashed to a physical panel.
 No private firmware source or Wi-Fi credentials are included.
