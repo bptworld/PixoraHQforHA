@@ -1,3 +1,7 @@
+# 1.2.29
+
+- Preserve baseball backgrounds beside inning captions, the full soccer pitch beside winner captions, and UFC backdrops beside result captions. Audit sports wall events across both panel sizes and multi-display walls without changing text sizes or timing.
+
 # 1.2.28
 
 - Preserve the court or field beside wall celebration captions when the text appears. Keep caption size, side artwork and animation timing unchanged.

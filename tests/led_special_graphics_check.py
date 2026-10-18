@@ -12,11 +12,11 @@ import card_utils
 card_utils.fetch_logo=lambda *args,**kwargs:None
 card_utils.warm_priority_graphic=lambda *args,**kwargs:None
 from card_worker import renderer_body,artwork
-from special_graphics import tests_for,render_test
+from special_graphics import tests_for,render_test,test_team
 from graphic_layout import install
 
 catalog=json.loads((ROOT/'pixora_led_displays/card_catalog.json').read_text(encoding='utf-8'))
-rendered=0;aliases=0;seen=set();button_tests=0
+rendered=0;aliases=0;seen=set();button_tests=0;sports_button_tests=0;sports_cards=set()
 for card in catalog['cards']:
     path=source/'addons'/(card['module']+'.py')
     text=path.read_text(encoding='utf-8-sig')
@@ -25,14 +25,15 @@ for card in catalog['cards']:
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);install(module)
     import base64
     for key in tests_for(card):
-        for width in (64,128,192):
+        for width in (64,128,192,256):
             opts={o['key']:o.get('default','') for o in card.get('options',[])}
-            opts.update({'_target':'matrixportal-s3-'+str(width)+'x32','favoriteTeam':'ALA',key:'group_wall' if width==192 else 'device'})
+            opts.update({'_target':'matrixportal-s3-'+str(width)+'x32','favoriteTeam':'ALA',key:'group_wall' if width>=192 else 'device'})
             try:result=render_test(module,card,key,opts,width)
             except Exception as exc:raise AssertionError((card['id'],key,width)) from exc
             with Image.open(io.BytesIO(base64.b64decode(result['body']))) as image:assert image.size==(width,32)
             assert result['once'] and result['duration']>0
             button_tests+=1
+            if card['category']=='Sports':sports_button_tests+=1;sports_cards.add(card['id'])
     names={name for name in ('_render_score_alert_frames','_render_score_animation_frames','_render_run_animation_frames','_render_goal_animation_frames') if callable(getattr(module,name,None))}
     # Every literal wall renderer referenced by a result must resolve on the card module.
     for node in ast.walk(ast.parse(text)):
@@ -55,13 +56,16 @@ for card in catalog['cards']:
         elif origin=='launch_countdown':kinds=['shake','liftoff']
         elif origin=='flight_track':kinds=['landing']
         else:kinds=['score','goal','bucket','three','free_throw','point','win','period_start','period_end','quarter_start','quarter_end','game_start','game_end','half_start','half_end']
-        for width in (64,128,192):
+        for width in (64,128,192,256):
             for kind in kinds:
                 team={'_width':width,'abbreviation':'ALA','displayName':'Alabama','color':'9E1B32','alternateColor':'FFFFFF','destination':'Boston','event':'Severe Thunderstorm Warning','roundNumber':2,'winnerName':'Test Winner'}
+                team['_wall']=width>=192
+                team['_sport']=test_team(module,card,{'favoriteTeam':'ALA'},width)[0]['_sport']
                 try:body,timing=renderer_body(module,{'renderer':name,'kind':kind,'team':team},width)
                 except Exception as exc:raise AssertionError((card['id'],name,kind,width)) from exc
                 normalized=artwork(body,width,timing,True)
                 with Image.open(io.BytesIO(normalized)) as image:assert image.size==(width,32)
                 rendered+=1
 print(f'Graphic buttons passed: {button_tests} option/width tests.')
+print(f'Sports catalog passed: {sports_button_tests} option/width tests across {len(sports_cards)} sports cards, including 256x32 walls.')
 print(f'Special artwork passed: {aliases} card renderer aliases, {len(seen)} implementations, {rendered} variant/width renders; provider traffic blocked.')

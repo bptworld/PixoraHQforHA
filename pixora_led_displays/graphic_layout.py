@@ -167,8 +167,12 @@ def install(selected):
             frames,durations=result[:2];width=int(team.get('_width',64))
             if sport=='baseball':
                 if kind in ('inning_start','inning_end'):
-                    for image in frames[20:]:
-                        ImageDraw.Draw(image).rectangle((27,3,width-28,29),fill=(2,8,12))
+                    color=wall.hex_color(team.get('color'),(117,231,214))
+                    alt=wall.readable_accent(color,wall.hex_color(team.get('alternateColor'),(255,255,255)))
+                    for index,image in enumerate(frames[20:],20):
+                        arena=Image.new('RGBA',(width,32),(0,0,0,255))
+                        wall._draw_generic_arena_frame(arena,ImageDraw.Draw(arena),width,sport,index,color,alt)
+                        image.paste(arena.crop((27,3,width-27,30)).convert('RGB'),(27,3))
                         panel(image,('START' if kind=='inning_start' else 'END','INNING'),max(28,width//2-30),min(width-29,width//2+30),(255,210,100))
                 return frames,durations
             if width<192:return result
@@ -181,7 +185,10 @@ def install(selected):
                 # Erase the original caption with the arena, not a wall-wide dark
                 # rectangle. Only the replacement caption panel should hide it.
                 arena=Image.new('RGBA',(width,32),(0,0,0,255))
-                wall._draw_generic_arena_frame(arena,ImageDraw.Draw(arena),width,sport,index,color,alt)
+                if sport=='soccer' and kind in ('win','wins','winner','final_win'):
+                    wall._draw_full_soccer_pitch(ImageDraw.Draw(arena),width,index,color,alt)
+                else:
+                    wall._draw_generic_arena_frame(arena,ImageDraw.Draw(arena),width,sport,index,color,alt)
                 image.paste(arena.crop((27,3,width-27,30)).convert('RGB'),(27,3))
                 lane=124 if width>=256 else 60;left=(width-lane)//2
                 name=str(team.get('playerName') or '').split()
@@ -226,7 +233,10 @@ def _install_card(module):
         _replacements[original_score]=football
     if hasattr(module,'_draw_winner_text'):
         def winner(image,draw,winner_name,moment_label,width,color,alt,phase,headshot_url='',flag_url=''):
-            draw.rectangle((1,3,width-2,28),fill=(5,5,8),outline=color)
+            if width>=192:
+                draw.rectangle((1,3,width-2,28),outline=color)
+                draw.rectangle(((width-124)//2,3,(width+124)//2-1,28),fill=(5,5,8),outline=color)
+            else:draw.rectangle((1,3,width-2,28),fill=(5,5,8),outline=color)
             size=12 if width==64 else 24
             head=module._fetch_headshot(headshot_url,size)
             # At 64px the portrait is more useful than a second image squeezing
