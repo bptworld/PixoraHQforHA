@@ -27,7 +27,7 @@ You also need a running Home Assistant installation with app support and a **2.4
 
 For a new MatrixPortal S3 controller, download the **[USB first-install firmware 2.0.27](https://github.com/bptworld/PixoraHQforHA/raw/refs/heads/main/firmware/usb/2.0.27/pixora-v2.0.27-s3-first-install-usb.bin)**. One file supports **64×32 and 128×32**.
 
-Follow the **[USB flashing and Wi-Fi setup instructions](../firmware/usb/2.0.27/README.txt)**. Flash the complete image at **0x0**, join the panel's `Pixora-…` network using its displayed password, then open **http://192.168.4.1** to enter your **2.4 GHz** home Wi-Fi and select the panel size. Reconnect to home Wi-Fi and add the panel in Studio using its displayed IP address.
+Follow the **[USB flashing and Wi-Fi setup instructions](../firmware/usb/2.0.27/README.md)**. Flash the complete image at **0x0**, join the panel's `Pixora-…` network using its displayed password, then open **http://192.168.4.1** to enter your **2.4 GHz** home Wi-Fi and select the panel size. Reconnect to home Wi-Fi and add the panel in Studio using its displayed IP address.
 
 **First installation erases existing Wi-Fi, pairing and panel settings.** This file is for USB installation, not Studio's firmware update button. Use normal OTA updates afterward to preserve settings. [SHA-256 checksum](../firmware/usb/2.0.27/SHA256SUMS.txt). The combined installer has passed binary checks.
 
