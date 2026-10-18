@@ -19,7 +19,7 @@ from client import PriorityMessageActive,DisplayUnavailable
 class Studio:
     def __init__(self,app,root,selected,displays):
         self.app,self.root,self.selected,self.displays=app,root,selected,displays
-        self.file=root/'studio.json';self.lock=asyncio.Lock();self.io_lock=asyncio.Lock();self.jobs={};self.runtime={};self.cache={};self.refresh_jobs={};self.renderer_revision=hashlib.sha256(b''.join(Path(__file__).with_name(name).read_bytes() for name in ('card_worker.py','special_graphics.py','graphic_cache.py','standings.py'))).hexdigest()
+        self.file=root/'studio.json';self.lock=asyncio.Lock();self.io_lock=asyncio.Lock();self.jobs={};self.runtime={};self.cache={};self.refresh_jobs={};self.renderer_revision=hashlib.sha256(b''.join(Path(__file__).with_name(name).read_bytes() for name in ('card_worker.py','special_graphics.py','graphic_cache.py','standings.py','graphic_layout.py'))).hexdigest()
         self.data=json.loads(self.file.read_text(encoding='utf-8')) if self.file.exists() else {'decks':{},'devices':{},'groups':{},'graphics':{},'settings':{'timezone':os.environ.get('TZ','UTC'),'timeFormat':'12','temperatureUnits':'F'}}
         self.store=CardStore(app['session'],root/'downloaded-cards')
         self.pipeline=Pipeline(root,self);self.monitors={};self.monitor_errors={};self.card_timing={};self.artwork_timing={};self.skipped={}

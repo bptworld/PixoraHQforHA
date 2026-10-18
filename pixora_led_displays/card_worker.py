@@ -88,6 +88,9 @@ def run(request):
         card_utils._settings_value=lambda key,default='':settings.get(key,default)
         if callable(getattr(card_utils,'use_runtime_settings',None)):card_utils.use_runtime_settings(settings)
     spec.loader.exec_module(module)
+    from graphic_layout import install as install_graphic_layout
+    install_graphic_layout(module)
+    module._local_render_width=int(request.get('width') or 64)
     if cache:module._hub_graphic_cache=cache
     if request['module']=='flight_track':
         # An isolated worker must finish the snapshot instead of returning 'Updating'.

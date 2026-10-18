@@ -1,3 +1,10 @@
+# 1.2.19
+
+- Fit special-graphic text to measured pixel bounds at 64x32 and 128x32, with separate portrait, logo and caption lanes. Correct clipped sports captions, long fighter/player names, order totals and weather labels.
+- Keep wall headlines clear of player details and images, remove effects drawn over portraits, and show correct inning captions. Check both three-device wall layouts: 64+128+64 and 64+64+64.
+- Use the same layouts for live events, warmed graphics and Test buttons, including downloaded league-card aliases. Invalidate older cached renders automatically while preserving animation durations and interrupt rotation.
+- Keep existing downloaded card files intact; no card removal, redownload or firmware change is required.
+
 # 1.2.18
 
 - Apply the new controls to already downloaded cards and existing decks automatically, including cards whose original metadata had no group selector. No card removal or redownload is needed.

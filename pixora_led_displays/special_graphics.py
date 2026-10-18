@@ -8,6 +8,8 @@ def test_team(module,card,options,width):
                 for choice in option.get('choices',[]) if isinstance(choice,dict) and choice.get('value')==favorite),favorite)
     team={'_width':width,'abbreviation':favorite,'displayName':label,'color':'668CFF','alternateColor':'FFFFFF',
           'winnerName':'Test Winner','playerName':'Test Player','roundNumber':2,'destination':'Destination','event':'Weather Alert'}
+    ident=card['id']
+    team['_sport']=('football' if ident in ('nfl','ufl','cfl','college_football') else 'hockey' if 'hockey' in ident or ident=='nhl' else 'basketball' if 'basketball' in ident or ident in ('nba','wnba','nba_g_league') else 'baseball' if 'baseball' in ident or 'softball' in ident or ident=='mlb' else 'soccer' if ident in ('soccer','fifa_world_cup') else 'lacrosse' if 'lacrosse' in ident else 'volleyball' if 'volleyball' in ident else ident)
     warning=''
     source=urlsplit(str(getattr(module,'_URL','')))
     if any(option['key']=='favoriteTeam' for option in card.get('options',[])):

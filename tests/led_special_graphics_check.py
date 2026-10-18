@@ -13,6 +13,7 @@ card_utils.fetch_logo=lambda *args,**kwargs:None
 card_utils.warm_priority_graphic=lambda *args,**kwargs:None
 from card_worker import renderer_body,artwork
 from special_graphics import tests_for,render_test
+from graphic_layout import install
 
 catalog=json.loads((ROOT/'pixora_led_displays/card_catalog.json').read_text(encoding='utf-8'))
 rendered=0;aliases=0;seen=set();button_tests=0
@@ -21,7 +22,7 @@ for card in catalog['cards']:
     text=path.read_text(encoding='utf-8-sig')
     if not tests_for(card) and not any(token in text for token in ('maybe_score_alert','_priority','_group_wall')):continue
     spec=importlib.util.spec_from_file_location('audit_'+card['module'],path)
-    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);install(module)
     import base64
     for key in tests_for(card):
         for width in (64,128,192):
