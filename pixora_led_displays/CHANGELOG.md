@@ -1,3 +1,7 @@
+# 1.2.34
+
+- Keep at least two ghosts in the Pac-Man camera using close corridor-following pursuers and a tunnel-aware view. The other two ghosts continue roaming independently.
+
 # 1.2.33
 
 - Give Matrix Rain crisp code-like glyphs, independent stream speeds and lengths, bright leading characters, green fading trails, and occasional character changes against true black.
