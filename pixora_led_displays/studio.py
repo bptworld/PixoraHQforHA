@@ -99,6 +99,7 @@ class Studio:
         for ident,message in getattr(self,'monitor_errors',{}).items():result['runtime'].setdefault(ident,{})['warning']=message
         result['priority']={ident:{'queued':len(queue),'active':ident in self.pipeline.jobs and not self.pipeline.jobs[ident].done(),'error':self.pipeline.errors.get(ident,'')} for ident,queue in self.pipeline.data['queues'].items()}
         result['cards']=[{k:v for k,v in card.items() if k not in ('files','module')}|{'installed':self.store.installed(card['id']),'specialTests':tests_for(card)} for card in self.store.cards.values()]
+        result['cardLibraryRevision']=self.store.catalog['commit'][:8]
         result['displays']=sorted([{k:v for k,v in d.items() if k!='key'} for d in self.displays()],key=lambda d:d['name'].casefold())
         return result
 
@@ -972,6 +973,14 @@ class Studio:
             if ident not in self.data['graphics']:raise ValueError('Graphic not found.')
             if any(i.get('graphic')==ident for d in self.data['decks'].values() for i in d['items']):raise ValueError('Remove this graphic from saved decks first.')
             await self.mutate(lambda:self.data['graphics'].pop(ident,None));(self.root/'graphics'/ident).unlink(missing_ok=True);return web.json_response(self.public())
+        async def update_cards(request):
+            from card_updates import fetch,install
+            catalog=await fetch(self.app['session'])
+            async with self.lock:
+                changed=await install(self.store,catalog,self.used())
+                self.cache.clear();self.skipped.clear();self.artwork_timing.clear()
+                self.graphic_prepared.clear();self.frame_prepared.clear();self.slice_prepared.clear()
+            return web.json_response({'state':self.public(),'message':('Card library updated. Saved decks and playback settings preserved.' if changed else 'Your card library is already up to date.')})
         async def custom_upload(request):
             if request.headers.get('X-Pixora-Trust-Code')!='yes':raise ValueError('Confirm that you trust this Python code before importing it.')
             from custom_cards import describe,MAX_SOURCE
@@ -997,6 +1006,7 @@ class Studio:
         async def creator_brief(request):return web.FileResponse(Path(__file__).with_name('Pixora-Codex-Card-Brief.md'),headers={'Content-Disposition':'attachment; filename="Pixora-Codex-Card-Brief.md"'})
         async def custom_starter(request):return web.FileResponse(Path(__file__).with_name('custom_card_starter.py'),headers={'Content-Disposition':'attachment; filename="custom_card_starter.py"'})
         routes.add_post('/api/studio/custom-apps',custom_upload)
+        routes.add_post('/api/studio/update-cards',update_cards)
         routes.add_delete('/api/studio/custom-apps/{ident}',custom_delete)
         routes.add_get('/api/studio/custom-apps/{ident}',custom_download)
         routes.add_get('/api/studio/creator-brief',creator_brief)

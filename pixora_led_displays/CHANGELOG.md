@@ -1,3 +1,9 @@
+# 1.2.37
+
+- Compress Pac-Man wall interiors into thick bars so more corridors fit while keeping five-pixel characters, random starts and routes, collisions, and two visible ghosts.
+
+- Add Card Library > Update cards: download verified library updates without updating or restarting the HA app. Preserve saved decks, settings, playback intent and custom apps. Stage updates before activation, retain the current library on failure, and restore the chosen library after restarting. Unused cards still download only when needed.
+
 # 1.2.36
 
 - Randomize Pac-Man and all ghost starting positions and independent routes on every appearance and restart. Keep two ghosts visible without fixed pursuers. Render a fresh Pac-Man scene for each deck appearance instead of reusing cached artwork.

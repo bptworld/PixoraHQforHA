@@ -124,3 +124,10 @@ Group walls wait until every member has finished prior messages and decoded its 
 Open **My Apps** in LED Studio to download the [AI card-creation brief](https://github.com/bptworld/PixoraHQforHA/blob/main/pixora_led_displays/Pixora-Codex-Card-Brief.md) and a [starter Python card](https://github.com/bptworld/PixoraHQforHA/blob/main/pixora_led_displays/custom_card_starter.py). Give the brief to your AI with your card idea, review the returned `.py` file, then import it in My Apps. Imported apps appear in the Card Library and can be configured and added to decks. Both 64×32 and 128×32 use the same file. Requires LED Studio 1.2.24 or later.
 
 Custom Python runs with LED Studio’s access to files and the network: only import code you trust. The single-file importer reads metadata without running the card; rendering executes it. Custom apps stay in the HA app’s persistent data across restarts and unused-card cleanup. Download your source from My Apps to edit or share it. Remove an app from saved decks before replacing or deleting it.
+
+
+## Update library cards
+
+In **Card Library**, click **Update cards** to check the public GitHub library and refresh the cards used by your saved decks. This requires internet access to GitHub, but no Pixora Cloud account. You do not need to restart or update the HA app for ordinary card changes. Saved decks, options, display settings and playing/paused states are preserved. Cards already prepared for playback finish normally; refreshed artwork is used on a subsequent turn.
+
+Downloads use immutable revisions and SHA-256 verification. Updates are staged before activation, and a failed download or verification keeps the previous library. Only used cards and retained shared helpers are installed; unused cards remain downloads-on-demand. The updated catalog persists across app restarts. **My Apps** imports remain separate and are never replaced by library updates. A library requiring a newer renderer will ask you to update LED Studio first. This does not update display firmware.

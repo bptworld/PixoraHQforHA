@@ -1,5 +1,5 @@
 """Download only cards referenced by local decks; shared helpers remain installed."""
-import asyncio,hashlib,json,os,shutil,uuid,logging
+import asyncio,hashlib,json,os,shutil,uuid,logging,re
 from custom_cards import describe
 from pathlib import Path,PurePosixPath
 import aiohttp
@@ -8,6 +8,19 @@ class CardStore:
     def __init__(self,session,root):
         self.session,self.root=session,root
         self.catalog=json.loads(Path(__file__).with_name('card_catalog.json').read_text(encoding='utf-8'))
+        restored=False
+        pointer=root.parent/'card-library.json'
+        if pointer.is_file():
+            try:
+                from card_updates import validate
+                if pointer.stat().st_size>3*1024*1024:raise ValueError('Large library pointer')
+                saved=json.loads(pointer.read_text(encoding='utf-8'))
+                if not re.fullmatch('card-generation-[0-9a-f]{32}',saved.get('generation','')):raise ValueError('Invalid library folder')
+                catalog=validate(saved['catalog']);active=root.parent/saved['generation']
+                if not active.is_dir():raise ValueError('Missing library folder')
+                self.root,self.catalog=active,catalog
+                restored=True
+            except (ValueError,KeyError,TypeError,OSError):logging.warning('Could not restore updated card library; using the app catalog.')
         self.cards={c['id']:c for c in self.catalog['cards']}
         from standings import configure
         configure(self.cards)
@@ -15,6 +28,11 @@ class CardStore:
         configure_scoring_choices(self.cards)
         self.lock=asyncio.Lock()
         self.root.mkdir(parents=True,exist_ok=True)
+        # Previous render requests may use an old generation until shutdown.
+        # A fresh app process has no such readers, so retire those snapshots.
+        for retired in self.root.parent.glob('card-generation-*') if restored else ():
+            if re.fullmatch('card-generation-[0-9a-f]{32}',retired.name) and retired!=self.root and retired.is_dir() and not retired.is_symlink():
+                shutil.rmtree(retired,ignore_errors=True)
         self.custom_root=self.root.parent/'custom-cards'
         self.custom_root.mkdir(parents=True,exist_ok=True)
         for path in self.custom_root.glob('custom_*.py'):
@@ -78,7 +96,7 @@ class CardStore:
                         continue
                     source=meta.get('source_path','cards/'+name)
                     if PurePosixPath(source).is_absolute() or '..' in PurePosixPath(source).parts:raise ValueError('Invalid public card source.')
-                    url='https://raw.githubusercontent.com/bptworld/pixora/'+self.catalog['commit']+'/'+source
+                    url='https://raw.githubusercontent.com/bptworld/pixora/'+meta.get('source_commit',self.catalog['commit'])+'/'+source
                     try:
                         async with self.session.get(url,allow_redirects=False,timeout=aiohttp.ClientTimeout(total=25)) as response:
                             if response.status!=200:raise ValueError('Could not download this card. Your deck was not changed.')
