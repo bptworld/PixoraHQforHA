@@ -1,3 +1,7 @@
+# 1.2.35
+
+- Detect Pac-Man touching a ghost, stop the chase for a short caught animation, then restart with fresh random routes. Keep two ghosts visible.
+
 # 1.2.34
 
 - Keep at least two ghosts in the Pac-Man camera using close corridor-following pursuers and a tunnel-aware view. The other two ghosts continue roaming independently.
