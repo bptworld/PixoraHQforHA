@@ -1,3 +1,7 @@
+# 1.2.39
+
+- Add a guided new-display wizard with naming, 64/128 panel selection, reusable private Wi-Fi settings and a unique pairing key for each setup. Install over USB on Home Assistant, use browser USB where supported, download configured first-install firmware or save setup for later. Verify firmware and USB writes, then connect the display to Studio and HA. Preserve existing display management and OTA updates.
+
 # 1.2.38
 
 - Poll and redraw enabled sports cards in playing decks in the background every 15 seconds during live games, even when another card is showing or Studio is closed. Back off outside live play and retain the last good artwork on provider failures. Special-graphic polling is unchanged.

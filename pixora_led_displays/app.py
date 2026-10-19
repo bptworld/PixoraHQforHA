@@ -293,6 +293,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         payload = await object_payload(request)
         if payload.get('confirmation') != 'REMOVE':
             raise ValueError('Type REMOVE to confirm deleting all Studio data and Pixora LED HA devices.')
+        if any(not task.done() for task in installer.tasks.values()):raise ValueError('Wait for the USB installation to finish before removing Studio.')
         async with lock:
             async with studio.lock:
                 root.mkdir(parents=True,exist_ok=True)
@@ -309,6 +310,31 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app['studio'] = studio
     studio.app = app
     studio.register()
+
+    from display_setup import DisplayInstaller
+    installer=DisplayInstaller(root)
+    async def attach_setup(profile,host):
+        async with lock:
+            client=client_factory(app['session'],host,profile['key'])
+            info=await client.info()
+            # Existing pairing is preserved; require the flashed profile key.
+            await client.pair()
+            if not hmac.compare_digest(client.key,profile['key']):raise ValueError('This display does not match the saved setup profile.')
+            if info['width']!=profile['width']:raise ValueError('The connected display has a different panel size. Check the setup profile.')
+            existing=next((d for d in state['displays'] if d['id']==info['id']),None)
+            if existing and existing['key']!=profile['key']:raise ValueError('This display belongs to a different setup profile.')
+            if not existing and len(state['displays'])>=30:raise ValueError('Up to 30 displays are supported.')
+            previous=list(state['displays'])
+            state['displays']=[d for d in previous if d['id']!=info['id']]+[{'id':info['id'],'name':profile['name'],'host':client.host,'key':profile['key'],'width':info['width'],'height':info['height'],'version':info['version']}]
+            try:await asyncio.to_thread(persist)
+            except OSError:state['displays']=previous;raise
+        result=await app['automation'].sync(list(state['displays']))
+        return {'displays':public(),'automation':result}
+    installer.register(app,attach_setup)
+    async def setup_page(request):return web.FileResponse(Path(__file__).with_name('display_setup.html'))
+    async def setup_usb(request):return web.FileResponse(Path(__file__).with_name('display_usb.js'))
+    app.router.add_get('/new-display',setup_page)
+    app.router.add_get('/display-usb.js',setup_usb)
 
     async def startup(app):
         app['session'] = ClientSession()

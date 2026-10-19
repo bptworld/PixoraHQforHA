@@ -134,3 +134,14 @@ Downloads use immutable revisions and SHA-256 verification. Updates are staged b
 
 
 Enabled sports cards in playing decks check stats and redraw in the background every **15 seconds while the selected game is live**, even when another card is showing or Studio is closed. Outside live play they check once a minute (standings every five minutes). Paused displays and Quiet Hours suspend these checks. New artwork replaces a visible score card as soon as it is ready. Special-graphic event polling is unchanged. Provider response time and data freshness still determine when new details become available; a failed refresh keeps the last good score and checks again on the next interval.
+
+
+## Add a new display from Home Assistant
+
+Open **Add a display** in LED Studio (also available under **Displays & firmware**). Enter a name, select one 64×32 panel or two panels for 128×32, and enter the 2.4 GHz Wi-Fi details. Each saved setup has its own pairing key. Wi-Fi passwords stay in the app’s private `/data` storage and can be reused for another display without being returned to the browser. Home Assistant backups containing this app also contain those settings. Remove an unused setup with **Remove saved setup**.
+
+Choose **USB on Home Assistant** to plug the MatrixPortal S3 directly into the HA machine. USB devices appear in the wizard; a virtual machine needs USB passthrough. Choose the controller, confirm first installation and install. Keep USB and panel power connected until verification finishes. The installer attempts to read the Wi-Fi address over USB; enter the router’s address if it cannot. **Connect this display** verifies its profile key and adds the display to Studio and Home Assistant.
+
+**From this computer** uses browser USB in supported Chrome/Edge secure contexts. Local HTTP pages and restricted HA frames can use **Download the file**, then open [ESPHome Web](https://web.esphome.io/) and select the downloaded file. With esptool, flash it at `0x0`. Return to the wizard to connect the display. **Later** keeps the saved setup for another day.
+
+This is a complete first-install image for **Adafruit MatrixPortal S3**, replacing existing firmware, Wi-Fi and pairing settings. It supports both 64×32 and 128×32; it does not support Tidbyt or arbitrary ESP32 boards. Configured downloads contain the Wi-Fi password and a private pairing key: keep them private and delete downloaded copies after installation. Normal firmware updates continue to use the existing settings-preserving OTA controls. No Cloud account is needed.

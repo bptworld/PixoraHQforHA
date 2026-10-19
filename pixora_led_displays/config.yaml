@@ -1,5 +1,5 @@
 name: Pixora LED Studio
-version: "1.2.38"
+version: "1.2.39"
 slug: pixora_led_displays
 description: "Send cards directly to S3 LED panels over local Wi-Fi. Brought to you by PixoraHQ.com."
 arch: [aarch64, amd64, armv7]
@@ -7,6 +7,7 @@ startup: application
 boot: auto
 init: false
 homeassistant_api: true
+uart: true
 discovery: [pixora_local]
 ingress: true
 ingress_port: 4188
