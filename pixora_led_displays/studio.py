@@ -208,6 +208,8 @@ class Studio:
         if request_only:return request
         encoded=json.dumps(request).encode()
         if len(encoded)>65536:raise ValueError('Card options are too large. Shorten the text values.')
+        # A new Pac-Man appearance needs a new scene, including prefetches.
+        if card['id']=='pacman':return await self.render_request(request)
         key=hashlib.sha256(json.dumps(request,sort_keys=True).encode()).hexdigest()
         if getattr(self,'skipped',{}).get(key,0)>time.time():raise CardSkipped('No active artwork for this card.')
         cached=self.cache.get(key)

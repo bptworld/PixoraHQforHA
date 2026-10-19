@@ -1,3 +1,7 @@
+# 1.2.36
+
+- Randomize Pac-Man and all ghost starting positions and independent routes on every appearance and restart. Keep two ghosts visible without fixed pursuers. Render a fresh Pac-Man scene for each deck appearance instead of reusing cached artwork.
+
 # 1.2.35
 
 - Detect Pac-Man touching a ghost, stop the chase for a short caught animation, then restart with fresh random routes. Keep two ghosts visible.

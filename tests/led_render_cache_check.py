@@ -54,6 +54,15 @@ async def check():
         except ValueError:pass
         else:raise AssertionError('Options reused stale artwork from another configuration')
         from studio import CardSkipped
+        fresh=instance();fresh_calls=[]
+        fresh.store.cards['pacman']={'id':'pacman','module':'pacman','category':'Fun'}
+        async def new_scene(request):
+            fresh_calls.append(request);return b'scene-'+str(len(fresh_calls)).encode()
+        fresh.render_request=new_scene
+        first_scene=await fresh.render({'card':'pacman'},64)
+        second_scene=await fresh.render({'card':'pacman'},64)
+        assert first_scene!=second_scene and len(fresh_calls)==2,'Pac-Man reused its previous appearance'
+        assert not fresh.cache and not fresh.refresh_jobs
         inactive=instance();skip_calls=0
         async def no_content(request):
             nonlocal skip_calls
