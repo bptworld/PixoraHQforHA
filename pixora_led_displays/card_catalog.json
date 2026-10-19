@@ -10,7 +10,7 @@
       "description": "Track selected coins with price and daily movement.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/crypto_watch.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/crypto_watch.webp",
       "options": [
         {
           "key": "symbols",
@@ -45,7 +45,7 @@
       "description": "Follow key commodities with price and daily movement.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/commodities_watch.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/commodities_watch.webp",
       "options": [
         {
           "key": "symbols",
@@ -80,7 +80,7 @@
       "description": "Show selected exchange rates and daily movement.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/currency_rates.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/currency_rates.webp",
       "options": [
         {
           "key": "pairs",
@@ -115,7 +115,7 @@
       "description": "Monitor major market indexes at a glance.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/market_indexes.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/market_indexes.webp",
       "options": [
         {
           "key": "indexes",
@@ -150,7 +150,7 @@
       "description": "Show whether major markets are open or closed.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/market_status.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/market_status.webp",
       "options": [
         {
           "key": "showCountdown",
@@ -184,7 +184,7 @@
       "description": "Summarize portfolio value, change, and daily gain.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/portfolio_pulse.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/portfolio_pulse.webp",
       "options": [
         {
           "key": "holdings",
@@ -219,7 +219,7 @@
       "description": "Compare sector performance with a compact heat view.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/sector_heat.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/sector_heat.webp",
       "options": [
         {
           "key": "symbols",
@@ -254,7 +254,7 @@
       "description": "Scroll selected tickers with current price movement.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/stocks.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/stocks.webp",
       "options": [
         {
           "key": "symbols",
@@ -296,7 +296,7 @@
       "description": "A glowing pixel heart with a gentle pulse.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/heartbeat.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/heartbeat.webp",
       "options": [
         {
           "key": "color",
@@ -347,7 +347,7 @@
       "description": "Retro invaders march across the display.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/alien_march.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/alien_march.webp",
       "options": [
         {
           "key": "speed",
@@ -394,7 +394,7 @@
       "description": "Cozy animated pixel flames for ambient display.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/fireplace.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/fireplace.webp",
       "options": [
         {
           "key": "height",
@@ -441,7 +441,7 @@
       "description": "A small daily fortune with playful pixel charm.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/fortune_cookie.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/fortune_cookie.webp",
       "options": [
         {
           "key": "mode",
@@ -485,7 +485,7 @@
       "description": "Soft drifting blobs for a relaxed ambient effect.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/lava_lamp.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/lava_lamp.webp",
       "options": [
         {
           "key": "palette",
@@ -539,8 +539,8 @@
       "detail": "Animated green code rain in classic terminal style.",
       "description": "Animated green code rain in classic terminal style.",
       "author": "bptworld",
-      "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/matrix_rain.webp",
+      "version": "1.1",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/matrix_rain.webp",
       "options": [
         {
           "key": "speed",
@@ -586,8 +586,8 @@
       "detail": "A tiny arcade chase loops across the screen.",
       "description": "A tiny arcade chase loops across the screen.",
       "author": "bptworld",
-      "version": "1.2",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/pacman.webp",
+      "version": "1.3",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/pacman.webp",
       "options": [
         {
           "key": "speed",
@@ -650,7 +650,7 @@
       "description": "A calm pixel aquarium with fish and bubbles.",
       "author": "bptworld",
       "version": "1.1",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/aquarium.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/aquarium.webp",
       "options": [
         {
           "key": "speed",
@@ -697,7 +697,7 @@
       "description": "A tiny rotating globe for ambient motion.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/pixel_globe.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/pixel_globe.webp",
       "options": [
         {
           "key": "speed",
@@ -744,7 +744,7 @@
       "description": "Classic paddles and ball in a looping match.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/pong_loop.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/pong_loop.webp",
       "options": [
         {
           "key": "speed",
@@ -791,7 +791,7 @@
       "description": "A miniature snake game animation with dot chasing.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/snake.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/snake.webp",
       "options": [
         {
           "key": "speed",
@@ -838,7 +838,7 @@
       "description": "Tiny cars roll through animated signal lights.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/tiny_traffic.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/tiny_traffic.webp",
       "options": [
         {
           "key": "speed",
@@ -885,7 +885,7 @@
       "description": "Show network blocking totals and recent activity.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/dns_stats.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/dns_stats.webp",
       "options": [
         {
           "key": "service",
@@ -954,7 +954,7 @@
       "description": "Display one smart home entity and its current state.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/home_assistant_entity.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/home_assistant_entity.webp",
       "options": [
         {
           "key": "entityId",
@@ -996,7 +996,7 @@
       "description": "Show one device attribute from your smart home.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/hubitat.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/hubitat.webp",
       "options": [
         {
           "key": "hubIp",
@@ -1050,7 +1050,7 @@
       "description": "Rotate several smart home device readings together.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/hubitat_multi.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/hubitat_multi.webp",
       "options": [
         {
           "key": "hubIp",
@@ -1104,7 +1104,7 @@
       "description": "Summarize door, lock, and contact sensor status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/hubitat_safety.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/hubitat_safety.webp",
       "options": [
         {
           "key": "hubIp",
@@ -1176,7 +1176,7 @@
       "description": "Display one connected device and its current state.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/smartthings_entity.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/smartthings_entity.webp",
       "options": [
         {
           "key": "token",
@@ -1245,7 +1245,7 @@
       "description": "Track shop orders, favorites, and audience growth.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/etsy_shop.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/etsy_shop.webp",
       "options": [
         {
           "key": "shopId",
@@ -1328,7 +1328,7 @@
       "description": "Show recent order totals and all-time store count.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/shopify_orders.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/shopify_orders.webp",
       "options": [],
       "module": "shopify_orders",
       "files": [
@@ -1355,7 +1355,7 @@
       "description": "Display page follower count in a compact card.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/facebook_followers.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/facebook_followers.webp",
       "options": [
         {
           "key": "pageId",
@@ -1396,7 +1396,7 @@
       "description": "Display profile follower count in a compact card.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/instagram_followers.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/instagram_followers.webp",
       "options": [
         {
           "key": "igUserId",
@@ -1437,7 +1437,7 @@
       "description": "Show the current or most recent track.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/lastfm_now_playing.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/lastfm_now_playing.webp",
       "options": [
         {
           "key": "username",
@@ -1478,7 +1478,7 @@
       "description": "Show the current track from your music player.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/music_assistant_now_playing.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/music_assistant_now_playing.webp",
       "options": [
         {
           "key": "serverUrl",
@@ -1532,7 +1532,7 @@
       "description": "Display account follower count in a compact card.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/twitter_followers.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/twitter_followers.webp",
       "options": [
         {
           "key": "username",
@@ -1573,7 +1573,7 @@
       "description": "Display channel subscriber count in a compact card.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/youtube_followers.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/youtube_followers.webp",
       "options": [
         {
           "key": "channelId",
@@ -1614,7 +1614,7 @@
       "description": "Scores, game status, and key matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/cfl.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/cfl.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -1721,7 +1721,7 @@
       "description": "College baseball scores, status, and matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/college_baseball.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/college_baseball.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -1916,7 +1916,7 @@
       "description": "College baseball standings with ranked team records.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/college_baseball_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/college_baseball_standings.webp",
       "options": [],
       "module": "college_baseball_standings",
       "files": [
@@ -1944,7 +1944,7 @@
       "description": "College football scores, status, and matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/college_football.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/college_football.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -2291,7 +2291,7 @@
       "description": "Conference standings with records and rank context.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/college_football_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/college_football_standings.webp",
       "options": [
         {
           "key": "group",
@@ -2364,7 +2364,7 @@
       "description": "Men's college hockey standings and team records.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/mens_college_hockey_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/mens_college_hockey_standings.webp",
       "options": [
         {
           "key": "group",
@@ -2429,7 +2429,7 @@
       "description": "College softball scores, status, and matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/college_softball.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/college_softball.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -2736,7 +2736,7 @@
         "card_utils.py",
         "LICENSE"
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/espn_fantasy_lineup.webp"
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/espn_fantasy_lineup.webp"
     },
     {
       "id": "espn_fantasy_matchup",
@@ -2898,7 +2898,7 @@
         "card_utils.py",
         "LICENSE"
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/espn_fantasy_matchup.webp"
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/espn_fantasy_matchup.webp"
     },
     {
       "id": "espn_fantasy_standings",
@@ -2978,7 +2978,7 @@
         "card_utils.py",
         "LICENSE"
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/espn_fantasy_standings.webp"
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/espn_fantasy_standings.webp"
     },
     {
       "id": "f1",
@@ -2988,7 +2988,7 @@
       "description": "Race weekend status, sessions, and standings highlights.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/f1.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/f1.webp",
       "options": [],
       "module": "f1",
       "files": [
@@ -3148,7 +3148,7 @@
         "card_utils.py",
         "LICENSE"
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/fantasy_lineup.webp"
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/fantasy_lineup.webp"
     },
     {
       "id": "fantasy_matchup",
@@ -3290,7 +3290,7 @@
         "card_utils.py",
         "LICENSE"
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/fantasy_matchup.webp"
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/fantasy_matchup.webp"
     },
     {
       "id": "fantasy_standings",
@@ -3350,7 +3350,7 @@
         "card_utils.py",
         "LICENSE"
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/fantasy_standings.webp"
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/fantasy_standings.webp"
     },
     {
       "id": "fifa_world_cup",
@@ -3360,7 +3360,7 @@
       "description": "Follow a selected team's next World Cup match.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/fifa_world_cup.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/fifa_world_cup.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -3585,7 +3585,7 @@
       "description": "Today's World Cup matches and game status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/world_cup_today.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/world_cup_today.webp",
       "options": [
         {
           "key": "city",
@@ -3689,7 +3689,7 @@
       "description": "World Cup scoring leaders in a compact table.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/world_cup_golden_boot.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/world_cup_golden_boot.webp",
       "options": [],
       "module": "world_cup_golden_boot",
       "files": [
@@ -3716,7 +3716,7 @@
       "description": "Track one World Cup team through its schedule.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/world_cup_tracker.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/world_cup_tracker.webp",
       "options": [
         {
           "key": "team",
@@ -3751,7 +3751,7 @@
       "description": "Tournament leaderboard with player position and score.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/lpga.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/lpga.webp",
       "options": [],
       "module": "lpga",
       "files": [
@@ -3779,7 +3779,7 @@
       "description": "Men's college basketball scores and game status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/mens_college_basketball.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/mens_college_basketball.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -4073,7 +4073,7 @@
       "description": "Men's college basketball standings and records.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/mens_college_basketball_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/mens_college_basketball_standings.webp",
       "options": [
         {
           "key": "group",
@@ -4150,7 +4150,7 @@
       "description": "Men's college lacrosse scores and game status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/mens_college_lacrosse.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/mens_college_lacrosse.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -4288,7 +4288,7 @@
       "description": "Baseball scores, inning status, and game highlights.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/mlb.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/mlb.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -4558,7 +4558,7 @@
       "description": "Race status, leaderboard, and event progress.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/nascar.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/nascar.webp",
       "options": [],
       "module": "nascar",
       "files": [
@@ -4585,7 +4585,7 @@
       "description": "G League scores, status, and matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/nba_g_league.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/nba_g_league.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -4775,7 +4775,7 @@
       "description": "Basketball scores, period status, and matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/nba.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/nba.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -5013,7 +5013,7 @@
       "description": "Conference standings with records and rank context.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/nba_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/nba_standings.webp",
       "options": [
         {
           "key": "group",
@@ -5058,7 +5058,7 @@
       "description": "Men's college hockey scores and game status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/mens_college_hockey.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/mens_college_hockey.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -5253,7 +5253,7 @@
       "description": "Football scores, quarter status, and matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/nfl.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/nfl.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -5499,7 +5499,7 @@
       "description": "Conference standings with records and playoff context.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/nfl_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/nfl_standings.webp",
       "options": [
         {
           "key": "group",
@@ -5544,7 +5544,7 @@
       "description": "Hockey scores, period status, and matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/nhl.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/nhl.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -5790,7 +5790,7 @@
       "description": "Conference standings with records and rank context.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/nhl_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/nhl_standings.webp",
       "options": [
         {
           "key": "group",
@@ -5835,7 +5835,7 @@
       "description": "Indoor lacrosse scores and game status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/nll_lacrosse.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/nll_lacrosse.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -5961,7 +5961,7 @@
       "description": "Tournament leaderboard with player position and score.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/pga.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/pga.webp",
       "options": [],
       "module": "pga",
       "files": [
@@ -5989,7 +5989,7 @@
       "description": "Current tournament details, leaderboard, and status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/pga_tournament.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/pga_tournament.webp",
       "options": [],
       "module": "pga_tournament",
       "files": [
@@ -6016,7 +6016,7 @@
       "description": "Outdoor lacrosse scores and game status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/pll_lacrosse.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/pll_lacrosse.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -6118,7 +6118,7 @@
       "description": "Soccer scores, match status, and key details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/soccer.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/soccer.webp",
       "options": [
         {
           "key": "league",
@@ -6344,7 +6344,7 @@
       "description": "League table with points, records, and position.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/soccer_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/soccer_standings.webp",
       "options": [
         {
           "key": "soccerLeague",
@@ -6429,7 +6429,7 @@
       "description": "Top teams and records for a selected league.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/sports_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/sports_standings.webp",
       "options": [
         {
           "key": "league",
@@ -6529,7 +6529,7 @@
       "description": "Fight card status, matchups, and results.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/ufc.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/ufc.webp",
       "options": [
         {
           "key": "showRecords",
@@ -6675,7 +6675,7 @@
       "description": "UFL scores, status, and matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/ufl.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/ufl.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -6778,7 +6778,7 @@
       "description": "WNBA scores, period status, and matchup details.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/wnba.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/wnba.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -6908,7 +6908,7 @@
       "description": "Women's college basketball scores and game status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/womens_college_basketball.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/womens_college_basketball.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -7130,7 +7130,7 @@
       "description": "Women's college basketball standings and records.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/womens_college_basketball_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/womens_college_basketball_standings.webp",
       "options": [
         {
           "key": "group",
@@ -7207,7 +7207,7 @@
       "description": "Women's college hockey standings and records.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/womens_college_hockey_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/womens_college_hockey_standings.webp",
       "options": [
         {
           "key": "group",
@@ -7268,7 +7268,7 @@
       "description": "Women's college lacrosse scores and game status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/womens_college_lacrosse.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/womens_college_lacrosse.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -7406,7 +7406,7 @@
       "description": "Women's college volleyball scores and match status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/womens_college_volleyball.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/womens_college_volleyball.webp",
       "options": [
         {
           "key": "favoriteTeam",
@@ -7592,7 +7592,7 @@
       "description": "Women's college volleyball standings and records.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/womens_college_volleyball_standings.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/womens_college_volleyball_standings.webp",
       "options": [
         {
           "key": "group",
@@ -7772,7 +7772,7 @@
         "card_utils.py",
         "LICENSE"
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/yahoo_fantasy_lineup.webp"
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/yahoo_fantasy_lineup.webp"
     },
     {
       "id": "yahoo_fantasy_matchup",
@@ -7920,7 +7920,7 @@
         "card_utils.py",
         "LICENSE"
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/yahoo_fantasy_matchup.webp"
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/yahoo_fantasy_matchup.webp"
     },
     {
       "id": "yahoo_fantasy_standings",
@@ -7986,7 +7986,7 @@
         "card_utils.py",
         "LICENSE"
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/yahoo_fantasy_standings.webp"
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/yahoo_fantasy_standings.webp"
     },
     {
       "id": "airport_board",
@@ -7996,7 +7996,7 @@
       "description": "Arrival and departure board for a selected airport.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/airport_board.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/airport_board.webp",
       "options": [
         {
           "key": "airport",
@@ -8197,7 +8197,7 @@
       "description": "Airport delay status and expected wait windows.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/airport_delays.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/airport_delays.webp",
       "options": [
         {
           "key": "airports",
@@ -8238,7 +8238,7 @@
       "description": "Drive time estimate for a saved route.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/commute_time.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/commute_time.webp",
       "options": [
         {
           "key": "origin",
@@ -8285,7 +8285,7 @@
       "description": "Track flights, pickups, countdowns, and nearby alerts.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/flight_watchlist.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/flight_watchlist.webp",
       "options": [
         {
           "key": "airline1",
@@ -8757,7 +8757,7 @@
       "description": "Detailed flight tracking with map and route panels.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/flight_track.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/flight_track.webp",
       "options": [
         {
           "key": "airline1",
@@ -9197,7 +9197,7 @@
       "description": "Show aircraft passing near your location.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/flights_overhead.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/flights_overhead.webp",
       "options": [
         {
           "key": "zipCode",
@@ -9295,7 +9295,7 @@
       "description": "Track nearby helicopter activity and route direction.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/helicopter_tracker.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/helicopter_tracker.webp",
       "options": [
         {
           "key": "zipCode",
@@ -9370,7 +9370,7 @@
       "description": "Local fuel price average for your area.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/gas_price_local.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/gas_price_local.webp",
       "options": [
         {
           "key": "zipCode",
@@ -9618,7 +9618,7 @@
       "description": "Countdown to the next selected space launch.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/launch_countdown.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/launch_countdown.webp",
       "options": [
         {
           "key": "provider",
@@ -9708,7 +9708,7 @@
       "description": "Movie showtimes with optional filters.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/amc_now_playing.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/amc_now_playing.webp",
       "options": [
         {
           "key": "theatreNumber",
@@ -9996,7 +9996,7 @@
       "description": "Rotating checklist for household battery tasks.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/battery_reminder.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/battery_reminder.webp",
       "options": [
         {
           "key": "items",
@@ -10039,7 +10039,7 @@
       "description": "Movie showtimes with optional filters.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/cinemark_now_playing.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/cinemark_now_playing.webp",
       "options": [
         {
           "key": "theatre",
@@ -10355,7 +10355,7 @@
           ]
         }
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/clock.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/clock.webp",
       "module": "clock",
       "files": [
         "addons/clock.py",
@@ -10447,7 +10447,7 @@
           ]
         }
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/clock_calendar.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/clock_calendar.webp",
       "module": "clock_calendar",
       "files": [
         "addons/clock_calendar.py",
@@ -10563,7 +10563,7 @@
           ]
         }
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/clock_day_progress.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/clock_day_progress.webp",
       "module": "clock_day_progress",
       "files": [
         "addons/clock_day_progress.py",
@@ -10679,7 +10679,7 @@
           ]
         }
       ],
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/clock_week_strip.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/clock_week_strip.webp",
       "module": "clock_week_strip",
       "files": [
         "addons/clock_week_strip.py",
@@ -10705,7 +10705,7 @@
       "description": "Days remaining until a custom event.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/countdown.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/countdown.webp",
       "options": [
         {
           "key": "eventName",
@@ -10746,7 +10746,7 @@
       "description": "Event countdown with celebratory pixel confetti.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/countdown_confetti.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/countdown_confetti.webp",
       "options": [
         {
           "key": "eventName",
@@ -10787,7 +10787,7 @@
       "description": "Show a custom two-line message.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/custom_text.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/custom_text.webp",
       "options": [
         {
           "key": "topLine",
@@ -10925,7 +10925,7 @@
       "description": "Scroll a short verse for daily reflection.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/daily_bible_verse.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/daily_bible_verse.webp",
       "options": [
         {
           "key": "label",
@@ -11019,7 +11019,7 @@
       "description": "Countdown the days until your trip.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/disney.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/disney.webp",
       "options": [
         {
           "key": "targetDate",
@@ -11062,7 +11062,7 @@
       "description": "Theme park attraction waits at a glance.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/disney_wait_times.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/disney_wait_times.webp",
       "options": [
         {
           "key": "parkId",
@@ -11168,7 +11168,7 @@
       "description": "Today's entertainment schedule for a selected park.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/disney_showtimes.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/disney_showtimes.webp",
       "options": [
         {
           "key": "parkId",
@@ -11228,7 +11228,7 @@
       "description": "Today's opening hours for a selected park.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/disney_park_hours.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/disney_park_hours.webp",
       "options": [
         {
           "key": "parkIds",
@@ -11305,7 +11305,7 @@
       "description": "Theme park attraction waits at a glance.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/universal_wait_times.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/universal_wait_times.webp",
       "options": [
         {
           "key": "parkId",
@@ -11400,7 +11400,7 @@
       "description": "Today's opening hours for a selected park.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/universal_park_hours.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/universal_park_hours.webp",
       "options": [
         {
           "key": "parkIds",
@@ -11458,7 +11458,7 @@
       "description": "Today's entertainment schedule for a selected park.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/universal_showtimes.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/universal_showtimes.webp",
       "options": [
         {
           "key": "parkId",
@@ -11515,7 +11515,7 @@
       "description": "Open issue count for a selected project.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/github_issues_watch.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/github_issues_watch.webp",
       "options": [
         {
           "key": "owner",
@@ -11570,7 +11570,7 @@
       "description": "Latest release version for a selected project.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/github_release_watch.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/github_release_watch.webp",
       "options": [
         {
           "key": "owner",
@@ -11631,7 +11631,7 @@
       "description": "Next calendar event with time and title.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/gcal.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/gcal.webp",
       "options": [
         {
           "key": "icsUrl",
@@ -11671,7 +11671,7 @@
       "description": "A short clean joke for quick smiles.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/joke_of_day.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/joke_of_day.webp",
       "options": [
         {
           "key": "style",
@@ -11715,7 +11715,7 @@
       "description": "Latest jackpot numbers in a compact layout.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/mega_millions.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/mega_millions.webp",
       "options": [],
       "module": "mega_millions",
       "files": [
@@ -11742,7 +11742,7 @@
       "description": "Latest jackpot numbers in a compact layout.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/megabucks.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/megabucks.webp",
       "options": [],
       "module": "megabucks",
       "files": [
@@ -11769,7 +11769,7 @@
       "description": "Current moon phase with illumination context.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/moon_phase.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/moon_phase.webp",
       "options": [],
       "module": "moon_phase",
       "files": [
@@ -11795,7 +11795,7 @@
       "description": "Manual package status for deliveries you track.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/package_watch.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/package_watch.webp",
       "options": [
         {
           "key": "carrier",
@@ -11853,7 +11853,7 @@
       "description": "Connection latency and up/down status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/ping_monitor.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/ping_monitor.webp",
       "options": [
         {
           "key": "host",
@@ -11903,7 +11903,7 @@
       "description": "Pixora release and card update status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/pixora_update_watch.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/pixora_update_watch.webp",
       "options": [
         {
           "key": "currentVersion",
@@ -11952,7 +11952,7 @@
       "description": "Latest jackpot numbers in a compact layout.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/powerball.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/powerball.webp",
       "options": [],
       "module": "powerball",
       "files": [
@@ -11979,7 +11979,7 @@
       "description": "A short quote for daily inspiration.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/quote_of_day.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/quote_of_day.webp",
       "options": [
         {
           "key": "fallbackQuote",
@@ -12014,7 +12014,7 @@
       "description": "Scroll the latest headline from a feed.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/rss_headlines.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/rss_headlines.webp",
       "options": [
         {
           "key": "feedUrl",
@@ -12056,7 +12056,7 @@
       "description": "Sunrise, sunset, and daylight timing.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/sunrise_sunset.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/sunrise_sunset.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12112,7 +12112,7 @@
       "description": "Pickup reminders for trash and recycling days.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/trash_recycling.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/trash_recycling.webp",
       "options": [
         {
           "key": "trashDay",
@@ -12250,7 +12250,7 @@
       "description": "Website availability and response status.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/website_uptime.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/website_uptime.webp",
       "options": [
         {
           "key": "url",
@@ -12292,7 +12292,7 @@
       "description": "Daily word with a short definition.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/word_of_day.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/word_of_day.webp",
       "options": [
         {
           "key": "mode",
@@ -12336,7 +12336,7 @@
       "description": "Air quality, pollen, and UV conditions.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/air_quality.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/air_quality.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12376,7 +12376,7 @@
       },
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/tide_tracking.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/tide_tracking.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12445,7 +12445,7 @@
       "description": "Beach water, wave, and wind conditions.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/beach_conditions.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/beach_conditions.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12499,7 +12499,7 @@
       "description": "Coastal wind and sea conditions.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/marine_forecast.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/marine_forecast.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12536,7 +12536,7 @@
       "description": "Boating wind, sea, and tide conditions.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/boating_conditions.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/boating_conditions.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12590,7 +12590,7 @@
       "description": "Fishing timing guidance based on tide windows.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/fishing_window.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/fishing_window.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12644,7 +12644,7 @@
       "description": "Meteor shower timing and night-sky viewing score.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/meteor_watch.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/meteor_watch.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12700,7 +12700,7 @@
       "description": "Surf height, swell, and wind conditions.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/surf_report.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/surf_report.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12737,7 +12737,7 @@
       "description": "Rip current risk status for nearby beaches.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/rip_current_risk.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/rip_current_risk.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12774,7 +12774,7 @@
       "description": "Severe weather alerts that skip when clear.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/weather_alert.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/weather_alert.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12919,7 +12919,7 @@
       "description": "Current conditions plus a four-day outlook.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/weather_forecast.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/weather_forecast.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12959,7 +12959,7 @@
       },
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/weather_radar_loop.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/weather_radar_loop.webp",
       "options": [
         {
           "key": "zipCode",
@@ -12995,7 +12995,7 @@
       "description": "Animated weather scene matching local conditions.",
       "author": "bptworld",
       "version": "1.0",
-      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/d35a3ba2d396aee16f1a91b9993346309b3f02b4/cards/assets/previews/weather_mood.webp",
+      "previewUrl": "https://raw.githubusercontent.com/bptworld/pixora/98e31a06667e7b6c75f0919cc7894bed7d195fbd/cards/assets/previews/weather_mood.webp",
       "options": [
         {
           "key": "zipCode",
@@ -13330,8 +13330,8 @@
       "size": 5108
     },
     "addons/matrix_rain.py": {
-      "sha256": "2619983790a789ea135bd8d8186d023706d5c9d13b10db2ecb66e41f782b699c",
-      "size": 3981
+      "sha256": "33db4db039fb8cf21b0bf52f04b43541b4e67735341038cd1a482d26c3e11312",
+      "size": 3457
     },
     "addons/mega_millions.py": {
       "sha256": "b871915f51ce9db09c521fe40a46f51279fe9d3ec803889bf2fd135c207e6b09",
@@ -13418,8 +13418,8 @@
       "size": 2791
     },
     "addons/pacman.py": {
-      "sha256": "9ba3d57e9980bc915bd062cbde7f5e3f5c73b152659fd39a741ddd77ae951460",
-      "size": 6908
+      "sha256": "5e240a5bc2d861b9d28c714d603a0e21a576ec4b337c19773b6b86e42be86f0f",
+      "size": 7315
     },
     "addons/pga.py": {
       "sha256": "c07739b37aa4206c5e036f13cd314bab0fed860fa06dcaaf355ea7ea7a9daf37",
@@ -13746,5 +13746,5 @@
     "card_utils.py",
     "event_sport_utils.py"
   ],
-  "commit": "d35a3ba2d396aee16f1a91b9993346309b3f02b4"
+  "commit": "98e31a06667e7b6c75f0919cc7894bed7d195fbd"
 }

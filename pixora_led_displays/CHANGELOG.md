@@ -1,3 +1,9 @@
+# 1.2.33
+
+- Give Matrix Rain crisp code-like glyphs, independent stream speeds and lengths, bright leading characters, green fading trails, and occasional character changes against true black.
+
+- Enlarge the classic Pac-Man maze grid and characters from three to five pixels per tile. Preserve the cropped camera, corridor-following movement, random ghost routes, and dot eating.
+
 # 1.2.32
 
 - Use the classic Pac-Man maze with a cropped camera following Pac-Man, connected side tunnels, four randomly routed ghosts, and dot eating.
