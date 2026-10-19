@@ -5,7 +5,7 @@ const require=createRequire('D:/planner/connect-features/cloud/render/planner/pa
 const {chromium}=require('playwright');
 const html=readFileSync(new URL('../pixora_led_displays/studio.html',import.meta.url),'utf8');
 const card={id:'clock',name:'Clock',category:'Utility',detail:'Local clock',options:[],installed:true};
-let state={cards:[card],decks:{saved:{name:'Saved deck',items:[{id:'one',card:'clock',duration:10,enabled:true,options:{}}]}},devices:{panel:{deck:'saved',playing:true}},displays:[{id:'panel',name:'Kitchen',width:64,height:32,version:'2.0.27'}],runtime:{panel:{playing:true,status:'Clock'}},settings:{},groups:{},graphics:{},cardLibraryRevision:'aaaaaaaa'};
+let state={cards:[card],decks:{saved:{name:'Saved deck',items:[{id:'one',card:'clock',duration:10,enabled:true,options:{}}]}},devices:{panel:{deck:'saved',playing:true}},displays:[{id:'panel',name:'Kitchen',width:64,height:32,version:'2.0.27'}],runtime:{panel:{playing:true,status:'Clock'}},settings:{},groups:{},graphics:{},cardLibraryUpdated:'2026-10-18T18:30:00Z',cardLibraryRevision:'aaaaaaaa'};
 let attempts=0,release;
 const browser=await chromium.launch();
 try{
@@ -28,6 +28,8 @@ try{
   throw Error('Unexpected browser request '+path);
  });
  await page.goto('http://studio.test/');await page.getByText('Library aaaaaaaa',{exact:true}).waitFor();
+ assert.match(await page.locator('#cardLibraryDate').innerText(),/Updated .+2026/);
+ const revisionBox=await page.locator('#cardLibraryRevision').boundingBox();const dateBox=await page.locator('#cardLibraryDate').boundingBox();assert.ok(dateBox.y>=revisionBox.y+revisionBox.height);
  const update=page.getByRole('button',{name:'Update cards',exact:true});await update.click();
  while(!release)await page.waitForTimeout(10);
  assert.equal(await page.getByRole('button',{name:'Working…',exact:true}).isDisabled(),true);

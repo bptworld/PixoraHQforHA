@@ -7,6 +7,7 @@ import aiohttp
 class CardStore:
     def __init__(self,session,root):
         self.session,self.root=session,root
+        self.updated_at=None
         self.catalog=json.loads(Path(__file__).with_name('card_catalog.json').read_text(encoding='utf-8'))
         restored=False
         pointer=root.parent/'card-library.json'
@@ -19,6 +20,7 @@ class CardStore:
                 catalog=validate(saved['catalog']);active=root.parent/saved['generation']
                 if not active.is_dir():raise ValueError('Missing library folder')
                 self.root,self.catalog=active,catalog
+                self.updated_at=saved.get('updated_at')
                 restored=True
             except (ValueError,KeyError,TypeError,OSError):logging.warning('Could not restore updated card library; using the app catalog.')
         self.cards={c['id']:c for c in self.catalog['cards']}

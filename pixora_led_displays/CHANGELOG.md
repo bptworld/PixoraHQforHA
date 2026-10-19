@@ -1,6 +1,7 @@
 # 1.2.38
 
-- Refresh live score-card artwork every ten seconds while it is on screen, including long card durations. Use the selected game state to keep slower refresh outside live play. Keep special-graphic polling unchanged and retain the last good score if a provider read fails.
+- Poll and redraw enabled sports cards in playing decks in the background every 15 seconds during live games, even when another card is showing or Studio is closed. Back off outside live play and retain the last good artwork on provider failures. Special-graphic polling is unchanged.
+- Fix Update cards by including its runtime module in the app image. Show the library update date and time below its revision.
 
 # 1.2.37
 

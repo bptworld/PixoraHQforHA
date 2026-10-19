@@ -58,6 +58,7 @@ async def check():
         restored=CardStore(session,root)
         assert restored.catalog['commit']=='b'*40 and restored.root==store.root
         assert restored.cards[ident]['custom']
+        assert restored.updated_at==store.updated_at and restored.updated_at
         requests=len(session.requests);session.bad=True
         await restored.ensure({'one',ident})
         assert len(session.requests)==requests,'Restart needed a download for already verified cards'
@@ -101,6 +102,7 @@ async def check():
             response=await client.post('/api/studio/update-cards',json={});assert response.status==200
             result=await response.json()
             assert result['state']['cardLibraryRevision']=='bbbbbbbb' and 'updated' in result['message']
+            assert result['state']['cardLibraryUpdated'] and studio.store.updated_at
             assert studio.data==before,'Library update changed saved decks or playback intent'
             response=await client.post('/api/studio/update-cards',json={})
             assert 'already up to date' in (await response.json())['message']

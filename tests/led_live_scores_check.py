@@ -1,4 +1,4 @@
-"""Live artwork refreshes every 10s; pre/post-game cards and events are unchanged."""
+"""Live artwork refreshes every 15s; pre/post-game cards and events are unchanged."""
 import asyncio,base64,io,json,sys,tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,10 +28,10 @@ async def check():
         with patch('studio.time.time',side_effect=lambda:now[0]):
             first=await s.render(item,64,device_id='panel')
             assert s.is_live_score(item,64,'panel')
-            now[0]=109;assert await s.render(item,64,device_id='panel')==first and len(calls)==1
-            now[0]=110;second=await s.render(item,64,device_id='panel')
-            assert second!=first and len(calls)==2,'Live cache served stale artwork at ten seconds'
-            now[0]=120;third=await s.render(item,64,device_id='panel')
+            now[0]=114;assert await s.render(item,64,device_id='panel')==first and len(calls)==1
+            now[0]=115;second=await s.render(item,64,device_id='panel')
+            assert second!=first and len(calls)==2,'Live cache served stale artwork at fifteen seconds'
+            now[0]=130;third=await s.render(item,64,device_id='panel')
             assert third!=second and not s.is_live_score(item,64,'panel')
             now[0]=150;assert await s.render(item,64,device_id='panel')==third and len(calls)==3,'Final game used live cadence'
         # Live metadata survives disk-cache restoration on app restart.
@@ -40,54 +40,27 @@ async def check():
         with patch('studio.time.time',side_effect=lambda:__import__('os').stat(Path(folder)/'render-cache'/(key+'.image')).st_mtime+1):
             assert await restored.render(item,64,device_id='panel')==first
             assert restored.is_live_score(item,64,'panel')
-        s=instance(Path(folder));s.quiet=lambda cfg:False
+        # Visible cards read prepared snapshots and never ask providers to refresh.
         for width in (64,128):
-            for live in (False,True):
-                chunks=[];refreshes=[]
-                s.live_sports={s.sports_key(item,width,'panel'):live}
-                async def deliver(client,body,width,duration,**kwargs):chunks.append((body,duration));return True
-                async def render(*args,**kwargs):
-                    assert kwargs.get('fresh') is True;refreshes.append(True);return b'fresh'
-                s.deliver=deliver;s.render=render
-                with patch('studio.time.monotonic',return_value=0):
-                    await s.deliver_score(None,b'initial',width,25,item,'panel')
-                assert [duration for body,duration in chunks]==([10,10,5] if live else [25])
-                assert len(refreshes)==(2 if live else 0)
-                if live:assert chunks[1][0]==b'fresh'
-            # Once the game is final, finish the card without further fast polls.
-            chunks=[];s.live_sports={s.sports_key(item,width,'panel'):True}
-            async def final(*args,**kwargs):
-                s.live_sports[s.sports_key(item,width,'panel')]=False;return b'final'
-            s.render=final
-            with patch('studio.time.monotonic',return_value=0):await s.deliver_score(None,b'live',width,25,item,'panel')
-            assert chunks==[(b'live',10),(b'final',15)]
-            # A failed read retains the last score; an uncertain panel write never repeats.
-            chunks=[];s.live_sports={s.sports_key(item,width,'panel'):True}
-            async def unavailable(*args,**kwargs):raise ValueError('Provider unavailable')
-            s.render=unavailable
-            with patch('studio.time.monotonic',return_value=0):await s.deliver_score(None,b'last-good',width,25,item,'panel')
-            assert all(body==b'last-good' for body,duration in chunks) and len(chunks)==3
-            async def uncertain(*args,**kwargs):return False
+            s=instance(Path(folder));s.quiet=lambda cfg:False;chunks=[];reads=[]
+            async def cached(*args,**kwargs):
+                assert kwargs.get('cached_only') is True and not kwargs.get('fresh')
+                reads.append(True);return b'latest' if len(reads)>1 else b'initial'
+            async def deliver(client,body,width,duration,**kwargs):
+                chunks.append((body,duration))
+                if len(chunks)==1:
+                    assert 'refresh_signal' in kwargs
+                    return 10.0  # background artwork arrives after fifteen seconds
+                return True
+            s.render=cached;s.deliver=deliver
+            await s.deliver_score(None,b'initial',width,25,item,'panel')
+            assert chunks==[(b'initial',25),(b'latest',10)] and len(reads)==2
+            # An uncertain physical write terminates this card without replay.
+            chunks.clear()
+            async def uncertain(*args,**kwargs):chunks.append(True);return False
             s.deliver=uncertain
-            async def never(*args,**kwargs):raise AssertionError('Uncertain frame was repeated')
-            s.render=never
-            await s.deliver_score(None,b'last-good',width,25,item,'panel')
-        # A card reappearing four seconds after its previous fetch updates in
-        # six seconds, rather than resetting the cadence at each deck turn.
-        s=instance(Path(folder));s.quiet=lambda cfg:False;now=[4.];chunks=[];refreshes=[]
-        key=s.sports_key(item,64,'panel');s.live_sports={key:True};s.live_checked={key:0}
-        async def advancing(client,body,width,duration,**kwargs):chunks.append(duration);now[0]+=duration;return True
-        async def refreshed(*args,**kwargs):refreshes.append(now[0]);s.live_checked[key]=now[0];return b'fresh'
-        s.deliver=advancing;s.render=refreshed
-        with patch('studio.time.time',side_effect=lambda:now[0]),patch('studio.time.monotonic',side_effect=lambda:now[0]):
-            await s.deliver_score(None,b'prefetched',64,12,item,'panel')
-        assert chunks==[6,6] and refreshes==[10]
-        chunks.clear();refreshes.clear();now[0]=0;s.live_checked[key]=0
-        async def failed(*args,**kwargs):refreshes.append(now[0]);raise ValueError('Provider down')
-        s.render=failed
-        with patch('studio.time.time',side_effect=lambda:now[0]),patch('studio.time.monotonic',side_effect=lambda:now[0]):
-            await s.deliver_score(None,b'last-good',64,25,item,'panel')
-        assert chunks==[10,10,5] and refreshes==[10,20],'Failed reads were retried too quickly'
-    print('Live scores passed: ten-second fresh cache and on-screen updates, pre/post-game slow mode, live metadata restart persistence, both sizes, provider failure fallback and no uncertain frame replay.')
+            await s.deliver_score(None,b'initial',width,25,item,'panel')
+            assert len(chunks)==1
+    print('Live scores passed: fifteen-second freshness, slower final state, restart metadata, prepared-artwork redraw at both sizes, no display-driven provider polling and no uncertain frame replay.')
 
 asyncio.run(check())

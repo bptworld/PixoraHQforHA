@@ -133,6 +133,40 @@ def run(request):
     # envelope so disabled events can be consumed without queueing any artwork.
     render_options={**options,**{key:'group_wall' for key in SCORING_TARGETS if options.get(key)=='none'}}
     result=module.render(render_options);event=None;state={}
+    # Standings and fantasy cards have no selected-game descriptor. Check their
+    # league scoreboard so these cards also use the live background cadence.
+    ident=request['module']
+    if 'live' not in sports_meta and not (isinstance(result,dict) and '_sports_live' in result):
+        path=None
+        if 'fantasy' in ident:
+            path='football/nfl'
+            if ident.startswith('yahoo_'):
+                from _fantasy_yahoo import get_json,league_key,access_token
+                def game_code(value):
+                    if isinstance(value,dict):
+                        if value.get('code') in ('nfl','nba','mlb','nhl'):return value['code']
+                        values=value.values()
+                    elif isinstance(value,list):values=value
+                    else:return None
+                    return next((code for child in values if (code:=game_code(child))),None)
+                try:
+                    game=get_json('/game/'+league_key(options).split('.',1)[0]+'/metadata',access_token(options))
+                    code=game_code(game)
+                    path={'nfl':'football/nfl','nba':'basketball/nba','mlb':'baseball/mlb','nhl':'hockey/nhl'}.get(code)
+                except Exception:path=None
+        elif ident.endswith('_standings') or ident=='sports_standings':
+            from standings import endpoint
+            try:path=endpoint({'id':ident},options).split('/sports/',1)[1].removesuffix('/standings')
+            except ValueError:pass
+        if path:
+            import urllib.request
+            try:
+                url='https://site.api.espn.com/apis/site/v2/sports/'+path+'/scoreboard'
+                with urllib.request.urlopen(urllib.request.Request(url,headers={'User-Agent':'Pixora/0.1'}),timeout=12) as response:
+                    scoreboard=json.loads(response.read().decode('utf-8'))
+                sports_meta['live']=any(e.get('status',{}).get('type',{}).get('state')=='in' for e in scoreboard.get('events',[]))
+            except Exception:pass
+
     if request.get('events'):
         for name,value in vars(module).items():
             if isinstance(value,dict) and ('STATE' in name or name in ('_LAST_SEEN','_LAST_FLIGHT_POS','_LANDED_FLIGHT_EVENTS')):
@@ -210,7 +244,7 @@ def run(request):
             warmed=[{'body':base64.b64encode(artwork(body,width,timing,True)).decode(),'members':members}]
         except Exception:pass
     return {'body':base64.b64encode(normal).decode() if normal else None,'duration':max(1,min(300,int(duration))),
-        'skip':normal is None,'event':event,'state':state,'warm_graphics':warmed,'live_sports':sports_meta.get('live') is True}
+        'skip':normal is None,'event':event,'state':state,'warm_graphics':warmed,'live_sports':sports_meta.get('live') is True or (isinstance(result,dict) and result.get('_sports_live') is True)}
 
 
 if __name__=='__main__':

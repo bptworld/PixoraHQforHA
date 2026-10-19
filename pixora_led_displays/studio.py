@@ -26,7 +26,7 @@ class Studio:
         self.pipeline=Pipeline(root,self);self.monitors={};self.monitor_errors={};self.card_timing={};self.artwork_timing={};self.skipped={}
         self.runtime={ident:{'playing':False,'error':cfg['last_error']} for ident,cfg in self.data['devices'].items() if cfg.get('last_error')}
         self.graphic_jobs={};self.graphic_prepared={};self.frame_prepared={};self.slice_prepared={}
-        self.recovery_jobs={};self.recovery_task=None;self.starting=set();self.restarting=set();self.play_generation={}
+        self.score_monitors={};self.recovery_jobs={};self.recovery_task=None;self.starting=set();self.restarting=set();self.play_generation={}
 
     async def recover_display(self,ident,info):
         cfg=self.data['devices'].get(ident)
@@ -100,11 +100,14 @@ class Studio:
         result['priority']={ident:{'queued':len(queue),'active':ident in self.pipeline.jobs and not self.pipeline.jobs[ident].done(),'error':self.pipeline.errors.get(ident,'')} for ident,queue in self.pipeline.data['queues'].items()}
         result['cards']=[{k:v for k,v in card.items() if k not in ('files','module')}|{'installed':self.store.installed(card['id']),'specialTests':tests_for(card)} for card in self.store.cards.values()]
         result['cardLibraryRevision']=self.store.catalog['commit'][:8]
+        result['cardLibraryUpdated']=getattr(self.store,'updated_at',None) or self.store.catalog.get('published_at')
         result['displays']=sorted([{k:v for k,v in d.items() if k!='key'} for d in self.displays()],key=lambda d:d['name'].casefold())
         return result
 
     async def stop(self,ident,remember=True):
         self.play_generation[ident]=self.play_generation.get(ident,0)+1
+        score=getattr(self,'score_monitors',{}).pop(ident,None)
+        if score:score.cancel();await asyncio.gather(score,return_exceptions=True)
         monitor=getattr(self,'monitors',{}).pop(ident,None)
         if monitor:monitor.cancel();await asyncio.gather(monitor,return_exceptions=True)
         task=self.jobs.pop(ident,None)
@@ -204,6 +207,10 @@ class Studio:
     def is_live_score(self,item,width,device_id):
         return getattr(self,'live_sports',{}).get(self.sports_key(item,width,device_id),False)
 
+    def score_signal(self,item,width,device_id):
+        if not hasattr(self,'score_signals'):self.score_signals={}
+        return self.score_signals.setdefault(self.sports_key(item,width,device_id),asyncio.Event())
+
     def record_live_score(self,request,value,checked_at=None):
         if not hasattr(self,'live_sports'):self.live_sports={}
         if not hasattr(self,'live_checked'):self.live_checked={}
@@ -213,7 +220,7 @@ class Studio:
         self.live_sports[key]=value is True
         self.live_checked[key]=time.time() if checked_at is None else checked_at
 
-    async def render(self,item,width,device_id="preview",request_only=False,events=False,fresh=False):
+    async def render(self,item,width,device_id="preview",request_only=False,events=False,fresh=False,cached_only=False):
         if 'graphic' in item:return (self.root/'graphics'/item['graphic']).read_bytes()
         card=self.store.cards[item['card']]
         options=dict(item.get('options',{}));options['_target']='matrixportal-s3-'+str(width)+'x32'
@@ -239,9 +246,11 @@ class Studio:
                 if duration:self.card_timing[(request['device_id'],request['module'])]=duration
                 self.record_live_score(request,getattr(self,'artwork_live',{}).get(key,False),cached[0])
         live=self.is_live_score(item,width,device_id)
-        ttl=10 if live else 1 if card['category'] in ('Fun',) or card['id'].startswith('clock') else 60
+        ttl=15 if live else 1 if card['category'] in ('Fun',) or card['id'].startswith('clock') else 60
+        background=getattr(self,'score_monitors',{}).get(device_id)
+        if cached and (cached_only or (not fresh and card['category']=='Sports' and background and not background.done())):return cached[1]
         checked=getattr(self,'live_checked',{}).get(self.sports_key(item,width,device_id),0)
-        if fresh or (cached and live and time.time()-cached[0]>=ttl and time.time()-checked>=10):
+        if fresh or (cached and live and time.time()-cached[0]>=ttl and time.time()-checked>=15):
             task=self.refresh_jobs.get(key) or self.start_refresh(key,request)
             try:return await asyncio.shield(task)
             except asyncio.CancelledError:raise
@@ -330,6 +339,9 @@ class Studio:
         except OSError:logging.warning("Could not save local artwork cache; using rendered artwork in memory.")
         if len(self.cache)>=32:self.cache.pop(next(iter(self.cache)))
         self.cache[key]=(time.time(),out)
+        card=self.store.cards.get(request.get('card_id'),{})
+        if card.get('category')=='Sports':
+            self.score_signal({'card':request['card_id'],'options':request.get('identity_options',{})},request['width'],request['device_id']).set()
         return out
 
     async def run_worker(self,request):
@@ -445,6 +457,35 @@ class Studio:
             else:frames[0].save(out,'PNG')
             return out.getvalue()
 
+    async def score_monitor(self,ident):
+        due={}
+        try:
+            while self.data['devices'].get(ident,{}).get('playing'):
+                cfg=self.data['devices'][ident]
+                if not self.quiet(cfg):
+                    width=next((d['width'] for d in self.displays() if d['id']==ident),None)
+                    if width is None:
+                        await asyncio.sleep(1)
+                        continue
+                    for item in list(self.data['decks'].get(cfg.get('deck'),{}).get('items',[])):
+                        card=self.store.cards.get(item.get('card'),{})
+                        if not item.get('enabled') or card.get('category')!='Sports':continue
+                        key=json.dumps([item,self.store.catalog['commit']],sort_keys=True)
+                        now=time.monotonic()
+                        if due.get(key,0)>now:continue
+                        try:
+                            await self.render(item,width,device_id=ident,fresh=True)
+                            warning=self.runtime.get(ident,{}).get('warning','')
+                            if warning.startswith('Sports background update delayed;'):self.runtime[ident].pop('warning',None)
+                        except asyncio.CancelledError:raise
+                        except CardSkipped:pass
+                        except Exception:
+                            self.runtime.setdefault(ident,{})['warning']='Sports background update delayed; keeping the last available artwork.'
+                        interval=15 if self.is_live_score(item,width,ident) else 300 if 'standings' in card.get('id','') else 60
+                        due[key]=max(time.monotonic(),now+interval)
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:raise
+
     async def monitor(self,ident):
         next_checks={}
         try:
@@ -533,7 +574,7 @@ class Studio:
             return
         raise asyncio.CancelledError
 
-    async def deliver(self,client,body,width,duration,owner='deck',ident=None,once=False,wire_ident=None,synchronize=None,group_check=None):
+    async def deliver(self,client,body,width,duration,owner='deck',ident=None,once=False,wire_ident=None,synchronize=None,group_check=None,refresh_signal=None):
         frames=await self.prepared_frames(body,width)
         if synchronize:
             # All wall slices are decoded before the barrier releases any panel.
@@ -558,6 +599,17 @@ class Studio:
                 return False
             elapsed=time.monotonic()-started
             wait=max(0,step-elapsed)
+            if refresh_signal is not None:
+                pending=wait
+                while pending>0:
+                    if refresh_signal.is_set():return float(max(0,remaining-elapsed-(wait-pending)))
+                    pause=min(1,pending)
+                    left=await self.pipeline.delay(ident,pause) if ident else 0
+                    if not ident:await asyncio.sleep(pause)
+                    if left>0:raise PriorityMessageActive('An interrupt is ready.')
+                    pending-=pause
+                remaining-=max(step,elapsed);position+=1
+                continue
             left=await self.pipeline.delay(ident,wait) if ident else 0
             if not ident:await asyncio.sleep(wait)
             played=max(0,step-left);remaining-=max(played,elapsed)
@@ -567,26 +619,23 @@ class Studio:
 
     async def deliver_score(self,client,body,width,duration,item,ident):
         remaining=float(duration)
+        sports=self.store.cards.get(item.get('card'),{}).get('category')=='Sports'
         while remaining>0:
             if self.quiet(self.data['devices'].get(ident,{})):return
-            live=self.is_live_score(item,width,ident)
-            age=max(0,time.time()-getattr(self,'live_checked',{}).get(self.sports_key(item,width,ident),time.time()))
-            step=min(remaining,max(.05,10-age)) if live else remaining
-            delivered=await self.deliver(client,body,width,step,ident=ident)
+            signal=self.score_signal(item,width,ident) if sports else None
+            if sports:
+                signal.clear()
+                # The background poller owns provider requests. Showing a card
+                # only reads its latest prepared artwork, including hidden polls.
+                try:body=await self.render(item,width,device_id=ident,cached_only=True)
+                except asyncio.CancelledError:raise
+                except Exception:pass
+            step=remaining
+            delivered=await self.deliver(client,body,width,step,ident=ident,**({'refresh_signal':signal} if signal else {}))
             if delivered is False:return
+            if type(delivered) is float:
+                remaining=delivered;continue
             remaining-=step
-            if remaining<=0 or not live or self.quiet(self.data['devices'].get(ident,{})):return
-            started=time.monotonic()
-            try:
-                body=await self.render(item,width,device_id=ident,fresh=True)
-                if self.runtime.get(ident,{}).get('warning','').startswith('Live score update delayed;'):
-                    self.runtime[ident].pop('warning',None)
-            except asyncio.CancelledError:raise
-            except Exception:
-                self.runtime.setdefault(ident,{})['warning']='Live score update delayed; keeping the last score and checking again shortly.'
-                if not hasattr(self,'live_checked'):self.live_checked={}
-                self.live_checked[self.sports_key(item,width,ident)]=time.time()
-            remaining-=max(0,time.monotonic()-started)
 
     async def deliver_timeline(self,client,frames,width,duration,start,owner,wire_ident,once,check):
         import bisect,math
@@ -666,6 +715,8 @@ class Studio:
         self.runtime[ident]={'playing':True,'status':'Preparing the first card…'}
         self.jobs[ident]=asyncio.create_task(self.player(ident))
         self.monitors[ident]=asyncio.create_task(self.monitor(ident))
+        if not hasattr(self,'score_monitors'):self.score_monitors={}
+        self.score_monitors[ident]=asyncio.create_task(self.score_monitor(ident))
 
     async def playback_info(self,ident,client):
         # These are read-only checks. A temporarily unavailable panel must not
@@ -1035,13 +1086,19 @@ class Studio:
             if any(i.get('graphic')==ident for d in self.data['decks'].values() for i in d['items']):raise ValueError('Remove this graphic from saved decks first.')
             await self.mutate(lambda:self.data['graphics'].pop(ident,None));(self.root/'graphics'/ident).unlink(missing_ok=True);return web.json_response(self.public())
         async def update_cards(request):
-            from card_updates import fetch,install
-            catalog=await fetch(self.app['session'])
-            async with self.lock:
-                changed=await install(self.store,catalog,self.used())
-                self.cache.clear();self.skipped.clear();self.artwork_timing.clear()
-                self.graphic_prepared.clear();self.frame_prepared.clear();self.slice_prepared.clear()
-            return web.json_response({'state':self.public(),'message':('Card library updated. Saved decks and playback settings preserved.' if changed else 'Your card library is already up to date.')})
+            try:
+                from card_updates import fetch,install
+                catalog=await fetch(self.app['session'])
+                async with self.lock:
+                    changed=await install(self.store,catalog,self.used())
+                    self.cache.clear();self.skipped.clear();self.artwork_timing.clear()
+                    self.graphic_prepared.clear();self.frame_prepared.clear();self.slice_prepared.clear()
+                return web.json_response({'state':self.public(),'message':('Card library updated. Saved decks and playback settings preserved.' if changed else 'Your card library is already up to date.')})
+            except asyncio.CancelledError:raise
+            except ValueError:raise
+            except Exception as exc:
+                logging.exception("Card library update failed")
+                raise ValueError("Card update failed. Saved decks were not changed. Check LED Studio logs for details.") from exc
         async def custom_upload(request):
             if request.headers.get('X-Pixora-Trust-Code')!='yes':raise ValueError('Confirm that you trust this Python code before importing it.')
             from custom_cards import describe,MAX_SOURCE

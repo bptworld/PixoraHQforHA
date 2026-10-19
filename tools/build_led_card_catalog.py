@@ -60,6 +60,7 @@ for name in names:
 imported_helpers={name for card in registry['cards'] for name in card['files'] if name.endswith('.py') and name != 'addons/'+card['module']+'.py'}
 registry['shared_files']=[name for name in sorted(paths) if name in imported_helpers or name in ('card_utils.py','event_sport_utils.py','LICENSE') or (name.startswith('assets/') and not name.startswith('assets/park-art/')) or name.startswith('addons/_')]
 registry['commit']=commit
+registry['published_at']=subprocess.check_output(['git','-C',str(source),'show','-s','--format=%cI',commit],text=True).strip()
 registry['schema']=1
 registry['renderer_api']=1
 out=Path(__file__).resolve().parents[1]/'pixora_led_displays/card_catalog.json'

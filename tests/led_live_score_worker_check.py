@@ -14,6 +14,8 @@ if len(sys.argv)>1 and sys.argv[1]=='worker':
     event={'id':'game','date':datetime.now(timezone.utc).isoformat(),'status':{'type':status},'competitions':[{'id':'game','status':{'type':status},'competitors':teams}]}
     def urlopen(request,*args,**kwargs):
         url=request.full_url if isinstance(request,urllib.request.Request) else str(request)
+        if 'standings' in url:
+            response=io.BytesIO(json.dumps({'children':[]}).encode());response.status=200;return response
         if 'scoreboard' not in url:raise urllib.error.URLError('Offline worker check')
         response=io.BytesIO(json.dumps({'events':[event]}).encode());response.status=200;return response
     urllib.request.urlopen=urlopen
@@ -24,11 +26,11 @@ if len(sys.argv)>1 and sys.argv[1]=='worker':
     with Image.open(io.BytesIO(base64.b64decode(result['body']))) as image:assert image.size==(request['width'],32)
 else:
     root=sys.argv[1]
-    for module,team in (('nba','BOS'),('nfl','NE')):
+    for module,team in (('nba','BOS'),('nfl','NE'),('nba_standings','BOS')):
         for width in (64,128):
             for phase in ('pre','in','post'):
                 request={'root':root,'module':module,'width':width,'protocol':2,'dwell':25,'settings':{},'events':False,
                     'options':{'favoriteTeam':team,'testPhase':phase,'_target':f'matrixportal-s3-{width}x32'}}
                 result=subprocess.run([sys.executable,__file__,'worker'],input=json.dumps(request).encode(),capture_output=True,timeout=30)
                 assert result.returncode==0,result.stderr.decode()
-    print('Public score workers passed: NBA and NFL at both sizes, selected-game pre/live/final state, real rendered artwork and no provider network.')
+    print('Public score workers passed: NBA, NFL and NBA standings at both sizes, selected-game pre/live/final state, real rendered artwork and no provider network.')

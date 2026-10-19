@@ -2,6 +2,7 @@
 import asyncio,hashlib,json,os,re,shutil,uuid
 from pathlib import Path,PurePosixPath
 import aiohttp
+from datetime import datetime,timezone
 
 URL='https://raw.githubusercontent.com/bptworld/pixora/main/cards/ha-catalog.json'
 MAX_CATALOG=2*1024*1024
@@ -104,11 +105,13 @@ async def install(store,catalog,used):
             from standings import configure
             from special_graphics import configure_scoring_choices
             configure(staged.cards);configure_scoring_choices(staged.cards)
+            updated_at=datetime.now(timezone.utc).isoformat()
             with temp.open('w',encoding='utf-8') as output:
-                json.dump({'generation':folder.name,'catalog':incoming},output);output.flush();os.fsync(output.fileno())
+                json.dump({'generation':folder.name,'catalog':incoming,'updated_at':updated_at},output);output.flush();os.fsync(output.fileno())
             os.replace(temp,pointer)
             changed=sum(old.get('files',{}).get(n)!=meta for n,meta in incoming['files'].items())
             store.root,store.catalog,store.cards=folder,staged.catalog,staged.cards
+            store.updated_at=updated_at
             return max(1,changed)
         except BaseException:
             shutil.rmtree(folder,ignore_errors=True);raise
