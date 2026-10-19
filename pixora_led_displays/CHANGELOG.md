@@ -1,3 +1,9 @@
+# 1.2.31
+
+- Make Pac-Man Chase a compact maze with smaller characters, corridor-following movement, dots consumed by Pac-Man, and independently randomized ghost routes.
+
+- Allow Quiet Hours brightness of 0% to turn individual displays completely off. Preserve zero after saving and restarting, and restore normal brightness and deck playback when Quiet Hours ends. Displays set above zero still show the quiet clock.
+
 # 1.2.30
 
 - Restore animated Pixel Aquarium on 64×32 and 128×32 displays, with independent randomized swimming paths, smooth turns and working speed choices. Refresh existing downloaded copies through the verified card catalog. No panel firmware update is needed.

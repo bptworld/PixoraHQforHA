@@ -1,5 +1,5 @@
 """Overnight clock handoff and lost brightness acknowledgments without hardware."""
-import asyncio,base64,io,sys,tempfile
+import asyncio,base64,io,json,sys,tempfile
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,11 +20,11 @@ assert not quiet_hours.active(config,datetime(2026,10,19,6,tzinfo=zone))
 assert not quiet_hours.active({**config,'quietEnd':'22:30'},datetime(2026,10,18,23,tzinfo=zone))
 assert quiet_hours.boundary(config,datetime(2026,11,1,0,0,tzinfo=zone))==7*3600,'DST overnight boundary'
 
-async def check(width,fail_value):
+async def check(width,fail_value,quiet_brightness):
     current=datetime(2026,10,18,22,29,59,tzinfo=zone)
     studio=Studio.__new__(Studio)
     items=[{'id':name,'card':name,'duration':300,'enabled':True} for name in ('first','second')]
-    studio.data={'settings':{'timezone':'America/New_York','timeFormat':'12'},'devices':{'panel':{**config,'deck':'deck','playing':True,'resume_on_boot':True,'brightness':60}},'decks':{'deck':{'items':items}}}
+    studio.data={'settings':{'timezone':'America/New_York','timeFormat':'12'},'devices':{'panel':{**config,'quietBrightness':quiet_brightness,'deck':'deck','playing':True,'resume_on_boot':True,'brightness':60}},'decks':{'deck':{'items':items}}}
     studio.runtime={};studio.card_timing={}
     studio.store=SimpleNamespace(root=Path('D:/planner/.build-tmp/led-public-card-source/cards'),cards={name:{'name':name} for name in ('first','second')})
     class Panel:
@@ -51,7 +51,7 @@ async def check(width,fail_value):
             assert duration==1,'Long card crosses quiet-hours boundary'
             current=datetime(2026,10,18,22,30,tzinfo=zone)
         elif status.startswith('Quiet'):
-            assert panel.brightness==10
+            assert panel.brightness==quiet_brightness
             if current.hour==22:current=datetime(2026,10,19,5,59,59,tzinfo=zone)
             else:
                 assert duration==1
@@ -69,8 +69,9 @@ async def check(width,fail_value):
     with patch('quiet_hours.now',lambda settings:current),patch('studio.asyncio.sleep',sleep):
         try:await studio.player('panel')
         except asyncio.CancelledError:pass
-    assert phases==['first','Quiet hours · Clock','Quiet hours · Clock','second'],phases
-    assert panel.writes==[10,60],panel.writes
+    quiet_status='Quiet hours · Off' if quiet_brightness==0 else 'Quiet hours · Clock'
+    assert phases==['first',quiet_status,quiet_status,'second'],phases
+    assert panel.writes==[quiet_brightness,60],panel.writes
     assert studio.data['devices']['panel']['playing'] and 'last_error' not in studio.data['devices']['panel']
     # Saving settings must preserve an existing pause as well as running state.
     async def mutate(fn):fn()
@@ -79,7 +80,7 @@ async def check(width,fail_value):
         studio.data['devices']['panel']['playing']=playing
         await studio.save_display_settings('panel',{**config,'brightness':60,'quietBrightness':0})
         assert studio.data['devices']['panel']['playing'] is playing
-        assert studio.data['devices']['panel']['quietBrightness']==10
+        assert studio.data['devices']['panel']['quietBrightness']==0
         assert studio.data['devices']['panel']['resume_on_boot'] is True
     studio.quiet=lambda cfg:cfg.get('quiet',False)
     studio.data['devices']['other']={'quiet':False}
@@ -88,7 +89,25 @@ async def check(width,fail_value):
 
 async def main():
     for width in (64,128):
-        for value in (None,10,60):await check(width,value)
+        for brightness in (0,10):
+            for value in (None,brightness,60):await check(width,value,brightness)
+    with tempfile.TemporaryDirectory() as folder:
+        root=Path(folder)
+        saved={'devices':{'off':{**config,'quietBrightness':0},'clock':config},'decks':{},'settings':{}}
+        (root/'studio.json').write_text(json.dumps(saved),encoding='utf-8')
+        studio=Studio({'session':None},root,lambda ident:None,lambda:[])
+        assert studio.data['devices']['off']['quietBrightness']==0,'Restart changed explicit off setting'
+        assert studio.data['devices']['clock']['quietBrightness']==10
+        writes=[]
+        class SettingsPanel:
+            async def info(self):return {'localDecks':True,'brightness':10}
+            async def request(self,path,payload):writes.append(payload['brightness'])
+        studio.selected=lambda ident:SettingsPanel()
+        studio.quiet=lambda cfg:True
+        await studio.save_display_settings('off',{**config,'quietBrightness':0})
+        assert writes==[0],'Saving zero during Quiet Hours did not turn panel off'
+        restored=Studio({'session':None},root,lambda ident:None,lambda:[])
+        assert restored.data['devices']['off']['quietBrightness']==0
     with tempfile.TemporaryDirectory() as folder:
         calls=[]
         class Panel:
@@ -107,4 +126,4 @@ async def main():
         await pipeline.submit([('panel',event)])
         assert calls==['HA alert'],'Quiet-hour event replayed in the morning'
 asyncio.run(main())
-print('Quiet Hours passed: clock at 10%, both sizes, midnight/DST, next-card resume, lost response reconciliation without duplicate writes, settings state and event suppression.')
+print('Quiet Hours passed: off at 0% or clock at 10%, both sizes, midnight/DST, next-card resume, lost response reconciliation without duplicate writes, settings state and event suppression.')

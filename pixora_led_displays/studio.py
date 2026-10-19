@@ -22,8 +22,6 @@ class Studio:
         self.app,self.root,self.selected,self.displays=app,root,selected,displays
         self.file=root/'studio.json';self.lock=asyncio.Lock();self.io_lock=asyncio.Lock();self.jobs={};self.runtime={};self.cache={};self.refresh_jobs={};self.renderer_revision=hashlib.sha256(b''.join(Path(__file__).with_name(name).read_bytes() for name in ('card_worker.py','special_graphics.py','graphic_cache.py','standings.py','graphic_layout.py'))).hexdigest()
         self.data=json.loads(self.file.read_text(encoding='utf-8')) if self.file.exists() else {'decks':{},'devices':{},'groups':{},'graphics':{},'settings':{'timezone':os.environ.get('TZ','UTC'),'timeFormat':'12','temperatureUnits':'F'}}
-        for cfg in self.data['devices'].values():
-            if cfg.get('quiet') and not cfg.get('quietBrightness'):cfg['quietBrightness']=10
         self.store=CardStore(app['session'],root/'downloaded-cards')
         self.pipeline=Pipeline(root,self);self.monitors={};self.monitor_errors={};self.card_timing={};self.artwork_timing={};self.skipped={}
         self.runtime={ident:{'playing':False,'error':cfg['last_error']} for ident,cfg in self.data['devices'].items() if cfg.get('last_error')}
@@ -573,10 +571,9 @@ class Studio:
 
     async def save_display_settings(self,ident,value):
         # Configuration saves preserve both running decks and explicit pauses.
-        if value.get('quiet') and not value.get('quietBrightness'):value['quietBrightness']=10
         await self.mutate(lambda:self.data['devices'].setdefault(ident,{}).update(value))
         cfg=self.data['devices'][ident]
-        brightness=(cfg.get('quietBrightness') or 10) if self.quiet(cfg) else cfg.get('brightness',60)
+        brightness=cfg.get('quietBrightness',10) if self.quiet(cfg) else cfg.get('brightness',60)
         try:
             client=self.selected(ident);info=await client.info()
             if info.get('localDecks'):await self.apply_brightness(ident,client,info,brightness)
@@ -628,7 +625,7 @@ class Studio:
                 if hasattr(self,'pipeline'):await self.pipeline.wait_ready(ident)
                 client=self.selected(ident);info=await self.playback_info(ident,client)
                 is_quiet=self.quiet(cfg)
-                brightness=max(1,cfg.get('quietBrightness') or 10) if is_quiet else cfg.get('brightness',60)
+                brightness=cfg.get('quietBrightness',10) if is_quiet else cfg.get('brightness',60)
                 if brightness!=last_brightness or ('brightness' in info and info['brightness']!=brightness):
                     if not await self.apply_brightness(ident,client,info,brightness):continue
                     last_brightness=brightness
@@ -640,7 +637,7 @@ class Studio:
                         prepared.cancel();await asyncio.gather(prepared,return_exceptions=True);prepared=None
                     current=quiet_hours.now(self.data.get('settings',{}))
                     body=quiet_hours.clock(info['width'],current,self.data['settings'],self.store.root/'assets')
-                    self.runtime[ident]={'playing':True,'status':'Quiet hours · Clock'}
+                    self.runtime[ident]={'playing':True,'status':'Quiet hours · Off' if brightness==0 else 'Quiet hours · Clock'}
                     try:
                         writing=True
                         await self.deliver(client,body,info['width'],self.quiet_remaining(cfg,min(10,60-current.second)),ident=ident)
