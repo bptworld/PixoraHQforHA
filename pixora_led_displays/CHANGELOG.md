@@ -1,3 +1,7 @@
+# 1.2.32
+
+- Use the classic Pac-Man maze with a cropped camera following Pac-Man, connected side tunnels, four randomly routed ghosts, and dot eating.
+
 # 1.2.31
 
 - Make Pac-Man Chase a compact maze with smaller characters, corridor-following movement, dots consumed by Pac-Man, and independently randomized ghost routes.
