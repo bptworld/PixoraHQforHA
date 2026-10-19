@@ -197,7 +197,23 @@ class Studio:
             if response.status!=200:raise ValueError('Could not read Home Assistant. Check the entity or HA connection.')
             return await response.json()
 
-    async def render(self,item,width,device_id="preview",request_only=False,events=False):
+    def sports_key(self,item,width,device_id):
+        card=self.store.cards.get(item.get('card'),{})
+        return json.dumps([device_id,card.get('module'),width,item.get('options',{})],sort_keys=True)
+
+    def is_live_score(self,item,width,device_id):
+        return getattr(self,'live_sports',{}).get(self.sports_key(item,width,device_id),False)
+
+    def record_live_score(self,request,value,checked_at=None):
+        if not hasattr(self,'live_sports'):self.live_sports={}
+        if not hasattr(self,'live_checked'):self.live_checked={}
+        key=json.dumps([request.get('device_id'),request['module'],request['width'],request.get('identity_options',request['options'])],sort_keys=True)
+        if len(self.live_sports)>=300:
+            old=next(iter(self.live_sports));self.live_sports.pop(old);self.live_checked.pop(old,None)
+        self.live_sports[key]=value is True
+        self.live_checked[key]=time.time() if checked_at is None else checked_at
+
+    async def render(self,item,width,device_id="preview",request_only=False,events=False,fresh=False):
         if 'graphic' in item:return (self.root/'graphics'/item['graphic']).read_bytes()
         card=self.store.cards[item['card']]
         options=dict(item.get('options',{}));options['_target']='matrixportal-s3-'+str(width)+'x32'
@@ -214,7 +230,6 @@ class Studio:
         key=hashlib.sha256(json.dumps(request,sort_keys=True).encode()).hexdigest()
         if getattr(self,'skipped',{}).get(key,0)>time.time():raise CardSkipped('No active artwork for this card.')
         cached=self.cache.get(key)
-        ttl=1 if card['category'] in ('Fun',) or card['id'].startswith('clock') else 60
         if cached is None:
             cached=await asyncio.to_thread(self.read_artwork,key)
             if cached:
@@ -222,8 +237,22 @@ class Studio:
                 self.cache[key]=cached
                 duration=getattr(self,'artwork_timing',{}).get(key)
                 if duration:self.card_timing[(request['device_id'],request['module'])]=duration
+                self.record_live_score(request,getattr(self,'artwork_live',{}).get(key,False),cached[0])
+        live=self.is_live_score(item,width,device_id)
+        ttl=10 if live else 1 if card['category'] in ('Fun',) or card['id'].startswith('clock') else 60
+        checked=getattr(self,'live_checked',{}).get(self.sports_key(item,width,device_id),0)
+        if fresh or (cached and live and time.time()-cached[0]>=ttl and time.time()-checked>=10):
+            task=self.refresh_jobs.get(key) or self.start_refresh(key,request)
+            try:return await asyncio.shield(task)
+            except asyncio.CancelledError:raise
+            except CardSkipped:raise
+            except Exception:
+                if not cached or not live or fresh:raise
+                self.live_checked[self.sports_key(item,width,device_id)]=time.time()
+                self.runtime.setdefault(device_id,{})['warning']='Live score update delayed; keeping the last score and checking again shortly.'
+                return cached[1]
         if cached:
-            if time.time()-cached[0]>=ttl and key not in self.refresh_jobs:
+            if not live and time.time()-cached[0]>=ttl and key not in self.refresh_jobs:
                 self.start_refresh(key,request)
             return cached[1]
         task=self.refresh_jobs.get(key)
@@ -249,6 +278,8 @@ class Studio:
             meta=path.with_suffix('.json')
             if meta.is_file():
                 timing=json.loads(meta.read_text());duration=timing.get('duration')
+                if not hasattr(self,'artwork_live'):self.artwork_live={}
+                self.artwork_live[key]=timing.get('live_sports') is True
                 if type(duration)is int and 1<=duration<=300:
                     if not hasattr(self,'artwork_timing'):self.artwork_timing={}
                     self.artwork_timing[key]=duration
@@ -257,14 +288,14 @@ class Studio:
         except CardSkipped:raise
         except (OSError,ValueError):return None
 
-    def write_artwork(self,key,body,duration=None):
+    def write_artwork(self,key,body,duration=None,live=False):
         folder=self.root/'render-cache';folder.mkdir(parents=True,exist_ok=True)
         path=folder/(key+'.image');temp=path.with_suffix('.tmp')
         temp.write_bytes(body);os.chmod(temp,0o600);os.replace(temp,path)
         path.with_suffix('.skip').unlink(missing_ok=True)
         if duration:
             meta=path.with_suffix('.json');staged=meta.with_suffix('.tmp')
-            staged.write_text(json.dumps({'duration':duration}));os.chmod(staged,0o600);os.replace(staged,meta)
+            staged.write_text(json.dumps({'duration':duration,'live_sports':live}));os.chmod(staged,0o600);os.replace(staged,meta)
         for old in sorted(folder.glob('*.image'),key=lambda p:p.stat().st_mtime,reverse=True)[32:]:
             old.unlink(missing_ok=True);old.with_suffix('.json').unlink(missing_ok=True)
 
@@ -289,7 +320,8 @@ class Studio:
             except OSError:logging.warning('Could not save the inactive-card cache.')
             raise
         duration=self.card_timing.get((request['device_id'],request['module']))
-        writing=asyncio.create_task(asyncio.to_thread(self.write_artwork,key,out,duration))
+        live=getattr(self,'live_sports',{}).get(json.dumps([request.get('device_id'),request['module'],request['width'],request.get('identity_options',request['options'])],sort_keys=True),False)
+        writing=asyncio.create_task(asyncio.to_thread(self.write_artwork,key,out,duration,live))
         try:await asyncio.shield(writing)
         except asyncio.CancelledError:
             # Let an in-flight atomic disk write finish before cleanup removes its folder.
@@ -314,6 +346,7 @@ class Studio:
 
     async def render_request(self,request):
         result=await self.run_worker(request)
+        if not request.get('events'):self.record_live_score(request,result.get('live_sports',False))
         if request.get('events'):
             await self.accept_event(request,result)
         if result.get('skip'):raise CardSkipped('No active artwork for this card.')
@@ -522,7 +555,7 @@ class Studio:
             except DisplayWriteUnconfirmed:
                 if owner!='deck' or not ident:raise
                 await self.recover_deck_delivery(ident,client)
-                return
+                return False
             elapsed=time.monotonic()-started
             wait=max(0,step-elapsed)
             left=await self.pipeline.delay(ident,wait) if ident else 0
@@ -530,6 +563,30 @@ class Studio:
             played=max(0,step-left);remaining-=max(played,elapsed)
             if left>0:raise PriorityMessageActive('An interrupt is ready.')
             position+=1
+        return True
+
+    async def deliver_score(self,client,body,width,duration,item,ident):
+        remaining=float(duration)
+        while remaining>0:
+            if self.quiet(self.data['devices'].get(ident,{})):return
+            live=self.is_live_score(item,width,ident)
+            age=max(0,time.time()-getattr(self,'live_checked',{}).get(self.sports_key(item,width,ident),time.time()))
+            step=min(remaining,max(.05,10-age)) if live else remaining
+            delivered=await self.deliver(client,body,width,step,ident=ident)
+            if delivered is False:return
+            remaining-=step
+            if remaining<=0 or not live or self.quiet(self.data['devices'].get(ident,{})):return
+            started=time.monotonic()
+            try:
+                body=await self.render(item,width,device_id=ident,fresh=True)
+                if self.runtime.get(ident,{}).get('warning','').startswith('Live score update delayed;'):
+                    self.runtime[ident].pop('warning',None)
+            except asyncio.CancelledError:raise
+            except Exception:
+                self.runtime.setdefault(ident,{})['warning']='Live score update delayed; keeping the last score and checking again shortly.'
+                if not hasattr(self,'live_checked'):self.live_checked={}
+                self.live_checked[self.sports_key(item,width,ident)]=time.time()
+            remaining-=max(0,time.monotonic()-started)
 
     async def deliver_timeline(self,client,frames,width,duration,start,owner,wire_ident,once,check):
         import bisect,math
@@ -669,6 +726,10 @@ class Studio:
                         if prepared is not None:
                             prepared.cancel();await asyncio.gather(prepared,return_exceptions=True);prepared=None
                         body=await self.render(item,info['width'],device_id=ident)
+                    # Prefetch may have happened earlier in a short deck rotation.
+                    # Recheck live-score freshness before showing that snapshot.
+                    if self.is_live_score(item,info['width'],ident):
+                        body=await self.render(item,info['width'],device_id=ident)
                     # Artwork errors are isolated before any physical display write.
                     with Image.open(io.BytesIO(body)) as artwork:artwork.verify()
                 except CardSkipped:
@@ -690,7 +751,7 @@ class Studio:
                 prepared=asyncio.create_task(self.render(next_item,info['width'],device_id=ident))
                 try:
                     writing=True
-                    await self.deliver(client,body,info['width'],self.quiet_remaining(cfg,self.card_timing.get((ident,self.store.cards.get(item.get('card'),{}).get('module')),item['duration'])),ident=ident)
+                    await self.deliver_score(client,body,info['width'],self.quiet_remaining(cfg,self.card_timing.get((ident,self.store.cards.get(item.get('card'),{}).get('module')),item['duration'])),item,ident)
                     writing=False
                 except PriorityMessageActive:
                     writing=False

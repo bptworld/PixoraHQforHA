@@ -1,3 +1,7 @@
+# 1.2.38
+
+- Refresh live score-card artwork every ten seconds while it is on screen, including long card durations. Use the selected game state to keep slower refresh outside live play. Keep special-graphic polling unchanged and retain the last good score if a provider read fails.
+
 # 1.2.37
 
 - Compress Pac-Man wall interiors into thick bars so more corridors fit while keeping five-pixel characters, random starts and routes, collisions, and two visible ghosts.

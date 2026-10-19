@@ -112,7 +112,8 @@ def run(request):
         if state is None:raise ValueError('Choose an available HA entity.')
         module._state=lambda *_:state
         request['options'].update({'host':'local','token':'local'})
-    options=dict(request['options']);options.update({'_pixora_target':'pixora-s3-wide' if request['width']==128 else 'pixora-s3','_settings':settings,'_width':request['width'],'_device_id':request.get('device_id','preview'),
+    sports_meta={}
+    options=dict(request['options']);options.update({'_sports_meta':sports_meta,'_pixora_target':'pixora-s3-wide' if request['width']==128 else 'pixora-s3','_settings':settings,'_width':request['width'],'_device_id':request.get('device_id','preview'),
         '_dwell':request.get('dwell',15),'_is_prefetch':not request.get('events',False),
         '_local_frame_stream':request.get('protocol')==2})
     if request['module'].endswith('_standings') or request['module']=='sports_standings':
@@ -209,7 +210,7 @@ def run(request):
             warmed=[{'body':base64.b64encode(artwork(body,width,timing,True)).decode(),'members':members}]
         except Exception:pass
     return {'body':base64.b64encode(normal).decode() if normal else None,'duration':max(1,min(300,int(duration))),
-        'skip':normal is None,'event':event,'state':state,'warm_graphics':warmed}
+        'skip':normal is None,'event':event,'state':state,'warm_graphics':warmed,'live_sports':sports_meta.get('live') is True}
 
 
 if __name__=='__main__':
