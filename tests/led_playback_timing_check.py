@@ -84,6 +84,27 @@ async def check():
     except asyncio.CancelledError:pass
     assert sequence==['first','second','third'],sequence
     assert ready,'Player did not wait for the interrupt queue'
+    # A temporarily empty sports card must rejoin a deck that also has a clock.
+    from studio import CardSkipped
+    elapsed=0;attempts=[];sequence=[]
+    studio.data['decks']['deck']={'items':items}
+    async def recovering_render(item,width,**kwargs):
+        if item['id']=='second':
+            attempts.append(elapsed)
+            if elapsed<15:raise CardSkipped('No game yet')
+        return body
+    async def recovering_deliver(*args,**kwargs):
+        nonlocal elapsed
+        await asyncio.sleep(0)
+        sequence.append(studio.runtime['panel']['item']);elapsed+=10
+        if sequence[-1]=='second' or len(sequence)>6:raise asyncio.CancelledError()
+    studio.render=recovering_render;studio.deliver=recovering_deliver
+    studio.data['devices']['panel']['playing']=True
+    with patch('studio.time',SimpleNamespace(monotonic=lambda:elapsed,time=lambda:elapsed)):
+        try:await studio.player('panel')
+        except asyncio.CancelledError:pass
+    assert sequence[-1]=='second',sequence
+    assert len(attempts)>=2 and attempts[-1]>=15,attempts
     print('Playback timing passed: next-card preparation across deck repeat, hold buffer, 300s lease renewal and task cleanup.')
 
 

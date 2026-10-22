@@ -1,3 +1,7 @@
+# 1.2.40
+
+- Recheck temporarily empty cards during normal deck rotation so sports scores and other live-data cards return automatically when content becomes available. Keep other cards playing while waiting.
+
 # 1.2.39
 
 - Add a guided new-display wizard with naming, 64/128 panel selection, reusable private Wi-Fi settings and a unique pairing key for each setup. Install over USB on Home Assistant, use browser USB where supported, download configured first-install firmware or save setup for later. Verify firmware and USB writes, then connect the display to Studio and HA. Preserve existing display management and OTA updates.

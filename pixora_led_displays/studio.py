@@ -729,7 +729,7 @@ class Studio:
         raise asyncio.CancelledError
 
     async def player(self,ident):
-        position=0;last_brightness=None;prepared=None;prepare_key=None;failed={};inactive=set();writing=False;deck_snapshot=None
+        position=0;last_brightness=None;prepared=None;prepare_key=None;failed={};inactive={};writing=False;deck_snapshot=None
         try:
             while True:
                 cfg=self.data['devices'].get(ident,{})
@@ -759,6 +759,8 @@ class Studio:
                 snapshot=json.dumps(deck,sort_keys=True)
                 if snapshot!=deck_snapshot:
                     failed.clear();inactive.clear();deck_snapshot=snapshot
+                # Empty live-data cards can gain content while other cards keep playing.
+                inactive={key:retry_at for key,retry_at in inactive.items() if retry_at>time.monotonic()}
                 items=[i for i in deck.get('items',[]) if i['enabled']]
                 if not items:raise ValueError('Deck has no enabled cards.')
                 if all(i['id'] in failed for i in items):raise ValueError('No playable cards remain. Skipped: '+', '.join(failed.values())+'. Fix the cards, then press Play.')
@@ -784,7 +786,7 @@ class Studio:
                     # Artwork errors are isolated before any physical display write.
                     with Image.open(io.BytesIO(body)) as artwork:artwork.verify()
                 except CardSkipped:
-                    inactive.add(item['id']);continue
+                    inactive[item['id']]=time.monotonic()+15;continue
                 except asyncio.CancelledError:raise
                 except Exception:
                     failed[item['id']]=name
