@@ -2,7 +2,8 @@
 import sys,unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice/custom_components/pixora_voice'))
-from engine import Entity,answer
+from engine import Entity,answer,duration_answer
+from datetime import datetime,timedelta,timezone
 
 
 def catalog():
@@ -22,6 +23,24 @@ def catalog():
 
 
 class MatchingTests(unittest.TestCase):
+    def test_added_phrasings_keep_capability_filtering(self):
+        for text in ['Do you know if the front door is open?','Can you check if the front door is ajar?']:
+            self.assertEqual(answer(text,catalog()).entities,['binary_sensor.front'])
+        self.assertIn('68',answer('Tell me the temp in this room',catalog(),'Living Room').speech)
+
+    def test_unqualified_temperature_never_substitutes_other_room(self):
+        self.assertEqual(answer("What's the temperature?",catalog(),'Living Room').entities,['sensor.living_temp'])
+        self.assertEqual(answer("What's the temperature?",catalog(),'Bedroom').kind,'not_found')
+        self.assertEqual(answer("What's the temperature?",catalog()).kind,'clarify')
+
+    def test_duration_is_current_report_not_invented_history(self):
+        now=datetime.now(timezone.utc);entity=catalog()[1]
+        self.assertIn('reliable time',duration_answer(entity,now).speech)
+        entity.last_changed=now-timedelta(minutes=4)
+        self.assertIn('reported closed for 4 minutes',duration_answer(entity,now).speech)
+        entity.state='unavailable';self.assertIn('unavailable',duration_answer(entity,now).speech)
+        entity.state='off';entity.last_changed=now+timedelta(minutes=1)
+        self.assertIn('reliable time',duration_answer(entity,now).speech)
     def test_front_open_uses_contact_even_when_lock_has_exact_name(self):
         r=answer('Is the front door open?',catalog());self.assertEqual(r.entities,['binary_sensor.front']);self.assertIn('closed',r.speech);self.assertIsNone(r.command)
 

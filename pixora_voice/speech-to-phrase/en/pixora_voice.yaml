@@ -22,3 +22,5 @@ intents:
           - "what is [the] (humidity|battery level|brightness) of [the] {name}"
           - "{area}"
           - "(cancel|never mind)"
+          - "(can you check if|tell me if|do you know if) [the] {name} is (open|closed|on|off|locked|unlocked)"
+          - "tell me [the] (temperature|humidity) in (here|this room|{area})"

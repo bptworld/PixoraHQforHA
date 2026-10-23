@@ -1,5 +1,6 @@
 """Adapter contract tests with fixture HA registries; no HA installation touched."""
 import asyncio,importlib,sys,types,unittest
+from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
@@ -60,7 +61,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_followup_scoped_to_conversation_and_current_states(self):
         self.request.device_id=None
-        r=await self.ask('Turn on the ceiling light');self.assertTrue(r.continue_conversation);self.hass.services.async_call.assert_not_awaited()
+        r=await self.ask('Turn on the ceiling light');self.assertFalse(r.continue_conversation);self.hass.services.async_call.assert_not_awaited()
         r=await self.ask('Kitchen');self.assertIn('Okay, turning on',r.speech);self.assertEqual(self.hass.services.async_call.await_args.args[2]['entity_id'],'light.kitchen')
 
     async def test_cancel_clarification_does_not_send_command(self):
@@ -71,8 +72,73 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         r=await self.ask('Kitchen')
         self.hass.services.async_call.assert_not_awaited()
 
+    async def test_every_reply_ends_listening_including_clarification(self):
+        self.request.device_id=None
+        for text in ['Turn on the ceiling light','Kitchen','Is the ceiling light on?','How long has it been on?','Never mind']:
+            self.assertFalse((await self.ask(text)).continue_conversation)
+
+    async def test_context_memory_is_bounded(self):
+        for i in range(1000):self.agent.followups.put(('user',str(i)),source='home',ids=['light.living'])
+        self.assertEqual(len(self.agent.followups.items),64)
+
+    async def test_timeout_returns_once_and_stops_listening(self):
+        self.hass.services.async_call.side_effect=asyncio.TimeoutError
+        result=await self.ask('Turn on the ceiling light')
+        self.assertIn('could not confirm',result.speech);self.assertFalse(result.continue_conversation)
+        self.hass.services.async_call.assert_awaited_once()
+
+    async def test_context_survives_new_wake_conversation_but_not_new_user(self):
+        await self.ask('Is the ceiling light off?')
+        self.states[1].last_changed=datetime.now(timezone.utc)-timedelta(minutes=3)
+        self.request.text='How long has it been off?'
+        log=NS(conversation_id='new-wake',messages=[]);log.async_add_assistant_content_without_tools=log.messages.append
+        result=await self.agent._async_handle_message(self.request,log)
+        self.assertIn('3 minutes',result.speech);self.assertFalse(result.continue_conversation)
+        self.context.user_id='different-user'
+        self.assertIn('Which device',(await self.ask('How long has it been off?')).speech)
+
     async def test_missing_user_fails_closed(self):
         self.hass.auth.async_get_user.return_value=None
         await self.ask('Turn on the ceiling light');self.hass.services.async_call.assert_not_awaited()
+
+    async def test_read_followup_is_fresh_and_does_not_command(self):
+        self.states[1].last_changed=datetime.now(timezone.utc)-timedelta(minutes=5)
+        await self.ask('Is the ceiling light off?')
+        self.states[1].state='on'
+        result=await self.ask('Is it still off?');self.assertIn('is on',result.speech)
+        result=await self.ask('How long has it been on?');self.assertIn('5 minutes',result.speech)
+        self.hass.services.async_call.assert_not_awaited()
+
+    async def test_followup_permission_and_speaker_isolation(self):
+        await self.ask('Is the ceiling light off?')
+        self.request.satellite_id='another_speaker'
+        self.assertIn('Which device', (await self.ask('How long has it been off?')).speech)
+        self.request.satellite_id=None
+        self.read_denied.add('light.living')
+        self.assertIn('Which device',(await self.ask('How long has it been off?')).speech)
+
+    async def test_followup_expiry_cancel_and_no_pronoun_commands(self):
+        await self.ask('Is the ceiling light off?')
+        for item in self.agent.followups.items.values():item['expires']=0
+        self.assertIn('Which device',(await self.ask('How long has it been off?')).speech)
+        await self.ask('Is the ceiling light off?');await self.ask('Never mind')
+        self.assertIn('Which device',(await self.ask('How long has it been off?')).speech)
+        await self.ask('Is the ceiling light off?');await self.ask('Turn it on')
+        self.hass.services.async_call.assert_not_awaited()
+
+    async def test_room_clarification(self):
+        self.request.device_id=None
+        self.assertIn('Which room',(await self.ask('Turn off the lights')).speech)
+        self.assertIn('turning off',(await self.ask('Kitchen')).speech)
+        self.assertEqual(self.hass.services.async_call.await_args.args[2]['entity_id'],['light.kitchen'])
+
+    async def test_planner_date_followup_uses_same_question(self):
+        from unittest.mock import patch
+        with patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value='A shared event.')) as ask:
+            self.assertFalse((await self.ask("What's Bryan's schedule today?")).continue_conversation)
+            self.assertFalse((await self.ask('And tomorrow?')).continue_conversation)
+            self.assertEqual(ask.await_args.args[1],"What's Bryan's schedule tomorrow?")
+            self.request.device_id='other'
+            await self.ask('And tomorrow?');self.assertEqual(ask.await_count,2)
 
 if __name__=='__main__':unittest.main()

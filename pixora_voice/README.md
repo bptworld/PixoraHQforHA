@@ -100,3 +100,35 @@ Enable **Integrate with Pixora Planner** in the Voice app to reuse the existing 
 Ask about a named person's schedule, Calendar items (including events added by other apps), saved sports games/broadcasts, meals, shared open chores, groceries, pantry, notes, messages, lists, countdowns, alarms and routines. Presence answers use current shared household location and report unknown when stale or unavailable. Room speakers have no verified person identity, so answers use household-shared information only. Private records and separate Budget, Student, Live, Connect and Home Control features are excluded; their shared Calendar entries remain included. This is read-only access; make changes in Planner.
 
 Enabling prepares a small household-name/team vocabulary and restarts Speech-to-Phrase once. Use **Refresh Planner phrases** after renaming people or changing followed teams. Only `pixora_voice_planner.yaml` is generated; existing user phrase files are preserved. Access is disabled immediately when unchecked. Unsupported or ambiguous questions ask for clarification rather than guessing. Date-specific repeating chore calculations are not yet supported.
+
+
+### One request per wake word
+
+Pixora Voice stops listening after every answer, including clarification or failure.
+To ask a follow-up, say **“Okay Nabu” again**, then “How long has it been open?”,
+“Is it still open?” or “And tomorrow?” after a Planner schedule/calendar question.
+Brief hints expire after 90 seconds, isolated by speaker and HA user (or Web UI
+conversation), capped at 64 entries in RAM. There is no automatic continued
+listening. Cancel with “Never mind”. New full questions replace old context.
+All readings and permissions are checked again. Duration describes how long HA
+has reported the current state, not an inferred history while HA was offline.
+Pronoun commands never use remembered device targets; name the device to control it.
+Unqualified temperature/humidity requests use the speaker's HA area; if that
+area is unknown, say the room name in your next request. Explicit rooms take
+precedence. Unavailable readings and stale Planner presence remain unknown.
+
+After updating, use **Install / update Assist integration** and restart HA once.
+Use **Prepare added phrases** under Setup & maintenance to write the small owned
+`pixora_voice_language.yaml` and restart Speech-to-Phrase. Wait for training to
+finish. Your own sentences and Planner vocabulary are preserved. Keep Amy Medium
+and normal speaking pause settings unchanged. No new model or background poller.
+
+Open **Response timing → Load recent timings** to read up to five existing
+Pixora Assist traces on demand. Recognition is measured from detected speech end
+to recognized text; lookup covers local or Planner handling. Speech preparation
+may be deferred or cached and is **not** time to audible playback. Missing stages
+show “not recorded”. Only numeric timings, assistant name and timestamp reach the
+browser; no transcripts, answers, audio URLs or tokens. No extra traces are
+recorded or stored. If HA timing is unavailable, use Voice assistants Debug.
+Failed Planner requests and uncertain device commands produce a bounded spoken
+explanation and are never blindly retried.

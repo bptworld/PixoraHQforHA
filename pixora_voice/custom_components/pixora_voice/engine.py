@@ -1,5 +1,6 @@
 """Deterministic English home questions and commands. No network or model dependencies."""
 from dataclasses import dataclass, field
+from datetime import datetime,timezone
 import re
 import unicodedata
 
@@ -22,6 +23,7 @@ class Entity:
     area: str=''
     aliases: list=field(default_factory=list)
     exposed: bool=True
+    last_changed: datetime|None=None
 
     @property
     def domain(self):return self.entity_id.split('.')[0]
@@ -51,6 +53,12 @@ def target_words(text):return set(normalized(re.sub(r'\b\d{1,3}\s+(?:percent|bri
 def canonical_request(text):
     # Only remove a polite prefix. Negation and conditionals remain visible.
     text=re.sub(r"^(?:can|could|would) you (?:please )?",'',text.strip(),flags=re.I)
+    text=re.sub(r"^do you know (?:whether|if) ",'is ',text,flags=re.I)
+    text=re.sub(r"^do you know (?:what )?(?:the )?temperature",'what is the temperature',text,flags=re.I)
+    text=re.sub(r"^tell me (?:the )?(temperature|humidity)\b",r'what is the \1',text,flags=re.I)
+    text=re.sub(r"\btemp\b",'temperature',text,flags=re.I)
+    text=re.sub(r"\b(?:switched|powered) (on|off)\b",r'\1',text,flags=re.I)
+    text=re.sub(r"\b(?:ajar)\b",'open',text,flags=re.I)
     text=re.sub(r'^please\s+','',text,flags=re.I)
     text=re.sub(r'\b(?:in this room|in my room|in the room)\b','in here',text,flags=re.I)
     text=re.sub(r'^(?:check|tell me) (?:whether|if)\s+','is ',text,flags=re.I)
@@ -69,6 +77,20 @@ def canonical_request(text):
             return str(tens[parts[0]]+(units[parts[1]] if len(parts)>1 else 0))+' percent'
         return m.group(0)
     return re.sub(r'\b((?:one hundred)|(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[ -](?:one|two|three|four|five|six|seven|eight|nine))?)|(?:'+ '|'.join(units)+r')) percent\b',number,text,flags=re.I)
+
+
+def duration_answer(entity,now=None):
+    """Describe only the current reported state's age, without history downloads."""
+    if entity.state in {'unknown','unavailable','None',''}:return Result(f"I can't check {spoken_name(entity)} right now. Its sensor is unavailable.",'unavailable')
+    changed=entity.last_changed;now=now or datetime.now(timezone.utc)
+    if not isinstance(changed,datetime) or changed.tzinfo is None or changed>now:return Result("I don't have a reliable time for that reading.",'unavailable')
+    seconds=int((now-changed).total_seconds())
+    if seconds<60:age='less than a minute'
+    else:
+        count,unit=(seconds//60,'minute') if seconds<3600 else (seconds//3600,'hour') if seconds<86400 else (seconds//86400,'day')
+        age=f'{count} {unit}'+('s' if count!=1 else '')
+    state={'on':'open','off':'closed'}.get(entity.state,entity.state) if entity.domain=='binary_sensor' and capable(entity,'opening','') else entity.state
+    return Result(f'{subject(entity)} has reported {state} for {age}.',entities=[entity.entity_id])
 
 
 def capable(entity,prop,text):
@@ -210,9 +232,12 @@ def answer(text,entities,area=''):
     prop,command=interpret(text)
     if not prop:return Result('I do not understand that request yet. Try asking whether a door is open, whether a lock is locked, or a temperature reading.','unsupported')
     if 'here' in words(text) and not area:return Result("Which room do you mean? I don't know which room this speaker is in yet.",'clarify',property=prop)
+    room_reading=prop in {'temperature','humidity'} and not target_words(text)
+    if room_reading and not area:return Result('Which room do you mean? Please include the room name.','clarify',property=prop)
     if set(words(text))&{'it','them','those'} and not target_words(text):return Result('Which device do you mean? Please include its name.','clarify',property=prop)
     candidates=choose(text,entities,prop,area)
     if 'here' in words(text):candidates=[pair for pair in candidates if normalized(pair[1].area)==normalized(area)]
+    if room_reading and area:candidates=[pair for pair in candidates if normalized(pair[1].area)==normalized(area)]
     explicit_area=any(set(normalized(e.area))<=set(normalized(text)) for e in entities if e.area)
     if command and area and not explicit_area:
         candidates=[pair for pair in candidates if normalized(pair[1].area)==normalized(area)]

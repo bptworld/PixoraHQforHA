@@ -18,6 +18,13 @@ class PhraseTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'settings.json';write_owned(p,'{"enabled":true}');self.assertTrue(json.loads(p.read_text())['enabled'])
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
+ async def test_connection_failure_speaks_and_cleans_pending(self):
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);(root/'.storage').mkdir();(root/'.storage'/planner.SETTINGS).write_text('{"enabled":true}')
+   def fail(*args):raise OSError('fixture connection failure')
+   hass=NS(config=NS(path=lambda *p:str(root.joinpath(*p))),data={},bus=NS(async_fire=fail))
+   self.assertIn("can't reach Planner",await planner.ask(hass,'calendar today'))
+   self.assertEqual(hass.data[planner.DOMAIN]['planner_pending'],{})
  async def test_disabled_never_sends(self):
   with tempfile.TemporaryDirectory() as d:
    fired=[];hass=NS(config=NS(path=lambda *p:str(Path(d).joinpath(*p))),data={},bus=NS(async_fire=lambda *a:fired.append(a)))

@@ -1,3 +1,15 @@
+## 0.1.4
+
+**In Beta Testing — not ready for everyday use.**
+
+- One request per wake word: stop listening after every answer, clarification or failure. Say the wake word again for a follow-up within 90 seconds; never automatically keep listening. Brief context is isolated by speaker/user and capped at 64 hints in RAM.
+- Read-only follow-ups re-read current permitted state; state duration uses HA’s current reported state timestamp, not invented history. Planner schedule questions support “And tomorrow?”.
+- More natural question phrasing and room awareness. Unqualified temperature/humidity requests use the speaker's room; never substitute another room's sensor.
+- Preserve capability matching, Assist exposure and permissions. Unavailable sensors and stale/unknown Planner presence remain unknown.
+- Friendly bounded Planner/command failure replies, without automatic retries of uncertain commands.
+- On-demand recent Assist timing view: recognition after speech ends, lookup and speech preparation. No background polling, extra trace recording, large models or persistent cache. Speech preparation is not actual speaker playback time.
+- Prepare a small owned additional question vocabulary from Setup & maintenance, preserving user phrase files.
+
 ## 0.1.3
 
 **In Beta Testing — not ready for everyday use.**

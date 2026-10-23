@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.3'
+VERSION='0.1.4'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -63,12 +63,21 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         return [s['entity_id'] for s in states if s['entity_id'].startswith('conversation.') and s.get('attributes',{}).get('friendly_name') in {'Pixora Voice','Pixora Voice (Beta)'}]
 
     async def index(request):return web.FileResponse(Path(__file__).with_name('index.html'))
+    async def timings(request):
+        from diagnostics import recent_runs
+        try:
+            available=await agents()
+            async with asyncio.timeout(12):
+                runs=await recent_runs(app['session'],os.environ.get('SUPERVISOR_TOKEN',''),available)
+            return web.json_response({'runs':runs})
+        except (ValueError,KeyError,TypeError,asyncio.TimeoutError,ClientError):
+            return web.json_response({'error':'Timing details are unavailable right now. You can also inspect this assistant under Home Assistant Voice assistants → Debug.'},status=503)
     async def icon(request):return web.FileResponse(Path(__file__).with_name('icon.svg'))
     async def status(request):
         try:available=await agents();error=''
         except (ValueError,asyncio.TimeoutError,ClientError):available=[];error='Home Assistant is reconnecting. Try again shortly.'
         return web.json_response({'version':VERSION,'agents':available,'installed':(config_root/'custom_components/pixora_voice/manifest.json').exists(),'notice':error})
-    from planner_phrases import write_owned,update_phrases
+    from planner_phrases import write_owned,update_phrases,update_local_phrases
     planner_file=config_root/'.storage'/'pixora_voice_planner.json'
     phrase_file=Path('/share/speech-to-phrase/custom_sentences/en/pixora_voice_planner.yaml')
     def planner_enabled():
@@ -105,16 +114,26 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         try:await asyncio.to_thread(install_component,config_root,data_root)
         except ValueError as exc:return web.json_response({'error':str(exc)},status=409)
         return web.json_response({'message':'Assist integration installed. Restart Home Assistant once, add Pixora Voice under Settings → Devices & services, then select it in your local voice assistant.'})
+    async def local_phrases(request):
+        try:
+            await asyncio.to_thread(update_local_phrases,phrase_file.with_name('pixora_voice_language.yaml'))
+            await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
+            return web.json_response({'message':'Conversation phrases saved. Speech-to-Phrase is restarting; wait for its training to finish before testing spoken follow-ups.'})
+        except (ValueError,OSError,asyncio.TimeoutError,ClientError):
+            return web.json_response({'error':'Phrase preparation or restart could not be confirmed. Check Speech-to-Phrase before testing. The restart was not retried.'},status=503)
     async def ask(request):
         value=await request.json();text=value.get('text','') if isinstance(value,dict) else ''
         if not isinstance(text,str) or not 0<len(text.strip())<=500:return web.json_response({'error':'Enter one short home question or command.'},status=400)
         try:
             available=await agents()
             if len(available)!=1:raise ValueError('Finish setting up the Pixora Voice integration first.')
-            result=await ha('services/conversation/process?return_response',{'text':text,'language':'en','agent_id':available[0]})
+            body={'text':text,'language':'en','agent_id':available[0]}
+            cid=value.get('conversation_id')
+            if isinstance(cid,str) and 0<len(cid)<=128:body['conversation_id']=cid
+            result=await ha('services/conversation/process?return_response',body)
             speech=result.get('service_response',{}).get('response',{}).get('speech',{}).get('plain',{}).get('speech')
             if not speech:raise ValueError('Home Assistant did not return an answer. The request was not retried.')
-            return web.json_response({'speech':speech})
+            return web.json_response({'speech':speech,'conversation_id':result.get('service_response',{}).get('conversation_id')})
         except (ValueError,asyncio.TimeoutError,ClientError) as exc:
             return web.json_response({'error':str(exc) if isinstance(exc,ValueError) else 'The request timed out. It was not retried; check any device you asked to control.'},status=503)
     async def startup(app):app['session']=ClientSession(timeout=ClientTimeout(total=20))
@@ -123,6 +142,8 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
     app.router.add_get('/',index);app.router.add_get('/icon.svg',icon);app.router.add_get('/api/status',status)
     app.router.add_get('/api/planner',planner_settings);app.router.add_post('/api/planner',planner_settings);app.router.add_post('/api/planner/refresh',refresh_planner)
     app.router.add_post('/api/install',install);app.router.add_post('/api/ask',ask)
+    app.router.add_get('/api/timings',timings)
+    app.router.add_post('/api/phrases',local_phrases)
     return app
 
 if __name__=='__main__':web.run_app(make_app(),host='0.0.0.0',port=4190)

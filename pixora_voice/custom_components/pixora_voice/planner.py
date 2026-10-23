@@ -1,10 +1,12 @@
 """Opt-in, read-only Planner requests over the already paired HA connector."""
 import asyncio,json,re,secrets,time
+from homeassistant.exceptions import HomeAssistantError
 from pathlib import Path
 DOMAIN='pixora_voice'
 SETTINGS='pixora_voice_planner.json'
 def is_planner_question(text):
- q=str(text).lower()
+ from .engine import canonical_request
+ q=canonical_request(str(text)).lower()
  if re.match(r'^(?:(?:can|could|would) you |please )?(turn|switch|set|dim|brighten)\b',q) and 'planner' not in q:return False
  return bool(re.search(r"\b(planner|schedule|calendar|agenda|appointments?|events?|games?|bruins|patriots|celtics|dinner|lunch|breakfast|meals?|menu|chores?|tasks?|grocer(?:y|ies)|shopping|pantry|notes?|messages?|countdowns?|alarms?|routines?|lists?)\b",q) or re.match(r'^(is|are|where)\b.*\b(home|away|arrived)\b',q) or re.match(r'^where is \w',q))
 async def enabled(hass):
@@ -36,5 +38,5 @@ async def ask(hass,text):
  try:
   hass.bus.async_fire('pixora_voice_planner_request',{'request_id':ident,'text':text[:500],'timezone':str(getattr(hass.config,'time_zone',''))[:80],'expires_at':time.time()+10})
   return await asyncio.wait_for(future,8)
- except asyncio.TimeoutError:return 'Planner did not respond. Check the Pixora Home Control connection. Your local home controls still work.'
+ except (asyncio.TimeoutError,HomeAssistantError,OSError):return "I can't reach Planner right now. Please try again shortly. Your local home controls still work."
  finally:pending.pop(ident,None)

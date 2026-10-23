@@ -1,5 +1,5 @@
 name: Pixora Voice (Beta)
-version: "0.1.3"
+version: "0.1.4"
 slug: pixora_voice
 description: "IN BETA TESTING - not ready for everyday use. Local home questions and controls, with optional Planner answers. No LLM. Brought to you by PixoraHQ.com."
 arch: [aarch64, amd64]

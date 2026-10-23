@@ -1,11 +1,12 @@
 """Assist adapter: fresh HA state, exposure, user permissions and satellite areas."""
-import time
+import asyncio,re
 from homeassistant.components import conversation
 from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.auth.permissions.const import POLICY_READ,POLICY_CONTROL
 from homeassistant.helpers import area_registry as ar,device_registry as dr,entity_registry as er
 from homeassistant.exceptions import HomeAssistantError
-from .engine import Entity,Result,answer,choose,interpret,words
+from .engine import Entity,Result,answer,words,duration_answer,canonical_request
+from .context import Followups,planner_followup,duration_question,reading_followup
 
 
 async def async_setup_entry(hass,entry,async_add_entities):
@@ -19,7 +20,7 @@ class LocalVoice(conversation.ConversationEntity):
 
     def __init__(self,entry):
         self._attr_unique_id=entry.entry_id
-        self.pending={}
+        self.followups=Followups()
 
     @property
     def supported_languages(self):return ['en']
@@ -36,12 +37,18 @@ class LocalVoice(conversation.ConversationEntity):
         return area.name if area else ''
 
     async def _async_handle_message(self,user_input,chat_log):
+        key=self.followups.key(user_input,chat_log.conversation_id)
+        previous=self.followups.get(key)
+        self.followups.clear(key)
         from .planner import is_planner_question,ask as ask_planner
-        if is_planner_question(user_input.text):
+        planner_text=planner_followup(user_input.text,previous)
+        if planner_text or is_planner_question(user_input.text):
             uid=user_input.context.user_id
-            speech=await ask_planner(self.hass,user_input.text) if not uid or await self.hass.auth.async_get_user(uid) else 'You do not have permission to read Planner.'
+            allowed=not uid or await self.hass.auth.async_get_user(uid)
+            speech=await ask_planner(self.hass,planner_text or user_input.text) if allowed else 'You do not have permission to read Planner.'
+            if allowed:self.followups.put(key,source='planner',text=planner_text or user_input.text)
             chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=speech))
-            return conversation.async_get_result_from_chat_log(user_input,chat_log)
+            return self.finish(user_input,chat_log)
         entities=er.async_get(self.hass);devices=dr.async_get(self.hass);areas=ar.async_get(self.hass)
         user_id=user_input.context.user_id
         user=await self.hass.auth.async_get_user(user_id) if user_id else None
@@ -55,23 +62,29 @@ class LocalVoice(conversation.ConversationEntity):
             area_id=(entry.area_id if entry else None) or (device.area_id if device else None)
             area=areas.async_get_area(area_id) if area_id else None
             aliases=list(entry.aliases) if entry else []
-            catalog.append(Entity(state.entity_id,str(state.name),state.state,dict(state.attributes),area.name if area else '',aliases))
+            catalog.append(Entity(state.entity_id,str(state.name),state.state,dict(state.attributes),area.name if area else '',aliases,last_changed=getattr(state,'last_changed',None)))
         origin=self.origin_area(user_input,entities,devices,areas)
-        key=(chat_log.conversation_id,user_id,user_input.device_id)
-        self.pending={k:v for k,v in self.pending.items() if v['expires']>time.monotonic()}
-        previous=self.pending.pop(key,None)
         text=user_input.text
         if words(text) in (['cancel'],['never','mind'],['nevermind']):
             result=Result('Okay.','cancelled')
-        elif previous and not interpret(text)[0]:
-            matches=choose(text,[e for e in catalog if e.entity_id in previous['ids']],previous['property'])
-            if matches and (len(matches)==1 or matches[0][0]>matches[1][0]):
-                result=answer(previous['text'],[matches[0][1]],origin)
-            else:result=Result('Please repeat the full request with the room and device name.','clarify')
+        elif duration_question(text):
+            found=[e for e in catalog if previous and previous.get('source')=='home' and e.entity_id in previous.get('ids',[])]
+            result=duration_answer(found[0]) if len(found)==1 else Result('Which device do you mean? Please ask about one device first.','clarify')
+            if found:result.property=previous.get('property','')
+        elif reading_followup(text,previous):
+            found=[e for e in catalog if e.entity_id in previous['ids']]
+            result=answer(re.sub(r'\b(it|that|they)\b',found[0].name,text,flags=re.I).replace('still ',''),found,origin) if len(found)==1 else Result('Which device do you mean? Please include its name.','clarify')
+        elif previous and previous.get('source')=='room' and any(words(text)==words(e.area) for e in catalog if e.area):
+            room=next(e.area for e in catalog if words(text)==words(e.area))
+            result=answer(previous['text'].replace('in here','in '+room),catalog,room)
+        elif previous and previous.get('source')=='clarify':
+            # A room/name clarification may be spoken only after another wake word.
+            from .engine import choose,interpret
+            matches=choose(text,[e for e in catalog if e.entity_id in previous['ids']],previous['property']) if not interpret(text)[0] else []
+            result=answer(previous['text'],[matches[0][1]],origin) if matches and (len(matches)==1 or matches[0][0]>matches[1][0]) else answer(text,catalog,origin)
         else:result=answer(text,catalog,origin)
-        if result.choices:
-            if len(self.pending)>=100:self.pending.pop(next(iter(self.pending)))
-            self.pending[key]={'ids':[c['entity_id'] for c in result.choices],'property':result.property,'text':text,'expires':time.monotonic()+120}
+        if result.choices:self.followups.put(key,source='clarify',ids=[c['entity_id'] for c in result.choices][:20],property=result.property,text=text)
+        elif result.kind=='clarify' and 'Which room' in result.speech:self.followups.put(key,source='room',text=canonical_request(text))
         if result.command:
             ids=result.entities
             if user_id and (not user or any(not user.permissions.check_entity(eid,POLICY_CONTROL) for eid in ids)):
@@ -80,9 +93,16 @@ class LocalVoice(conversation.ConversationEntity):
                 result=Result('That device does not support the requested control.','unsupported')
             else:
                 try:
-                    await self.hass.services.async_call(result.command['domain'],result.command['service'],result.command['data'],blocking=True,context=user_input.context)
-                except HomeAssistantError:
+                    await asyncio.wait_for(self.hass.services.async_call(result.command['domain'],result.command['service'],result.command['data'],blocking=True,context=user_input.context),10)
+                except (HomeAssistantError,asyncio.TimeoutError):
                     # The device may have accepted the command. Never blindly retry.
                     result=Result('I could not confirm that command. Please check the device.','uncertain')
+        if result.entities and not result.command and result.kind=='answer':self.followups.put(key,source='home',ids=result.entities[:20],property=result.property,text=text)
         chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=result.speech))
-        return conversation.async_get_result_from_chat_log(user_input,chat_log)
+        return self.finish(user_input,chat_log)
+
+    def finish(self,user_input,chat_log):
+        # Single request per wake word, including clarification and failure replies.
+        result=conversation.async_get_result_from_chat_log(user_input,chat_log)
+        result.continue_conversation=False
+        return result
