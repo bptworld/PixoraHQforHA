@@ -36,7 +36,7 @@ async def check():
                 def __init__(self,ident):self.ident=ident
                 async def info(self):
                     if scenario=='unavailable' and self.ident=='right':raise ValueError('Offline')
-                    return {'width':64 if self.ident=='left' else 128,'active':scenario=='legacy-busy' and self.ident=='left','owner':'message','remaining':.08}
+                    return {'id':self.ident,'width':64 if self.ident=='left' else 128,'active':scenario=='legacy-busy' and self.ident=='left','owner':'message','remaining':.08}
                 async def show(self,*args):ha.append(time.monotonic())
                 async def request(self,path,payload):
                     red=base64.b64decode(payload['rgb'])[0];writes.append((self.ident,red,time.monotonic()))
@@ -65,7 +65,11 @@ async def check():
                 assert any('skipped' in value.get('warning','').lower() for value in studio.runtime.values())
             elif scenario=='uncertain':
                 assert len([row for row in writes if row[0]=='left'])==1,writes
-                assert pipeline.errors and all(not cfg['playing'] for cfg in studio.data['devices'].values())
+                assert pipeline.errors and all(cfg['playing'] for cfg in studio.data['devices'].values())
+                before=list(writes)
+                for ident in ('left','right'):await asyncio.wait_for(pipeline.wait_ready(ident),2)
+                assert not pipeline.errors and not pipeline.blocked
+                assert writes==before,'Recovery replayed the failed wall'
             else:
                 assert {row[0] for row in writes}=={'left','right'},(scenario,writes,pipeline.errors,studio.runtime)
                 first=[next(row for row in writes if row[0]==ident) for ident in ('left','right')]

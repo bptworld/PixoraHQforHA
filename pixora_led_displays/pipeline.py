@@ -110,6 +110,8 @@ class Pipeline:
 
     async def wait_ready(self,ident):
         _,idle=self.signals(ident);await idle.wait()
+        while hasattr(self.studio,'recover_priority_delivery') and ident in self.errors and not self.errors[ident].startswith('Deck delivery could not be confirmed.'):
+            if not await self.studio.recover_priority_delivery(ident):await asyncio.sleep(1)
         if ident in self.errors or ident in self.blocked:raise ValueError(self.errors.get(ident,'Delivery paused after an uncertain write. Check the display, then press Play.'))
 
     async def delay(self,ident,seconds):
@@ -223,13 +225,10 @@ class Pipeline:
         except Exception:
             # Never automatically send queued work behind an uncertain physical write.
             async with self.lock:
-                self.errors[ident]='Priority delivery could not be confirmed. Playback paused; the command was not retried. Check the display, then press Play.'
+                self.errors[ident]='Priority delivery could not be confirmed. Graphic skipped; checking the display before continuing. It will not be replayed.'
                 self.data['queues'][ident]=[];self.data['inflight'].pop(ident,None)
                 await self.commit()
-            self.studio.runtime[ident]={'playing':False,'error':self.errors[ident]}
-            if hasattr(self.studio,'data'):
-                self.studio.data['devices'].get(ident,{})['playing']=False
-                await self.studio.save()
+            self.studio.runtime[ident]={'playing':True,'status':'Checking display after a failed graphic…','warning':self.errors[ident]}
         finally:
             busy.clear();idle.set()
 

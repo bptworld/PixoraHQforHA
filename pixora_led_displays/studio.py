@@ -39,6 +39,9 @@ class Studio:
         # messages, or clear their delivery errors as part of deck recovery.
         priority_error=error and not error.startswith('Deck delivery could not be confirmed.')
         running=ident in self.jobs and not self.jobs[ident].done()
+        if desired and priority_error:
+            if await self.recover_priority_delivery(ident) and not running:await self.play(ident)
+            return
         if desired and error.startswith('Deck delivery could not be confirmed.') and not running:
             cfg['playing']=True
             await self.recover_deck_delivery(ident,self.selected(ident),saved_error=True)
@@ -63,6 +66,42 @@ class Studio:
                             self.runtime[ident]={'playing':False,'status':'Waiting for display to reconnect…'}
                 await asyncio.sleep(1)
         except asyncio.CancelledError:raise
+
+    async def recover_priority_delivery(self,ident,info=None):
+        """Discard the failed graphic; reconcile its lease using reads, never replay it."""
+        if not hasattr(self,'priority_recovery_locks'):self.priority_recovery_locks={}
+        async with self.priority_recovery_locks.setdefault(ident,asyncio.Lock()):
+            if ident not in self.pipeline.errors:return True
+            return await self._recover_priority_delivery(ident,info)
+
+    async def _recover_priority_delivery(self,ident,info=None):
+        cfg=self.data['devices'].get(ident,{})
+        if not cfg.get('resume_on_boot',cfg.get('playing',False)):raise asyncio.CancelledError
+        client=self.selected(ident)
+        try:info=info if info is not None else await client.info()
+        except DisplayUnavailable:
+            self.runtime[ident]={'playing':True,'status':'Waiting for display to reconnect…'}
+            return False
+        if not cfg.get('resume_on_boot',cfg.get('playing',False)):raise asyncio.CancelledError
+        if info.get('id')!=ident or type(info.get('active')) is not bool:
+            return False
+        # Quiet hours must still turn the panel off while an accepted graphic's
+        # lease expires. Brightness is independent of frame/message ownership.
+        if self.quiet(cfg):
+            if not await self.apply_brightness(ident,client,info,cfg.get('quietBrightness',10)):return False
+        job=self.pipeline.jobs.get(ident)
+        if (job and not job.done()) or info['active']:return False
+        async with self.pipeline.lock:
+            if not cfg.get('resume_on_boot',cfg.get('playing',False)):raise asyncio.CancelledError
+            self.pipeline.data['queues'][ident]=[]
+            self.pipeline.data['inflight'].pop(ident,None)
+            self.pipeline.errors.pop(ident,None)
+            self.pipeline.blocked.discard(ident)
+            await self.pipeline.commit()
+        cfg['playing']=True;cfg.pop('last_error',None)
+        await self.save()
+        self.runtime[ident]={'playing':True,'status':'Graphic skipped · continuing playback'}
+        return True
 
     async def recovery_loop(self):
         try:

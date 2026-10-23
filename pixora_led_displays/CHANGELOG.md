@@ -1,3 +1,8 @@
+# 1.2.42
+
+- Recover automatically after a failed special graphic instead of leaving displays permanently paused. Discard the failed graphic and queued tail, check the same panel until its active content finishes, then continue normal playback and future events without replaying uncertain writes. Recover older saved priority failures after restart and preserve explicit pauses.
+- Apply quiet-hours brightness even while checking an uncertain graphic delivery, so a failed graphic cannot leave an otherwise reachable panel lit overnight.
+
 # 1.2.41
 
 - Automatically recover all enabled cards and uploaded graphics after temporary empty content or rendering/provider failures. Empty content is rechecked after 15 seconds; rendering failures after 60 seconds. Keep checking even when the whole deck is unavailable, preserve healthy card rotation, and clear recovered warnings. Disabled cards stay disabled. Uncertain display writes still pause without automatic retry.
