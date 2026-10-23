@@ -1,0 +1,91 @@
+# Pixora Voice — local Home Assistant app
+
+An initial implementation of a standalone hub app and native Assist conversation
+agent. It uses HA state, domains, device classes, areas and aliases instead of an
+LLM. No Pixora account, remote language model or cloud command transport.
+
+**IN BETA TESTING — not ready for everyday use. Keep your usual controls and assistant available.**
+Matching and adapter tests use fixture devices. A container build, native HA
+integration load, speech recognition coverage and physical satellite tests are
+still required before calling this a verified voice release.
+
+## The first acceptance cases
+
+| Request | Source / behavior |
+|---|---|
+| Is the front door open? | Door/contact binary sensor; never a lock |
+| Is the front door locked? | Lock entity; never a contact sensor |
+| Are there any windows open? | Window-class contacts across the home; unavailable readings disclosed |
+| Is the heat on? | Thermostat `hvac_action`; distinguishes actively heating, idle and unknown |
+| What's the temperature in here? | Listening satellite's HA area; dedicated temperature sensor preferred |
+| Turn on the ceiling light | Listening satellite's area; asks if ambiguous |
+| Turn off all kitchen lights | All exposed, permitted kitchen light entities, regardless of speaker room |
+
+English initially. Also supports humidity, numeric battery readings, motion /
+occupancy, light brightness and on/off queries and controls. This is a growing
+intent vocabulary, **not arbitrary HA troubleshooting knowledge**. Historical
+questions, automation explanations, calendars, media, relative changes, chained
+commands, security actions such as unlocking, and temperature setpoint changes
+are not implemented yet. Unsupported requests do not execute an approximation.
+
+## Install from the permanent app repository
+
+Add **https://github.com/bptworld/PixoraHQforHA** to the Home Assistant app store,
+install **Pixora Voice (Beta)**, start it and open its Web UI. Install from this
+repository for a stable app identity and normal updates. Do not configure the
+temporary local copy for everyday use.
+
+The app provides an explicit **Install / update Assist integration** action. This
+copies only its own `pixora_voice` custom component into HA's configuration folder,
+backing up prior versions in the app's `/data/integration-backups`. It does not
+restart HA automatically, change other integrations, or change voice pipelines.
+Restart HA once, add **Pixora Voice** under Devices & services, then select the
+agent in your voice assistant. Keep this agent responsible for matching rather
+than putting another conversation agent in front of it.
+
+An app alone cannot register a native conversation entity in HA Core. The small
+bundled custom integration supplies that entry point and runs the shared matching
+engine directly on the hub. The app is the installation/setup and testing UI;
+it does not poll a remote server or need a browser left open.
+
+## Local speech and satellites
+
+Use a local wake word, local Speech-to-Phrase or Whisper, and local Piper speech.
+Speech-to-Phrase is the first option to evaluate on Yellow because it is light
+enough for modest hardware, but accepts a constrained phrase vocabulary. Its
+grammar must include our questions and device aliases. Extending the agent does
+not automatically extend the recognizer's vocabulary. Whisper supports broader
+speech and requires a real latency test on the particular Yellow hardware.
+Neural speech recognition / synthesis is allowed; there is no language model
+interpreting or answering home requests.
+
+Assign each Satellite1 / ESPHome Assist satellite to the correct HA area. Context
+comes from the **satellite that captured the request**, not an assumed phone
+location or whichever speaker happened to play audio. Missing room context asks
+for a room. An explicit room overrides the speaker. Text testing in the app has
+no satellite context; test “in here” on the physical satellite.
+
+## Permissions and behavior
+
+- Only entities exposed to Assist are eligible. Respect the calling HA user's
+  read and control permissions; satellites without a user use Assist exposure.
+- Device capability is a hard filter before name matching. Offline and unknown
+  states never become false/closed/off readings.
+- Commands are sent once through HA services with the original request context.
+  A failed acknowledgment is reported as uncertain and never blindly retried.
+- Clarifications are bounded, expire after two minutes, and are scoped by
+  conversation, user and originating device. State and permissions are read again
+  for the follow-up.
+- The UI is available through authenticated HA ingress only, with admin access
+  required. No LAN command port, developer credentials or stored home-state logs.
+
+Run offline checks from this directory: `python -m unittest discover -s tests -v`.
+Tests require aiohttp for the app installer import; the matcher is standard-library
+only. The HA adapter is contract-tested with fixture HA APIs and still needs
+verification inside an actual current HA installation.
+
+Official architecture references: [conversation entity](https://contributors.home-assistant.io/core/entities/conversation/),
+[app communication](https://contributors.home-assistant.io/apps/guides/communication/),
+[local Speech-to-Phrase](https://www.home-assistant.io/blog/2025/02/13/voice-chapter-9-speech-to-phrase/).
+
+Brought to you by [PixoraHQ.com](https://pixorahq.com/).

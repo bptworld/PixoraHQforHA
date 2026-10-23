@@ -1,0 +1,16 @@
+{
+  "domain": "pixora_voice",
+  "name": "Pixora Voice",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/bptworld/PixoraHQforHA/tree/main/pixora_voice",
+  "codeowners": [
+    "@bptworld"
+  ],
+  "dependencies": [
+    "conversation"
+  ],
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "requirements": []
+}

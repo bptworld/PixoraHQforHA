@@ -1,0 +1,44 @@
+"""Ingress access and one-shot app-to-HA calls; no real HA endpoint."""
+import os,sys,tempfile,unittest
+from pathlib import Path
+from types import SimpleNamespace as NS
+from unittest.mock import AsyncMock,patch
+from aiohttp import web
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice'))
+from app import make_app
+
+
+class Response:
+    def __init__(self,status,data):self.status=status;self.data=data
+    async def __aenter__(self):return self
+    async def __aexit__(self,*args):pass
+    async def json(self):return self.data
+
+
+class AppTests(unittest.IsolatedAsyncioTestCase):
+    async def test_direct_access_and_cross_origin_installs_denied(self):
+        app=make_app();handler=AsyncMock(return_value=web.json_response({'ok':True}));gate=app.middlewares[0]
+        with self.assertRaises(web.HTTPForbidden):await gate(NS(remote='127.0.0.1',method='POST'),handler)
+        request=NS(remote='172.30.32.2',method='POST',headers={'Origin':'https://elsewhere.invalid'},host='homeassistant.local')
+        with self.assertRaises(web.HTTPForbidden):await gate(request,handler)
+        handler.assert_not_awaited()
+
+    async def test_ingress_allows_authenticated_same_origin(self):
+        app=make_app();handler=AsyncMock(return_value=web.json_response({'ok':True}))
+        request=NS(remote='172.30.32.2',method='POST',headers={'Origin':'http://homeassistant.local:8123','X-Forwarded-Host':'homeassistant.local:8123'},host='internal')
+        response=await app.middlewares[0](request,handler)
+        self.assertEqual(response.status,200);self.assertEqual(response.headers['Cache-Control'],'no-store')
+
+    async def test_uncertain_post_is_not_retried(self):
+        app=make_app();calls=[]
+        def request(method,url,**kwargs):
+            calls.append((method,url))
+            if method=='GET':return Response(200,[{'entity_id':'conversation.local','attributes':{'friendly_name':'Pixora Voice'}}])
+            return Response(503,{})
+        app['session']=NS(request=request)
+        handler=next(route.handler for route in app.router.routes() if route.method=='POST' and route.resource.canonical=='/api/ask')
+        with patch.dict(os.environ,{'SUPERVISOR_TOKEN':'local-fixture-only'}):
+            response=await handler(NS(json=AsyncMock(return_value={'text':'Turn on the ceiling light'})))
+        self.assertEqual(response.status,503);self.assertEqual(len([c for c in calls if c[0]=='POST']),1)
+
+if __name__=='__main__':unittest.main()
