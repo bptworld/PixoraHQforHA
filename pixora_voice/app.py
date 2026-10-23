@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.0'
+VERSION='0.1.1'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -55,7 +55,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         token=os.environ.get('SUPERVISOR_TOKEN','')
         if not token:raise ValueError('Home Assistant access is unavailable.')
         async with app['session'].request('POST' if body is not None else 'GET','http://supervisor/core/api/'+path,headers={'Authorization':'Bearer '+token},json=body) as response:
-            if response.status>=400:raise ValueError('Home Assistant could not confirm the request. It was not retried.')
+            if response.status>=400:raise ValueError('Home Assistant could not confirm the request (HTTP '+str(response.status)+'). It was not retried.')
             return await response.json()
 
     async def agents():

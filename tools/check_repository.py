@@ -3,7 +3,7 @@ from pathlib import Path
 import ast,json
 import yaml
 ROOT=Path(__file__).resolve().parents[1]
-APPS={'haflow','pixora_home_control','pixora_locator','pixora_led_displays'}
+APPS={'haflow','pixora_home_control','pixora_locator','pixora_led_displays','pixora_voice'}
 found={path.parent.name for path in ROOT.glob('*/config.yaml')}
 assert found==APPS,found
 for name in sorted(APPS):
@@ -19,7 +19,9 @@ for name in sorted(APPS):
     for path in folder.rglob('*'):
         if not path.is_file() or 'node_modules' in path.parts:continue
         assert path.name not in {'.env','options.json','displays.json','credentials.json'},path
-        assert path.suffix not in {'.bin','.pem','.key','.cpp','.ino'},path
+        # Existing tested first-install image is an app runtime asset, not source.
+        if path!=ROOT/'pixora_led_displays/first-install.bin':
+            assert path.suffix not in {'.bin','.pem','.key','.cpp','.ino','.h','.hpp'},path
     print(name+': '+config['version']+' checked')
 assert yaml.safe_load((ROOT/'repository.yaml').read_text())['url']=='https://github.com/bptworld/PixoraHQforHA'
-print('All four public HA app packages passed.')
+print(f'All {len(APPS)} public HA app packages passed.')

@@ -1,0 +1,14 @@
+# Additional LOCAL speech recognition patterns for the Pixora Voice beta.
+# Keep this as a separate file; never replace a user's sentences.yaml.
+language: en
+intents:
+  PixoraVoiceLocal:
+    data:
+      - sentences:
+          - "is [the] (front|back|side|garage) door (open|closed|locked|unlocked)"
+          - "are [there] any (windows|doors) (open|closed)"
+          - "which (windows|doors) are (open|closed)"
+          - "is [the] (heat|heating) on"
+          - "(what is|what's) the temperature in here"
+          - "turn (on|off) [the] ceiling light"
+          - "turn [the] ceiling light (on|off)"

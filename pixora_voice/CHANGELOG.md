@@ -1,3 +1,9 @@
+# 0.1.1
+
+**IN BETA TESTING — not ready for everyday use.**
+
+- Load the standard HA app environment for internal API access. Include additional local recognizer phrases for the first beta questions without replacing existing user sentences.
+
 # 0.1.0
 
 **IN BETA TESTING — not ready for everyday use.**
