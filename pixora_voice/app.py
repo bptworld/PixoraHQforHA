@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.2'
+VERSION='0.1.3'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -54,7 +54,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
     async def ha(path,body=None):
         token=os.environ.get('SUPERVISOR_TOKEN','')
         if not token:raise ValueError('Home Assistant access is unavailable.')
-        async with app['session'].request('POST' if body is not None else 'GET','http://supervisor/core/api/'+path,headers={'Authorization':'Bearer '+token},json=body) as response:
+        async with app['session'].request('POST' if body is not None else 'GET','http://supervisor/core/api/'+path,headers={'Authorization':'Bearer '+token},json=body,timeout=ClientTimeout(total=60 if path=='services/hassio/addon_restart' else 20)) as response:
             if response.status>=400:raise ValueError('Home Assistant could not confirm the request (HTTP '+str(response.status)+'). It was not retried.')
             return await response.json()
 
@@ -80,7 +80,8 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         vocabulary=result.get('service_response',{})
         if vocabulary.get('available') is not True:raise ValueError('Planner did not respond. Check that the paired Pixora Home Control app and the updated Assist integration are running.')
         await asyncio.to_thread(update_phrases,phrase_file,vocabulary)
-        await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
+        try:await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
+        except (ValueError,asyncio.TimeoutError,ClientError):return 'Planner is connected and its spoken phrases are saved. Speech-to-Phrase restart could not be confirmed; check its status before trying a spoken Planner question. The restart was not retried.'
         return 'Planner is connected. Speech-to-Phrase is restarting to learn your household names and teams; spoken requests will be available after training finishes.'
     async def planner_settings(request):
         if request.method=='GET':return web.json_response({'enabled':await asyncio.to_thread(planner_enabled)})

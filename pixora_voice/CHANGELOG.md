@@ -1,3 +1,10 @@
+## 0.1.3
+
+**In Beta Testing — not ready for everyday use.**
+
+- Allow the local recognizer time to restart and distinguish a saved vocabulary from a restart acknowledgment timeout. Include HA action descriptions.
+- Use the listening HA hub timezone when Planner has no saved household timezone, so today/tomorrow answers work without extra setup.
+
 ## 0.1.2
 
 **In Beta Testing — not ready for everyday use.**

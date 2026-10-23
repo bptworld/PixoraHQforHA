@@ -34,7 +34,7 @@ async def ask(hass,text):
  if len(pending)>=2:return 'Planner is answering another question. Please try again in a moment.'
  ident=secrets.token_hex(16);future=asyncio.get_running_loop().create_future();pending[ident]=future
  try:
-  hass.bus.async_fire('pixora_voice_planner_request',{'request_id':ident,'text':text[:500],'expires_at':time.time()+10})
+  hass.bus.async_fire('pixora_voice_planner_request',{'request_id':ident,'text':text[:500],'timezone':str(getattr(hass.config,'time_zone',''))[:80],'expires_at':time.time()+10})
   return await asyncio.wait_for(future,8)
  except asyncio.TimeoutError:return 'Planner did not respond. Check the Pixora Home Control connection. Your local home controls still work.'
  finally:pending.pop(ident,None)

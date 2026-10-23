@@ -1,0 +1,15 @@
+planner_reply:
+  name: Deliver Planner reply
+  description: Internal reply to an outstanding Pixora Voice Planner request. Unmatched replies are ignored.
+  fields:
+    request_id:
+      required: true
+      selector:
+        text:
+    speech:
+      required: true
+      selector:
+        text:
+planner_vocabulary:
+  name: Read Planner speech vocabulary
+  description: Read bounded household names and followed teams through the existing paired connector when Planner integration is enabled.
