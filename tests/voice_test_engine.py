@@ -29,7 +29,7 @@ class MatchingTests(unittest.TestCase):
         r=answer('Is the front door locked?',catalog());self.assertEqual(r.entities,['lock.front']);self.assertIn('unlocked',r.speech)
 
     def test_windows_uses_device_class_even_when_not_in_name(self):
-        r=answer('Are there any windows open?',catalog(),'Living Room');self.assertIn('Kitchen contact',r.speech);self.assertNotIn('Front door',r.speech);self.assertEqual(len(r.entities),2)
+        r=answer('Are there any windows open?',catalog(),'Living Room');self.assertIn('kitchen window',r.speech);self.assertNotIn('Front door',r.speech);self.assertEqual(len(r.entities),2)
 
     def test_heat_mode_does_not_mean_heat_running(self):
         r=answer('Is the heat on?',catalog(),'Living Room');self.assertEqual(r.entities,['climate.downstairs']);self.assertIn('not heating',r.speech)
@@ -58,7 +58,7 @@ class MatchingTests(unittest.TestCase):
         es=catalog();es[1].state='unavailable';r=answer('Is the front door open?',es);self.assertEqual(r.entities,['binary_sensor.front']);self.assertIn('unavailable',r.speech);self.assertNotIn('closed',r.speech)
 
     def test_unknown_windows_are_disclosed(self):
-        es=catalog();es[2].state='unavailable';r=answer('Are any windows open?',es);self.assertIn('cannot confirm Kitchen contact',r.speech)
+        es=catalog();es[2].state='unavailable';r=answer('Are any windows open?',es);self.assertIn("can't check Kitchen window",r.speech)
 
     def test_hidden_from_assist_never_matched(self):
         es=catalog();es[1].exposed=False;self.assertEqual(answer('Is the front door open?',es).kind,'not_found')
@@ -75,6 +75,62 @@ class MatchingTests(unittest.TestCase):
 
     def test_missing_room_never_selects_other_room_for_control(self):
         self.assertIsNone(answer('Turn off all lights',catalog(),'Bedroom').command)
+
+    def test_spoken_names_and_readings_are_natural(self):
+        es=catalog();es[1].name='Living Room Front Door Sensor';es[1].area='Living Room'
+        self.assertEqual(answer('Is the front door open?',es).speech,'The front door is closed.')
+        self.assertEqual(answer('Are any windows open?', [e for e in es if e.entity_id!='binary_sensor.kitchen']).speech,'All the windows I can check are closed.')
+        self.assertEqual(answer("What's the temperature in here?",es,'Living Room').speech,"It's 68 degrees Fahrenheit in Living Room.")
+        self.assertEqual(answer('Turn on the ceiling light',es,'Living Room').speech,'Okay, turning on Ceiling light.')
+
+    def test_polite_requests_and_natural_readings(self):
+        for text in ['Could you please turn on the ceiling light','Can you turn the ceiling light on','Please turn on the ceiling light']:
+            self.assertEqual(answer(text,catalog(),'Kitchen').command['data']['entity_id'],'light.kitchen_ceiling')
+        self.assertIn('closed',answer('Tell me if the front door is open',catalog()).speech)
+        self.assertIn('68',answer('How warm is it in this room?',catalog(),'Living Room').speech)
+
+    def test_spoken_brightness_and_negation(self):
+        self.assertEqual(answer('Could you set the ceiling light to forty five percent',catalog(),'Kitchen').command['data']['brightness_pct'],45)
+        for text in ['Could you not turn on the ceiling light','Set the ceiling light to forty percent if it is dark','Dim the ceiling light to ten percent and turn off the fan']:
+            self.assertIsNone(answer(text,catalog(),'Kitchen').command)
+
+    def test_group_status_filters_and_counts(self):
+        es=catalog();es[8].state='off'
+        r=answer('Which kitchen lights are on?',es)
+        self.assertEqual(r.speech,'The counter light is on.')
+        self.assertIn('1 are on',answer('How many kitchen lights are on?',es).speech)
+        es[9].state='unavailable'
+        self.assertIn("can't confirm",answer('Are all kitchen lights off?',es).speech)
+
+    def test_here_groups_never_leak_into_other_rooms(self):
+        r=answer('Are any lights on in this room?',catalog(),'Living Room')
+        self.assertEqual(r.entities,['light.living_ceiling']);self.assertIn('None',r.speech)
+
+    def test_cooling_uses_actual_action(self):
+        es=catalog();es[4].state='cool';es[4].attributes['hvac_action']='idle'
+        self.assertIn('not cooling',answer('Is the air conditioning on?',es).speech)
+        es[4].attributes['hvac_action']='cooling'
+        self.assertIn('is cooling',answer('Is the air conditioning on?',es).speech)
+
+    def test_unsupported_pronoun_command_never_guesses(self):
+        r=answer('Turn it off',[catalog()[7]],'Living Room')
+        self.assertEqual(r.kind,'clarify');self.assertIsNone(r.command)
+
+    def test_numbered_rooms_stay_distinct(self):
+        es=[Entity('light.one','Room 1 ceiling light','on',{},'Room 1'),Entity('light.two','Room 2 ceiling light','off',{},'Room 2')]
+        self.assertEqual(answer('Turn on all Room 2 lights',es).entities,['light.two'])
+        self.assertEqual(answer('Which Room 1 lights are on?',es).entities,['light.one'])
+
+    def test_plural_room_lights_work_without_all(self):
+        self.assertEqual(set(answer('Turn off kitchen lights',catalog(),'Living Room').entities),{'light.kitchen_ceiling','light.kitchen_counter'})
+        self.assertEqual(set(answer('Turn off the lights',catalog(),'Kitchen').entities),{'light.kitchen_ceiling','light.kitchen_counter'})
+        self.assertIsNone(answer('Turn off the lights',catalog()).command)
+
+    def test_lazy_ha_name_does_not_break_unrelated_queries(self):
+        class ComputedName:
+            def __str__(self):return 'Unrelated light'
+        es=catalog()+[Entity('light.computed',ComputedName(),'off',{},'Office')]
+        self.assertEqual(answer('Which kitchen lights are on?',es).entities,['light.kitchen_ceiling','light.kitchen_counter'])
 
     def test_no_long_or_empty_input(self):
         for text in ['',None,'a'*501]:self.assertEqual(answer(text,catalog()).kind,'unsupported')

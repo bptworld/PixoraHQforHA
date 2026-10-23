@@ -1,5 +1,5 @@
 """Ingress access and one-shot app-to-HA calls; no real HA endpoint."""
-import os,sys,tempfile,unittest
+import os,sys,tempfile,unittest,json
 from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock,patch
@@ -28,6 +28,18 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         request=NS(remote='172.30.32.2',method='POST',headers={'Origin':'http://homeassistant.local:8123','X-Forwarded-Host':'homeassistant.local:8123'},host='internal')
         response=await app.middlewares[0](request,handler)
         self.assertEqual(response.status,200);self.assertEqual(response.headers['Cache-Control'],'no-store')
+
+    async def test_planner_corrupt_settings_and_invalid_input(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/'.storage').mkdir();(root/'.storage/pixora_voice_planner.json').write_text('[]')
+            app=make_app(root,root)
+            get=next(r.handler for r in app.router.routes() if r.method=='GET' and r.resource.canonical=='/api/planner')
+            post=next(r.handler for r in app.router.routes() if r.method=='POST' and r.resource.canonical=='/api/planner')
+            self.assertFalse(json.loads((await get(NS(method='GET'))).text)['enabled'])
+            result=await post(NS(method='POST',json=AsyncMock(return_value={'enabled':'yes'})))
+            self.assertEqual(result.status,400)
+            result=await post(NS(method='POST',json=AsyncMock(return_value={'enabled':False})))
+            self.assertEqual(result.status,200);self.assertFalse(json.loads((root/'.storage/pixora_voice_planner.json').read_text())['enabled'])
 
     async def test_uncertain_post_is_not_retried(self):
         app=make_app();calls=[]

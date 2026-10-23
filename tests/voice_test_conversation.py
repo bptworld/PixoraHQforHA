@@ -45,12 +45,12 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         return await self.agent._async_handle_message(self.request,log)
 
     async def test_context_area_and_original_context_in_service_call(self):
-        r=await self.ask('Turn on the ceiling light');self.assertIn('Sent',r.speech)
+        r=await self.ask('Turn on the ceiling light');self.assertIn('Okay, turning on',r.speech)
         call=self.hass.services.async_call.await_args;self.assertEqual(call.args[:2],('light','turn_on'));self.assertEqual(call.args[2]['entity_id'],'light.living');self.assertIs(call.kwargs['context'],self.context)
 
     async def test_exposure_and_read_permissions(self):
-        self.hass.hidden.add('light.living');r=await self.ask('Turn on the ceiling light');self.assertIn('could not find',r.speech);self.hass.services.async_call.assert_not_awaited()
-        self.hass.hidden.clear();self.read_denied.add('light.living');r=await self.ask('Turn on the ceiling light');self.assertIn('could not find',r.speech)
+        self.hass.hidden.add('light.living');r=await self.ask('Turn on the ceiling light');self.assertIn("can't find",r.speech);self.hass.services.async_call.assert_not_awaited()
+        self.hass.hidden.clear();self.read_denied.add('light.living');r=await self.ask('Turn on the ceiling light');self.assertIn("can't find",r.speech)
 
     async def test_control_permission_checked_for_every_target(self):
         self.control_denied.add('light.kitchen');r=await self.ask('Turn off all kitchen lights');self.assertIn('permission',r.speech);self.hass.services.async_call.assert_not_awaited()
@@ -61,7 +61,15 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_followup_scoped_to_conversation_and_current_states(self):
         self.request.device_id=None
         r=await self.ask('Turn on the ceiling light');self.assertTrue(r.continue_conversation);self.hass.services.async_call.assert_not_awaited()
-        r=await self.ask('Kitchen');self.assertIn('Sent',r.speech);self.assertEqual(self.hass.services.async_call.await_args.args[2]['entity_id'],'light.kitchen')
+        r=await self.ask('Kitchen');self.assertIn('Okay, turning on',r.speech);self.assertEqual(self.hass.services.async_call.await_args.args[2]['entity_id'],'light.kitchen')
+
+    async def test_cancel_clarification_does_not_send_command(self):
+        self.request.device_id=None
+        await self.ask('Turn on the ceiling light')
+        r=await self.ask('Never mind')
+        self.assertEqual(r.speech,'Okay.');self.hass.services.async_call.assert_not_awaited()
+        r=await self.ask('Kitchen')
+        self.hass.services.async_call.assert_not_awaited()
 
     async def test_missing_user_fails_closed(self):
         self.hass.auth.async_get_user.return_value=None

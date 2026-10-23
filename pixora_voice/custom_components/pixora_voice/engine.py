@@ -39,13 +39,36 @@ class Result:
 
 # Functional words and type suffixes are removed only after capability filtering.
 STOP=set('is are was were the a an my our your please tell me what which how many any all of in at to for it its there here right now currently status state reading value does do have has get give show on off open opened opening close closed closing shut locked unlocked lock locking unlocking contact contacts sensor sensors device devices temperature degrees degree humidity percent level battery motion occupancy detected detecting occupied unoccupied presence present lights light lamps lamp switches switch fans fan brightness dim bright set turn make change'.split())
-NORMAL={'doors':'door','windows':'window','lamps':'lamp','lights':'light','batteries':'battery','temp':'temperature','shut':'closed','dr':'door','rm':'room','bath':'bathroom'}
+NORMAL={'doors':'door','windows':'window','lamps':'lamp','lights':'light','batteries':'battery','temp':'temperature','bulbs':'light','bulb':'light','fans':'fan','switches':'switch','shut':'closed','shut':'closed','dr':'door','rm':'room','bath':'bathroom'}
 
 
 def normalized(text):return [NORMAL.get(w,w) for w in words(text)]
 
 
-def target_words(text):return {w for w in normalized(text) if not w.isdigit()}-STOP-{'door','window','heat','heating','heater','hvac','thermostat','activity','much','remaining'}
+def target_words(text):return set(normalized(re.sub(r'\b\d{1,3}\s+(?:percent|brightness)\b','',str(text),flags=re.I)))-STOP-{'can','could','would','you','check','whether','this','room','air','conditioning','cooling','running','door','window','heat','heating','heater','hvac','thermostat','activity','much','remaining'}
+
+
+def canonical_request(text):
+    # Only remove a polite prefix. Negation and conditionals remain visible.
+    text=re.sub(r"^(?:can|could|would) you (?:please )?",'',text.strip(),flags=re.I)
+    text=re.sub(r'^please\s+','',text,flags=re.I)
+    text=re.sub(r'\b(?:in this room|in my room|in the room)\b','in here',text,flags=re.I)
+    text=re.sub(r'^(?:check|tell me) (?:whether|if)\s+','is ',text,flags=re.I)
+    text=re.sub(r'^how (?:warm|cold) is it\b',"what is the temperature",text,flags=re.I)
+    text=re.sub(r'^how humid is it\b',"what is the humidity",text,flags=re.I)
+    text=re.sub(r'\b(?:air conditioning|air conditioner|a c)\b','cooling',text,flags=re.I)
+    text=re.sub(r'\b(?:heat|heating) running\b','heat on',text,flags=re.I)
+    # Spoken numbers are bounded to the brightness range, without another model.
+    units={'zero':0,'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7,'eight':8,'nine':9,'ten':10,'eleven':11,'twelve':12,'thirteen':13,'fourteen':14,'fifteen':15,'sixteen':16,'seventeen':17,'eighteen':18,'nineteen':19}
+    tens={'twenty':20,'thirty':30,'forty':40,'fifty':50,'sixty':60,'seventy':70,'eighty':80,'ninety':90}
+    def number(m):
+        parts=m.group(1).lower().replace('-',' ').split()
+        if parts==['one','hundred']:return '100 percent'
+        if len(parts)==1 and parts[0] in units:return str(units[parts[0]])+' percent'
+        if parts[0] in tens and (len(parts)==1 or (len(parts)==2 and 0<units.get(parts[1],99)<10)):
+            return str(tens[parts[0]]+(units[parts[1]] if len(parts)>1 else 0))+' percent'
+        return m.group(0)
+    return re.sub(r'\b((?:one hundred)|(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[ -](?:one|two|three|four|five|six|seven|eight|nine))?)|(?:'+ '|'.join(units)+r')) percent\b',number,text,flags=re.I)
 
 
 def capable(entity,prop,text):
@@ -61,7 +84,7 @@ def capable(entity,prop,text):
         if 'window' in normalized(text):return cls=='window'
         return True
     if prop=='lock':return domain=='lock'
-    if prop=='heating':return domain=='climate'
+    if prop in {'heating','cooling'}:return domain=='climate'
     if prop=='temperature':return (domain=='sensor' and cls=='temperature') or (domain=='climate' and 'current_temperature' in entity.attributes)
     if prop=='humidity':return domain=='sensor' and cls=='humidity'
     if prop=='battery':return domain=='sensor' and cls=='battery'
@@ -76,35 +99,65 @@ def capable(entity,prop,text):
     return False
 
 
+def spoken_name(entity):
+    """Clean technical suffixes for speech only; keep matching identities intact."""
+    name=re.sub(r'\s+(?:contact\s+sensor|contact|sensor)$','',entity.name,flags=re.I).strip()
+    if entity.area and name.lower().startswith(entity.area.lower()+' '):
+        remainder=name[len(entity.area):].strip()
+        if re.match(r'^(front|back|side) door$',remainder,re.I):name=remainder.lower()
+    if entity.attributes.get('device_class')=='window' and 'window' not in words(name):name+=' window'
+    return name or entity.name
+
+
+def subject(entity):
+    name=spoken_name(entity)
+    return 'The '+name[0].lower()+name[1:]
+
+
+def spoken_list(names):
+    if len(names)<2:return ''.join(names)
+    return ', '.join(names[:-1])+' and '+names[-1]
+
+
 def describe(entity,prop):
-    name=entity.name;state=str(entity.state);attrs=entity.attributes
-    if state in {'unknown','unavailable','None',''}:return f'{name} is unavailable; I cannot confirm its {prop}.'
+    name=subject(entity);state=str(entity.state);attrs=entity.attributes
+    if state in {'unknown','unavailable','None',''}:return f"I can't check {spoken_name(entity)} right now. Its sensor is unavailable."
     if prop=='opening':
         value={'on':'open','off':'closed'}.get(state,state) if entity.domain=='binary_sensor' else state
-        if value not in {'open','closed','opening','closing'}:return f'I cannot determine whether {name} is open or closed.'
+        if value not in {'open','closed','opening','closing'}:return f"I can't tell whether {spoken_name(entity)} is open or closed right now."
         return f'{name} is {value}.'
     if prop=='lock':return f'{name} is {state}.'
-    if prop=='heating':
+    if prop in {'heating','cooling'}:
         action=attrs.get('hvac_action')
-        if action=='heating':return f'{name} is actively heating.'
-        if action in {'idle','off','cooling','drying','fan'}:return f'{name} is not heating right now. Its mode is {state}.'
-        return f'{name} is set to {state} mode, but it does not report whether the heat is running.'
+        if prop=='cooling':
+            if action=='cooling':return f'{name} is cooling right now.'
+            if action in {'idle','off','heating','drying','fan'}:return f'{name} is not cooling right now.'
+            return f'{name} does not report whether the air conditioning is actually running.'
+        if action=='heating':return f'{name} is actively heating right now.'
+        if action in {'idle','off','cooling','drying','fan'}:return f'{name} is not heating right now.'
+        return f'{name} is set to {state}, but it does not report whether the heat is actually running.'
     if prop=='motion':return f'{name} {"detects activity" if state=="on" else "is clear" if state=="off" else "has an unknown activity state"}.'
     if prop=='power':return f'{name} is {state}.'
     if prop=='brightness':
         if state=='off':return f'{name} is off.'
         value=attrs.get('brightness')
-        return f'{name} brightness is {round(float(value)*100/255)} percent.' if isinstance(value,(int,float)) else f'{name} brightness is unknown.'
+        return f'{name} is at {round(float(value)*100/255)} percent brightness.' if isinstance(value,(int,float)) else f"I can't read the brightness of {spoken_name(entity)} right now."
     value=attrs.get('current_temperature') if entity.domain=='climate' else state
-    if value is None:return f'{name} has no current {prop} reading.'
+    if value is None:return f"I can't get a current {prop} reading from {spoken_name(entity)}."
     unit=attrs.get('unit_of_measurement','')
-    if prop in {'humidity','battery'}:unit='percent'
-    return f'{name} {prop} is {value}{" "+unit if unit else ""}.'
+    if prop=='temperature':
+        unit={'°F':'degrees Fahrenheit','°C':'degrees Celsius'}.get(unit,unit)
+        location=entity.area or spoken_name(entity)
+        return f"It's {value}{' '+unit if unit else ''} in {location}."
+    if prop=='humidity':return f"The humidity in {entity.area or spoken_name(entity)} is {value} percent."
+    if prop=='battery':return f'{name} has {value} percent battery left.'
+    return f'{name} is {value}{" "+unit if unit else ""}.'
 
 
 def interpret(text):
     """Return a property and optional explicit command; never guess an intent."""
-    sentence=' '.join(normalized(text))
+    sentence=' '.join(normalized(canonical_request(text)))
+    if re.search(r'\b(not|never|unless|except|if|when|and|then)\b',sentence) and re.match(r'^(turn|switch|set|dim|brighten)\b',sentence):return '',None
     if re.search(r'\b(unlock|lock|open|close) (the |my )?',sentence) and not re.match(r'^(is|are|what|which|how|does|do|tell|show)\b',sentence):
         return '',None
     if re.match(r'^(please )?(turn|switch)\b',sentence) and re.search(r'\b(on|off)\b',sentence):
@@ -118,6 +171,7 @@ def interpret(text):
         return '',None
     if not re.match(r'^(is|are|what|which|how|does|do|tell|show|give|can you tell)\b',sentence):return '',None
     if re.search(r'\b(locked|unlocked|lock)\b',sentence):return 'lock',None
+    if 'cooling' in sentence.split() and 'temperature' not in sentence.split():return 'cooling',None
     if re.search(r'\b(heat|heating|heater|hvac|thermostat)\b',sentence) and 'temperature' not in sentence.split():return 'heating',None
     if re.search(r'\b(open|closed|opened|opening|closing|closed|contact)\b',sentence):return 'opening',None
     for prop in ('temperature','humidity','battery','brightness'):
@@ -152,14 +206,17 @@ def choose(text,entities,prop,area=''):
 def answer(text,entities,area=''):
     if not isinstance(text,str) or not text.strip() or len(text)>500:
         return Result('Please ask one short question about your home.','unsupported')
+    text=canonical_request(text)
     prop,command=interpret(text)
     if not prop:return Result('I do not understand that request yet. Try asking whether a door is open, whether a lock is locked, or a temperature reading.','unsupported')
-    if 'here' in words(text) and not area:return Result('Which room do you mean? The listening speaker has no assigned area.','clarify',property=prop)
+    if 'here' in words(text) and not area:return Result("Which room do you mean? I don't know which room this speaker is in yet.",'clarify',property=prop)
+    if set(words(text))&{'it','them','those'} and not target_words(text):return Result('Which device do you mean? Please include its name.','clarify',property=prop)
     candidates=choose(text,entities,prop,area)
+    if 'here' in words(text):candidates=[pair for pair in candidates if normalized(pair[1].area)==normalized(area)]
     explicit_area=any(set(normalized(e.area))<=set(normalized(text)) for e in entities if e.area)
     if command and area and not explicit_area:
         candidates=[pair for pair in candidates if normalized(pair[1].area)==normalized(area)]
-    if not candidates:return Result(f'I could not find an exposed device that can report {prop} for that location.','not_found',property=prop)
+    if not candidates:return Result(f"I can't find a device shared with Assist to check {'whether the heat is running' if prop=='heating' else prop} there.",'not_found',property=prop)
     # Unqualified room requests use the listening satellite's registered area.
     # An explicit room/entity wins on its own; context only breaks equal matches.
     best=candidates[0][0]
@@ -169,22 +226,38 @@ def answer(text,entities,area=''):
     group=bool(re.search(r'\b(which|any|all|how many)\b',' '.join(words(text)))) and not command
     if group:
         found=[e for _,e in candidates]
+        if prop in {'power','lock','motion'}:
+            desired=next((w for w in words(text) if w in ({'on','off'} if prop=='power' else {'locked','unlocked'} if prop=='lock' else {'occupied','unoccupied','detected','clear'})),None)
+            if desired:
+                expected={'occupied':'on','detected':'on','unoccupied':'off','clear':'off'}.get(desired,desired)
+                known={'on','off'} if prop in {'power','motion'} else {'locked','unlocked'}
+                active=[e for e in found if e.state==expected]
+                unknown=[e for e in found if e.state not in known]
+                if 'all' in words(text):
+                    speech=(f'All {len(found)} are {desired}.' if len(active)==len(found) else f'{len(active)} of {len(found)} are {desired}.')
+                else:speech=(spoken_list([subject(e) for e in active])+(' is ' if len(active)==1 else ' are ')+desired+'.') if active else f'None of the devices I can check are {desired}.'
+                if unknown:speech+=" I can't confirm "+spoken_list([spoken_name(e) for e in unknown])+'.'
+                if 'how many' in text.lower():speech=f'{len(active)} are {desired}. '+speech
+                return Result(speech,entities=[e.entity_id for e in found],property=prop)
         if prop=='opening' and 'open' in words(text) and 'all' not in words(text):
             active=[e for e in found if e.state==('on' if e.domain=='binary_sensor' else 'open')]
             unknown=[e for e in found if e.state not in ({'on','off'} if e.domain=='binary_sensor' else {'open','closed'})]
-            speech=('Open: '+', '.join(e.name for e in active)+'.') if active else 'No matching doors or windows are open.'
-            if unknown:speech+=' I cannot confirm '+', '.join(e.name for e in unknown)+'.'
+            noun='windows' if 'window' in normalized(text) else 'doors' if 'door' in normalized(text) else 'doors or windows'
+            speech=(spoken_list([subject(e) for e in active])+(' is open.' if len(active)==1 else ' are open.')) if active else ('None of the '+noun+' I can check are open.' if unknown else 'All the '+noun+' I can check are closed.')
+            if unknown:speech+=" I can't check "+spoken_list([spoken_name(e) for e in unknown])+" right now."
             if 'how many' in text.lower():speech=f'{len(active)} are open. '+speech
         else:speech=' '.join(describe(e,prop) for e in found[:20])+(f' There are {len(found)-20} more matches.' if len(found)>20 else '')
         return Result(speech,entities=[e.entity_id for e in found],property=prop)
     best=candidates[0][0];found=[e for score,e in candidates if score==best]
-    if command and 'all' in words(text):
+    plural_command=bool(command and set(words(text))&{'lights','lamps','fans','switches'})
+    if plural_command and not area and not explicit_area:return Result('Which room do you mean? Please include the room name.','clarify',property=prop)
+    if command and ('all' in words(text) or plural_command):
         found=[e for _,e in candidates]
         if len({e.domain for e in found})!=1:return Result('Please specify one kind of device, such as all kitchen lights.','clarify',property=prop)
         unavailable=[e for e in found if e.state in {'unknown','unavailable'}]
         if unavailable:return Result('I cannot confirm all those devices are available: '+', '.join(e.name for e in unavailable)+'. No command was sent.','unavailable',property=prop)
         ids=[e.entity_id for e in found]
-        return Result(f'Sent the command to {len(ids)} devices.','command',ids,property=prop,command={'domain':found[0].domain,**command,'data':{**command['data'],'entity_id':ids}})
+        return Result(f"Okay, turning {'off' if command['service']=='turn_off' else 'on'} {len(ids)} {found[0].domain.replace('_',' ')}s.",'command',ids,property=prop,command={'domain':found[0].domain,**command,'data':{**command['data'],'entity_id':ids}})
     if len(found)>1:
         labels=[e.name for e in found[:5]]
         return Result('Which device did you mean: '+', '.join(labels)+'?','clarify',choices=[{'entity_id':e.entity_id,'name':e.name} for e in found],property=prop)
@@ -193,5 +266,5 @@ def answer(text,entities,area=''):
         if entity.state in {'unknown','unavailable'}:return Result(f'{entity.name} is unavailable. I did not send a command.','unavailable',property=prop)
         if command['service']=='turn_on' and prop=='brightness' and entity.domain!='light':return Result('That device does not support light brightness.','unsupported')
         command={'domain':entity.domain,**command,'data':{**command['data'],'entity_id':entity.entity_id}}
-        return Result(f'Sent the command to {entity.name}.','command',[entity.entity_id],property=prop,command=command)
+        return Result((f"Okay, setting {spoken_name(entity)} to {command['data']['brightness_pct']} percent." if prop=='brightness' else f"Okay, turning {'off' if command['service']=='turn_off' else 'on'} {spoken_name(entity)}."),'command',[entity.entity_id],property=prop,command=command)
     return Result(describe(entity,prop),entities=[entity.entity_id],property=prop)

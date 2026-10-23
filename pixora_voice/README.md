@@ -79,13 +79,24 @@ no satellite context; test “in here” on the physical satellite.
 - The UI is available through authenticated HA ingress only, with admin access
   required. No LAN command port, developer credentials or stored home-state logs.
 
-Run offline checks from this directory: `python -m unittest discover -s tests -v`.
+Run offline checks from the repository root: `python -m unittest discover -s tests -p "voice_test_*.py" -v`.
 Tests require aiohttp for the app installer import; the matcher is standard-library
-only. The HA adapter is contract-tested with fixture HA APIs and still needs
-verification inside an actual current HA installation.
+only. The HA adapter is contract-tested with fixture HA APIs. Physical satellite and speech accuracy testing is ongoing during beta.
 
 Official architecture references: [conversation entity](https://contributors.home-assistant.io/core/entities/conversation/),
 [app communication](https://contributors.home-assistant.io/apps/guides/communication/),
 [local Speech-to-Phrase](https://www.home-assistant.io/blog/2025/02/13/voice-chapter-9-speech-to-phrase/).
 
 Brought to you by [PixoraHQ.com](https://pixorahq.com/).
+
+### Lightweight beta language improvements
+
+Uses bounded local rules for polite requests, spoken brightness percentages, room context, actual heating/cooling activity, and filtered group status/counts. Unknown readings stay explicit; ambiguous devices ask for clarification. No additional model, background poller, history scan, or cloud service is added. Speech-to-Phrase uses the separate supplied grammar file and the existing HA device/area vocabulary.
+
+
+### Optional Pixora Planner answers
+Enable **Integrate with Pixora Planner** in the Voice app to reuse the existing paired Pixora Home Control connection. No new login or pairing is needed. Update both the Voice app/native integration and the Pixora server before enabling. Local device controls and speech remain local; Planner answers require internet, without an LLM.
+
+Ask about a named person's schedule, Calendar items (including events added by other apps), saved sports games/broadcasts, meals, shared open chores, groceries, pantry, notes, messages, lists, countdowns, alarms and routines. Presence answers use current shared household location and report unknown when stale or unavailable. Room speakers have no verified person identity, so answers use household-shared information only. Private records and separate Budget, Student, Live, Connect and Home Control features are excluded; their shared Calendar entries remain included. This is read-only access; make changes in Planner.
+
+Enabling prepares a small household-name/team vocabulary and restarts Speech-to-Phrase once. Use **Refresh Planner phrases** after renaming people or changing followed teams. Only `pixora_voice_planner.yaml` is generated; existing user phrase files are preserved. Access is disabled immediately when unchecked. Unsupported or ambiguous questions ask for clarification rather than guessing. Date-specific repeating chore calculations are not yet supported.

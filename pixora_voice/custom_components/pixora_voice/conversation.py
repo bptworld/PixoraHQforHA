@@ -5,7 +5,7 @@ from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.auth.permissions.const import POLICY_READ,POLICY_CONTROL
 from homeassistant.helpers import area_registry as ar,device_registry as dr,entity_registry as er
 from homeassistant.exceptions import HomeAssistantError
-from .engine import Entity,Result,answer,choose,interpret
+from .engine import Entity,Result,answer,choose,interpret,words
 
 
 async def async_setup_entry(hass,entry,async_add_entities):
@@ -36,6 +36,12 @@ class LocalVoice(conversation.ConversationEntity):
         return area.name if area else ''
 
     async def _async_handle_message(self,user_input,chat_log):
+        from .planner import is_planner_question,ask as ask_planner
+        if is_planner_question(user_input.text):
+            uid=user_input.context.user_id
+            speech=await ask_planner(self.hass,user_input.text) if not uid or await self.hass.auth.async_get_user(uid) else 'You do not have permission to read Planner.'
+            chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=speech))
+            return conversation.async_get_result_from_chat_log(user_input,chat_log)
         entities=er.async_get(self.hass);devices=dr.async_get(self.hass);areas=ar.async_get(self.hass)
         user_id=user_input.context.user_id
         user=await self.hass.auth.async_get_user(user_id) if user_id else None
@@ -49,13 +55,15 @@ class LocalVoice(conversation.ConversationEntity):
             area_id=(entry.area_id if entry else None) or (device.area_id if device else None)
             area=areas.async_get_area(area_id) if area_id else None
             aliases=list(entry.aliases) if entry else []
-            catalog.append(Entity(state.entity_id,state.name,state.state,dict(state.attributes),area.name if area else '',aliases))
+            catalog.append(Entity(state.entity_id,str(state.name),state.state,dict(state.attributes),area.name if area else '',aliases))
         origin=self.origin_area(user_input,entities,devices,areas)
         key=(chat_log.conversation_id,user_id,user_input.device_id)
         self.pending={k:v for k,v in self.pending.items() if v['expires']>time.monotonic()}
         previous=self.pending.pop(key,None)
         text=user_input.text
-        if previous and not interpret(text)[0]:
+        if words(text) in (['cancel'],['never','mind'],['nevermind']):
+            result=Result('Okay.','cancelled')
+        elif previous and not interpret(text)[0]:
             matches=choose(text,[e for e in catalog if e.entity_id in previous['ids']],previous['property'])
             if matches and (len(matches)==1 or matches[0][0]>matches[1][0]):
                 result=answer(previous['text'],[matches[0][1]],origin)

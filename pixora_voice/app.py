@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.1'
+VERSION='0.1.2'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -63,10 +63,43 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         return [s['entity_id'] for s in states if s['entity_id'].startswith('conversation.') and s.get('attributes',{}).get('friendly_name') in {'Pixora Voice','Pixora Voice (Beta)'}]
 
     async def index(request):return web.FileResponse(Path(__file__).with_name('index.html'))
+    async def icon(request):return web.FileResponse(Path(__file__).with_name('icon.svg'))
     async def status(request):
         try:available=await agents();error=''
         except (ValueError,asyncio.TimeoutError,ClientError):available=[];error='Home Assistant is reconnecting. Try again shortly.'
         return web.json_response({'version':VERSION,'agents':available,'installed':(config_root/'custom_components/pixora_voice/manifest.json').exists(),'notice':error})
+    from planner_phrases import write_owned,update_phrases
+    planner_file=config_root/'.storage'/'pixora_voice_planner.json'
+    phrase_file=Path('/share/speech-to-phrase/custom_sentences/en/pixora_voice_planner.yaml')
+    def planner_enabled():
+        try:value=json.loads(planner_file.read_text(encoding='utf-8'))
+        except (OSError,ValueError):return False
+        return isinstance(value,dict) and value.get('enabled') is True
+    async def planner_refresh():
+        result=await ha('services/pixora_voice/planner_vocabulary?return_response',{})
+        vocabulary=result.get('service_response',{})
+        if vocabulary.get('available') is not True:raise ValueError('Planner did not respond. Check that the paired Pixora Home Control app and the updated Assist integration are running.')
+        await asyncio.to_thread(update_phrases,phrase_file,vocabulary)
+        await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
+        return 'Planner is connected. Speech-to-Phrase is restarting to learn your household names and teams; spoken requests will be available after training finishes.'
+    async def planner_settings(request):
+        if request.method=='GET':return web.json_response({'enabled':await asyncio.to_thread(planner_enabled)})
+        try:
+            value=await request.json()
+            if not isinstance(value,dict) or type(value.get('enabled')) is not bool:raise ValueError('Choose whether to integrate with Planner.')
+            await asyncio.to_thread(write_owned,planner_file,json.dumps({'enabled':value['enabled']}))
+            if value['enabled']:
+                try:message=await planner_refresh()
+                except (ValueError,asyncio.TimeoutError,ClientError,OSError):message='Planner integration is enabled, but its connection or spoken phrases could not be confirmed. Check the paired Pixora Home Control app, then use Refresh Planner phrases.'
+            else:
+                await asyncio.to_thread(update_phrases,phrase_file)
+                message='Planner integration is off. Your local home controls still work.'
+            return web.json_response({'enabled':value['enabled'],'message':message})
+        except (ValueError,OSError) as exc:return web.json_response({'error':str(exc)},status=400)
+    async def refresh_planner(request):
+        if not await asyncio.to_thread(planner_enabled):return web.json_response({'error':'Enable Planner integration first.'},status=400)
+        try:return web.json_response({'message':await planner_refresh()})
+        except (ValueError,asyncio.TimeoutError,ClientError,OSError):return web.json_response({'error':'Planner phrases could not be confirmed. Check the paired Pixora Home Control app and Assist integration. The request was not retried.'},status=503)
     async def install(request):
         try:await asyncio.to_thread(install_component,config_root,data_root)
         except ValueError as exc:return web.json_response({'error':str(exc)},status=409)
@@ -86,7 +119,8 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
     async def startup(app):app['session']=ClientSession(timeout=ClientTimeout(total=20))
     async def cleanup(app):await app['session'].close()
     app.on_startup.append(startup);app.on_cleanup.append(cleanup)
-    app.router.add_get('/',index);app.router.add_get('/api/status',status)
+    app.router.add_get('/',index);app.router.add_get('/icon.svg',icon);app.router.add_get('/api/status',status)
+    app.router.add_get('/api/planner',planner_settings);app.router.add_post('/api/planner',planner_settings);app.router.add_post('/api/planner/refresh',refresh_planner)
     app.router.add_post('/api/install',install);app.router.add_post('/api/ask',ask)
     return app
 

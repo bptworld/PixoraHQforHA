@@ -1,5 +1,5 @@
-# Additional LOCAL speech recognition patterns for the Pixora Voice beta.
-# Keep this as a separate file; never replace a user's sentences.yaml.
+# Bounded additions to local recognition; shared HA name/area lists are reused.
+# Installed separately; never replace the user's own sentences.yaml.
 language: en
 intents:
   PixoraVoiceLocal:
@@ -8,7 +8,17 @@ intents:
           - "is [the] (front|back|side|garage) door (open|closed|locked|unlocked)"
           - "are [there] any (windows|doors) (open|closed)"
           - "which (windows|doors) are (open|closed)"
-          - "is [the] (heat|heating) on"
-          - "(what is|what's) the temperature in here"
+          - "(is|are) [the] {name} (open|closed|locked|unlocked|on|off)"
+          - "(is|are) [the] (heat|heating|air conditioning) (on|running)"
+          - "(what is|what's) the (temperature|humidity) in (here|this room|{area})"
+          - "how (warm|cold|humid) is it in (here|this room|{area})"
+          - "(are any|are all|which|how many) [of the] {area} lights [are] (on|off)"
+          - "(are any|are all|which|how many) [of the] lights [are] (on|off) in (here|this room)"
+          - "(can you|could you|please) turn (on|off) [the] {name}"
+          - "(can you|could you|please) turn [the] {name} (on|off)"
           - "turn (on|off) [the] ceiling light"
           - "turn [the] ceiling light (on|off)"
+          - "[please] set [the] ceiling light to {brightness} percent"
+          - "what is [the] (humidity|battery level|brightness) of [the] {name}"
+          - "{area}"
+          - "(cancel|never mind)"
