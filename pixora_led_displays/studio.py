@@ -729,7 +729,7 @@ class Studio:
         raise asyncio.CancelledError
 
     async def player(self,ident):
-        position=0;last_brightness=None;prepared=None;prepare_key=None;failed={};inactive={};writing=False;deck_snapshot=None
+        position=0;last_brightness=None;prepared=None;prepare_key=None;failed={};failed_until={};inactive={};writing=False;deck_snapshot=None
         try:
             while True:
                 cfg=self.data['devices'].get(ident,{})
@@ -758,14 +758,15 @@ class Studio:
                 deck=self.data['decks'].get(cfg.get('deck'),{})
                 snapshot=json.dumps(deck,sort_keys=True)
                 if snapshot!=deck_snapshot:
-                    failed.clear();inactive.clear();deck_snapshot=snapshot
+                    failed.clear();failed_until.clear();inactive.clear();deck_snapshot=snapshot
                 # Empty live-data cards can gain content while other cards keep playing.
                 inactive={key:retry_at for key,retry_at in inactive.items() if retry_at>time.monotonic()}
+                for key in list(failed):
+                    if failed_until.get(key,0)<=time.monotonic():failed.pop(key);failed_until.pop(key,None)
                 items=[i for i in deck.get('items',[]) if i['enabled']]
                 if not items:raise ValueError('Deck has no enabled cards.')
-                if all(i['id'] in failed for i in items):raise ValueError('No playable cards remain. Skipped: '+', '.join(failed.values())+'. Fix the cards, then press Play.')
                 if all(i['id'] in failed or i['id'] in inactive for i in items):
-                    self.runtime[ident]={'playing':True,'status':'No active cards; checking again shortly'}
+                    self.runtime[ident]={'playing':True,'status':'No active cards; checking again shortly',**({'warning':'Cards temporarily unavailable: '+', '.join(failed.values())+'. Retrying automatically.'} if failed else {})}
                     await asyncio.sleep(15);inactive.clear();continue
                 item=items[position%len(items)];position+=1
                 if item['id'] in failed or item['id'] in inactive:continue
@@ -790,15 +791,16 @@ class Studio:
                 except asyncio.CancelledError:raise
                 except Exception:
                     failed[item['id']]=name
+                    failed_until[item['id']]=time.monotonic()+60
                     self.runtime[ident]={'playing':True,'status':'Skipping '+name,
-                        'warning':'Skipped broken cards: '+', '.join(failed.values())+'. Fix them, then press Play to try them again.'}
+                        'warning':'Cards temporarily unavailable: '+', '.join(failed.values())+'. Retrying automatically.'}
                     continue
                 # Re-read after potentially slow provider rendering: never overwrite a new HA message.
                 current=await self.playback_info(ident,client)
                 if self.quiet(cfg):continue
                 if current.get('active') and current.get('owner')!='deck':position-=1;continue
                 name=self.store.cards[item['card']]['name'] if 'card' in item else self.data['graphics'][item['graphic']]['name']
-                self.runtime[ident]={'playing':True,'status':name,'item':item['id'],**({'warning':'Skipped broken cards: '+', '.join(failed.values())+'. Fix them, then press Play to try them again.'} if failed else {})}
+                self.runtime[ident]={'playing':True,'status':name,'item':item['id'],**({'warning':'Cards temporarily unavailable: '+', '.join(failed.values())+'. Retrying automatically.'} if failed else {})}
                 next_item=next(items[(position+offset)%len(items)] for offset in range(len(items)) if items[(position+offset)%len(items)]['id'] not in failed and items[(position+offset)%len(items)]['id'] not in inactive)
                 prepare_key=(json.dumps(next_item,sort_keys=True),info['width'])
                 prepared=asyncio.create_task(self.render(next_item,info['width'],device_id=ident))

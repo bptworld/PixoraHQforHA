@@ -1,3 +1,7 @@
+# 1.2.41
+
+- Automatically recover all enabled cards and uploaded graphics after temporary empty content or rendering/provider failures. Empty content is rechecked after 15 seconds; rendering failures after 60 seconds. Keep checking even when the whole deck is unavailable, preserve healthy card rotation, and clear recovered warnings. Disabled cards stay disabled. Uncertain display writes still pause without automatic retry.
+
 # 1.2.40
 
 - Recheck temporarily empty cards during normal deck rotation so sports scores and other live-data cards return automatically when content becomes available. Keep other cards playing while waiting.
