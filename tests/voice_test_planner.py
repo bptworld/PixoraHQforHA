@@ -16,6 +16,19 @@ class PhraseTests(unittest.TestCase):
     self.assertIsNotNone(recognize(text,intents),text)
    self.assertLessEqual(len(value['lists']['pv_team']['values']),32)
 
+ def test_tv_title_alias_and_tonight_are_recognized(self):
+  from hassil import Intents,recognize
+  with tempfile.TemporaryDirectory() as d:
+   p=Path(d)/'phrases.yaml';update_phrases(p,{'events':['Fire Country — New Episode','Boston Blue - New Episode','School concert']})
+   value=json.loads(p.read_text(encoding='utf-8')[len(MARKER):]);intents=Intents.from_dict(value)
+   for text in ('is Fire Country on tonight','what time is Fire Country tonight','when is Fire Country on tonight','is Boston Blue on tomorrow','when is School concert today'):
+    self.assertIsNotNone(recognize(text,intents),text)
+    self.assertTrue(planner.is_planner_question(text),text)
+   self.assertIn('Fire Country',value['lists']['pv_calendar_event']['values'])
+   self.assertIn('Fire Country New Episode',value['lists']['pv_calendar_event']['values'])
+   update_phrases(p,{'events':[str(i)+' — New Episode' for i in range(50)]})
+   self.assertLessEqual(len(json.loads(p.read_text(encoding='utf-8')[len(MARKER):])['lists']['pv_calendar_event']['values']),48)
+
  def test_playing_questions_use_saved_team_vocabulary(self):
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'phrases.yaml';update_phrases(p,{'teams':['Boston Red Sox'],'events':['School concert']})

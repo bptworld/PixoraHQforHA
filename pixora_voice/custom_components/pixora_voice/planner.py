@@ -14,7 +14,7 @@ def is_planner_question(text):
  q=canonical_request(str(text)).lower()
  if re.match(r'^(?:(?:can|could|would) you |please )?(turn|switch|set|dim|brighten)\b',q) and 'planner' not in q:return False
  calendar_search=re.match(r'^(?:when\b|what time\b|(?:is|are|do|does|will)\b.+\bplay(?:ing)?\b)',q)
- return bool(calendar_search or re.search(r"\b(planner|schedule|calendar|agenda|appointments?|events?|games?|dinner|lunch|breakfast|meals?|menu|chores?|tasks?|grocer(?:y|ies)|shopping|pantry|notes?|messages?|countdowns?|alarms?|routines?|lists?)\b",q) or re.match(r'^(is|are|where)\b.*\b(home|away|arrived)\b',q) or re.match(r'^where is \w',q))
+ return bool(calendar_search or re.match(r'^(?:is|are) .+ on (?:today|tonight|tomorrow)[?.!]*$',q) or re.search(r"\b(planner|schedule|calendar|agenda|appointments?|events?|games?|dinner|lunch|breakfast|meals?|menu|chores?|tasks?|grocer(?:y|ies)|shopping|pantry|notes?|messages?|countdowns?|alarms?|routines?|lists?)\b",q) or re.match(r'^(is|are|where)\b.*\b(home|away|arrived)\b',q) or re.match(r'^where is \w',q))
 async def enabled(hass):
  def read():
   try:

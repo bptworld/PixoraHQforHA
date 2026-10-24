@@ -45,6 +45,19 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         log=NS(conversation_id='test',messages=[]);log.async_add_assistant_content_without_tools=log.messages.append
         return await self.agent._async_handle_message(self.request,log)
 
+    async def test_configured_voice_flow_is_exact_and_stops_listening(self):
+        from unittest.mock import patch
+        with patch('custom_components.pixora_voice.flows.matches',AsyncMock(return_value=True)),patch('custom_components.pixora_voice.flows.ask',AsyncMock(return_value='Started Bedtime.')) as start:
+            self.context.user_id=None
+            reply=await self.ask('Good night')
+            self.assertEqual(reply.speech,'Started Bedtime.');self.assertFalse(reply.continue_conversation)
+            start.assert_awaited_once_with(self.hass,'Good night')
+            self.hass.services.async_call.assert_not_awaited()
+    async def test_non_admin_cannot_start_voice_flow(self):
+        from unittest.mock import patch
+        with patch('custom_components.pixora_voice.flows.matches',AsyncMock(return_value=True)),patch('custom_components.pixora_voice.flows.ask',AsyncMock()) as start:
+            reply=await self.ask('Good night')
+            self.assertIn('permission',reply.speech);self.assertFalse(reply.continue_conversation);start.assert_not_awaited()
     async def test_context_area_and_original_context_in_service_call(self):
         r=await self.ask('Turn on the ceiling light');self.assertIn('Okay, turning on',r.speech)
         call=self.hass.services.async_call.await_args;self.assertEqual(call.args[:2],('light','turn_on'));self.assertEqual(call.args[2]['entity_id'],'light.living');self.assertIs(call.kwargs['context'],self.context)

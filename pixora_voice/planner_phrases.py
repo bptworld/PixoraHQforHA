@@ -39,6 +39,9 @@ def update_phrases(path, vocabulary=None):
  def spoken(value):
   return re.sub(r'\s+',' ',re.sub(r"[^\w .’'-]",' ',value.replace('&',' and ').replace('@',' at '))).strip()
  events=list(dict.fromkeys(spoken(v) for v in raw_events if spoken(v)))
+ # Keep full titles and one short TV alias per saved event; no extra provider fetch.
+ aliases=[spoken(re.sub(r'\s+[—–-]\s+New Episode\s*$','',v,flags=re.I)) for v in raw_events]
+ events=list(dict.fromkeys(events+[v for v in aliases if v]))[:48]
  people=list(dict.fromkeys(people+[n.split()[0] for n in people]))
  people=list(dict.fromkeys(people+[n+"'s" for n in people]+[n+'s' for n in people]))
  teams=list(dict.fromkeys(teams+[' '.join(n.split()[1:]) for n in teams if len(n.split())>1]))
@@ -54,6 +57,18 @@ def update_phrases(path, vocabulary=None):
  if teams:
   lists['pv_team']={'values':teams};sentences += ["(what time is|when is) [the] {pv_team} [next] game [on] [today|tomorrow]","(is|are) [the] {pv_team} playing [today|tomorrow]","(do|does|will) [the] {pv_team} play [today|tomorrow]"]
  if events:
-  lists['pv_calendar_event']={'values':events};sentences += ["(what time is|when is) [the] {pv_calendar_event} [today|tomorrow]","(tell me about|find|search for|read) [the] {pv_calendar_event} [today|tomorrow]"]
+  lists['pv_calendar_event']={'values':events};sentences += ["(what time is|when is) [the] {pv_calendar_event} [on] [today|tonight|tomorrow]","(is|are) [the] {pv_calendar_event} on (today|tonight|tomorrow)","(tell me about|find|search for|read) [the] {pv_calendar_event} [today|tonight|tomorrow]"]
  payload={'language':'en','intents':{'PixoraPlanner':{'data':[{'sentences':sentences}]}},'lists':lists}
  write_owned(path,MARKER+json.dumps(payload,ensure_ascii=False,indent=2)+'\n')
+
+def update_voice_phrases(path,phrases):
+ path=Path(path)
+ if path.exists() and (path.is_symlink() or not path.read_text(encoding='utf-8').startswith(MARKER)):
+  raise ValueError('An existing voice trigger phrase file was preserved because it is not owned by Pixora Voice.')
+ if not isinstance(phrases,list) or len(phrases)>64 or any(not isinstance(p,str) or not 1<=len(p.strip())<=100 or not re.fullmatch(r"[A-Za-z0-9 .!?'-]+",p) or not re.search(r'[A-Za-z0-9]',p) for p in phrases):
+  raise ValueError('Voice triggers need at most 64 short plain-language phrases.')
+ values=list(dict.fromkeys(' '.join(re.findall(r'[a-z0-9]+',p.lower())) for p in phrases))
+ if values:
+  payload={'language':'en','intents':{'PixoraVoiceFlow':{'data':[{'sentences':['{pv_flow_phrase}']}] }},'lists':{'pv_flow_phrase':{'values':values}}}
+ else:payload={'language':'en','intents':{}}
+ write_owned(path,MARKER+json.dumps(payload,indent=2)+'\n')

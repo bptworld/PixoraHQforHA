@@ -41,6 +41,13 @@ class LocalVoice(conversation.ConversationEntity):
         previous=self.followups.get(key)
         self.followups.clear(key)
         from .planner import is_planner_question,ask as ask_planner,enabled as planner_enabled,is_write_request
+        from .flows import matches as matches_flow,ask as ask_flow
+        if await matches_flow(self.hass,user_input.text):
+            uid=user_input.context.user_id
+            user=await self.hass.auth.async_get_user(uid) if uid else None
+            speech=await ask_flow(self.hass,user_input.text) if not uid or user and getattr(user,'is_admin',False) else 'You do not have permission to start voice Flows.'
+            chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=speech))
+            return self.finish(user_input,chat_log)
         planner_text=planner_followup(user_input.text,previous)
         if planner_text or is_planner_question(user_input.text):
             uid=user_input.context.user_id

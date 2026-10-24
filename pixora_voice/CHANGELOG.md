@@ -1,3 +1,11 @@
+## 0.1.7
+- Recognize natural calendar TV requests such as “Is Fire Country on tonight?” without requiring “New Episode.” Refresh Planner phrases after installing the updated Assist integration. Short title aliases remain bounded.
+- Start existing Pixora Flows with exact configured phrases such as “Good night.” Add a Voice trigger, save and enable the Flow, then use Refresh Voice triggers in this app.
+- Train up to 64 local phrases without polling, an LLM or a second automation engine. Flows use your existing paired Home Control connection and require internet; the Planner checkbox is independent.
+- Voice commands acknowledge queue admission, use normal run history and restart the matching path when retriggered. Paused flows cannot run; uncertain commands are never retried automatically.
+- Anyone using a satellite can start the configured voice paths. Authenticated non-administrator HA users cannot invoke these server automations through this assistant.
+- After updating the app, install/update the Assist integration, restart Home Assistant once, then refresh Voice triggers. Keep your satellite’s configured wake word (for example, “Okay Nabu”).
+
 ## 0.1.6
 
 - Search shared Planner information for unanswered read-only questions instead of requiring a fixed topic or team name. Keep local device commands, permissions and uncertainty handling unchanged, and stop listening after every reply.

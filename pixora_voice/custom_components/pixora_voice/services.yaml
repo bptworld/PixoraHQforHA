@@ -13,3 +13,10 @@ planner_reply:
 planner_vocabulary:
   name: Read Planner speech vocabulary
   description: Read bounded household names and followed teams through the existing paired connector when Planner integration is enabled.
+
+flow_reply:
+  name: Deliver Flow reply
+  description: Internal reply to an outstanding authenticated voice Flow request. Unmatched replies are ignored.
+flow_vocabulary:
+  name: Read enabled Flow phrases
+  description: Read up to 64 enabled voice trigger phrases using the paired Home Control connection.

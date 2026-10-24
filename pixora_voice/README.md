@@ -132,3 +132,14 @@ browser; no transcripts, answers, audio URLs or tokens. No extra traces are
 recorded or stored. If HA timing is unavailable, use Voice assistants Debug.
 Failed Planner requests and uncertain device commands produce a bounded spoken
 explanation and are never blindly retried.
+
+## Voice triggers for Flows
+
+1. In Home Control → Flows, add a **Voice trigger** and enter just the phrase, such as **Good night**.
+2. Connect the actions, save, and enable the Flow.
+3. In Pixora Voice, select **Refresh Voice triggers**. Wait for Speech-to-Phrase training to finish. Refresh again after changing phrases.
+4. Say your satellite’s wake word, then the phrase: **Okay Nabu, good night**. The wake word is configured on the satellite; this feature does not change it.
+
+This uses the paired Pixora Home Control app and existing Flow runner over the internet. Planner integration can be off. Local recognition learns up to 64 exact phrases, ignoring punctuation and capitalization, without an LLM or background polling. Anyone using a satellite can run these configured paths. Use only actions you want household speakers to invoke. Repeating the phrase restarts that matching path; independent paths continue. Pausing the Flow prevents new voice runs immediately. Commands already sent can finish. A timeout is uncertain: check Flow history before trying again. Every reply stops listening.
+
+For this update, use **Install / update Assist integration** and restart Home Assistant once before refreshing phrases. Existing voice assistant and speaker settings remain in place.

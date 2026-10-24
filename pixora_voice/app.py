@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.6'
+VERSION='0.1.7'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -110,6 +110,19 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         if not await asyncio.to_thread(planner_enabled):return web.json_response({'error':'Enable Planner integration first.'},status=400)
         try:return web.json_response({'message':await planner_refresh()})
         except (ValueError,asyncio.TimeoutError,ClientError,OSError):return web.json_response({'error':'Planner phrases could not be confirmed. Check the paired Pixora Home Control app and Assist integration. The request was not retried.'},status=503)
+    async def refresh_flows(request):
+        from planner_phrases import update_voice_phrases
+        try:
+            result=await ha('services/pixora_voice/flow_vocabulary?return_response',{})
+            vocabulary=result.get('service_response',{})
+            if vocabulary.get('available') is not True:raise ValueError('Flows did not respond. Check the paired Home Control app and updated Assist integration.')
+            values=vocabulary.get('phrases',[])
+            await asyncio.to_thread(update_voice_phrases,phrase_file.with_name('pixora_voice_flows.yaml'),values)
+            await asyncio.to_thread(write_owned,config_root/'.storage'/'pixora_voice_flows.json',json.dumps(values))
+            await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
+            return web.json_response({'message':str(len(values))+' voice trigger phrases saved. Speech-to-Phrase is restarting to learn them. Wait for training before speaking.'})
+        except (ValueError,OSError,asyncio.TimeoutError,ClientError):
+            return web.json_response({'error':'Voice trigger refresh or speech training could not be confirmed. Check the updated Assist integration, paired Home Control app and Speech-to-Phrase. It was not retried.'},status=503)
     async def install(request):
         try:await asyncio.to_thread(install_component,config_root,data_root)
         except ValueError as exc:return web.json_response({'error':str(exc)},status=409)
@@ -144,6 +157,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
     app.router.add_post('/api/install',install);app.router.add_post('/api/ask',ask)
     app.router.add_get('/api/timings',timings)
     app.router.add_post('/api/phrases',local_phrases)
+    app.router.add_post('/api/flows/refresh',refresh_flows)
     return app
 
 if __name__=='__main__':web.run_app(make_app(),host='0.0.0.0',port=4190)
