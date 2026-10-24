@@ -108,6 +108,14 @@ class MatchingTests(unittest.TestCase):
         reply=answer('Is the heat on?',es).speech
         self.assertNotIn('Yes,',reply);self.assertNotIn('No,',reply);self.assertIn('does not report',reply)
 
+    def test_clock_is_local_and_event_questions_stay_separate(self):
+        from engine import clock_answer
+        now=datetime(2026,10,24,1,7,tzinfo=timezone.utc)
+        self.assertEqual(clock_answer('what time is it','America/New_York',now),"It's 9:07 PM.")
+        self.assertEqual(clock_answer("What's the date today?",'America/New_York',now),"It's Friday, October 23.")
+        self.assertIsNone(clock_answer('What time is the Bruins game?','America/New_York',now))
+        self.assertIn('time zone',clock_answer('what time is it','Invalid/Zone',now))
+
     def test_spoken_names_and_readings_are_natural(self):
         es=catalog();es[1].name='Living Room Front Door Sensor';es[1].area='Living Room'
         self.assertEqual(answer('Is the front door open?',es).speech,'No, the front door is closed.')

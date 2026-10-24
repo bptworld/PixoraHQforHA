@@ -29,11 +29,18 @@ def install_services(hass):
  async def receive(call):
   future=hass.data.setdefault(DOMAIN,{}).setdefault('flow_pending',{}).get(call.data.get('request_id'))
   speech=call.data.get('speech')
-  if future and not future.done() and isinstance(speech,str) and 0<len(speech)<=8000:future.set_result(speech)
+  if future and not future.done() and isinstance(speech,str) and 0<len(speech)<=12000:future.set_result(speech)
  async def vocabulary(call):
   try:value=json.loads(await ask(hass,'__pixora_voice_flow_vocabulary__'))
   except ValueError:return {'available':False}
-  return {'available':True,'phrases':value.get('phrases',[])} if isinstance(value,dict) else {'available':False}
+  return {'available':True,'phrases':value.get('phrases',[]),'variables':value.get('variables',[])} if isinstance(value,dict) else {'available':False}
  from homeassistant.core import SupportsResponse
  if not hass.services.has_service(DOMAIN,'flow_reply'):hass.services.async_register(DOMAIN,'flow_reply',receive)
  if not hass.services.has_service(DOMAIN,'flow_vocabulary'):hass.services.async_register(DOMAIN,'flow_vocabulary',vocabulary,supports_response=SupportsResponse.ONLY)
+
+def variable_question(text):
+ q=str(text).strip().rstrip('?.!')
+ match=re.fullmatch(r"(?:what is|what's|read|tell me) (?:the )?(?:value of (?:the )?|variable )(.+?)(?: variable)?",q,re.I)
+ if match:return match[1].strip()
+ match=re.fullmatch(r"(?:what is|what's|read|tell me) (?:the )?(.+?) variable",q,re.I)
+ return match[1].strip() if match else None

@@ -35,7 +35,7 @@ class PhraseTests(unittest.TestCase):
    value=json.loads(p.read_text()[len(MARKER):])
    self.assertIn('Red Sox',value['lists']['pv_team']['values'])
    sentences=value['intents']['PixoraPlanner']['data'][0]['sentences']
-   self.assertIn('(is|are) [the] {pv_team} playing [today|tomorrow]',sentences)
+   self.assertTrue(any(s.startswith('(is|are) [the] {pv_team} playing ') for s in sentences))
    self.assertIn('School concert',value['lists']['pv_calendar_event']['values'])
 
  def test_owned_phrases_and_preserve_foreign_file(self):

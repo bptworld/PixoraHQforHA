@@ -1,3 +1,10 @@
+## 0.1.9
+- Add local time/date, configured HA weather and bounded forecasts, HA-native satellite timers, broader device controls and relative adjustments, and one-device/24-hour Recorder history questions.
+- Add read-only global Flow variable answers and a bounded spoken variable vocabulary. No variable writes or new Flow engine.
+- Expand shared Planner calendar dates and personal next-appointment matching. Home lookup failures stay home-specific instead of being mistaken for calendar searches.
+- Add a compact capability guide with clear setup and limitations. Uses existing HA services and data, standard-library parsing, finite speech phrases and no LLM or new background polling.
+- Install/update Assist, restart HA once, Prepare added phrases, Refresh Planner phrases if enabled, and Refresh Voice triggers to learn variable names. Timers require a native timer-capable satellite; weather needs an exposed weather entity; history needs Recorder. Physical Yellow/satellite verification remains required.
+
 ## 0.1.8
 - Use conversational replies across home status, commands, counts, clarification, access problems, unavailable devices, Flow requests and connection failures. Answer yes/no questions directly only when the reported state supports the answer.
 - Planner replies now use natural sentences for schedules, sports, TV, meals, shared lists and search results. Original shared content, dates, values and privacy boundaries are preserved.

@@ -95,6 +95,20 @@ def duration_answer(entity,now=None):
     return Result(f'{subject(entity)} has been reporting {state} for {age}.',entities=[entity.entity_id])
 
 
+def clock_answer(text,time_zone,now=None):
+    """Answer clock questions on the hub; never treat an event time as current time."""
+    query=' '.join(words(canonical_request(str(text))))
+    time_questions={'what time is it','what is the time','tell me the time','tell me what time it is','what is the current time','what time is it now'}
+    date_questions={'what is the date','what is the date today','what is today date','what date is it','what day is it','what day is today','what day of the week is it','what is today','tell me the date'}
+    if query not in time_questions|date_questions:return None
+    from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
+    try:zone=ZoneInfo(str(time_zone))
+    except (ZoneInfoNotFoundError,ValueError):return "I need the correct time zone in Home Assistant before I can tell you the local time."
+    local=(now or datetime.now(timezone.utc)).astimezone(zone)
+    if query in time_questions:return "It's "+local.strftime('%I:%M %p').lstrip('0').replace(':00 ',' ')+'.'
+    return "It's "+local.strftime('%A, %B')+' '+str(local.day)+'.'
+
+
 def capable(entity,prop,text):
     domain=entity.domain;cls=entity.attributes.get('device_class','')
     if prop=='opening':

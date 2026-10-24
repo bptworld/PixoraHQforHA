@@ -48,8 +48,27 @@ class LocalVoice(conversation.ConversationEntity):
             speech=await ask_flow(self.hass,user_input.text) if not uid or user and getattr(user,'is_admin',False) else "I can't start voice Flows from this account. An administrator can help with access."
             chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=speech))
             return self.finish(user_input,chat_log)
+        from .engine import clock_answer
+        clock=clock_answer(user_input.text,getattr(getattr(self.hass,'config',None),'time_zone',None))
+        if clock:
+            chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=clock))
+            return self.finish(user_input,chat_log)
+        from .flows import variable_question
+        variable_name=variable_question(user_input.text)
+        if variable_name:
+            uid=user_input.context.user_id
+            user=await self.hass.auth.async_get_user(uid) if uid else None
+            speech=await ask_flow(self.hass,'__pixora_voice_variable__:'+variable_name) if not uid or user and getattr(user,'is_admin',False) else "I can't read Flow variables from this account. Please check its permissions."
+            chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=speech))
+            return self.finish(user_input,chat_log)
+        from .timers import reply as timer_reply
+        timer=await timer_reply(self.hass,user_input)
+        if timer:
+            chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=timer))
+            return self.finish(user_input,chat_log)
+        from .extra_reads import request_kind
         planner_text=planner_followup(user_input.text,previous)
-        if planner_text or is_planner_question(user_input.text):
+        if not request_kind(user_input.text) and (planner_text or is_planner_question(user_input.text)):
             uid=user_input.context.user_id
             allowed=not uid or await self.hass.auth.async_get_user(uid)
             speech=await ask_planner(self.hass,planner_text or user_input.text) if allowed else "I can't read Planner from this account. Please check its permissions."
@@ -72,7 +91,19 @@ class LocalVoice(conversation.ConversationEntity):
             catalog.append(Entity(state.entity_id,str(state.name),state.state,dict(state.attributes),area.name if area else '',aliases,last_changed=getattr(state,'last_changed',None)))
         origin=self.origin_area(user_input,entities,devices,areas)
         text=user_input.text
-        if words(text) in (['cancel'],['never','mind'],['nevermind']):
+        from .extra_reads import reply as extra_read
+        from .controls import plan as control_plan
+        extra=await extra_read(self.hass,text,catalog,origin)
+        control_text=text;control_catalog=catalog
+        if previous and previous.get('source')=='home' and len(previous.get('ids',[]))==1 and re.match(r'^(?:make|set|dim|brighten)\b',text,re.I):
+            prior=next((e for e in catalog if e.entity_id==previous['ids'][0]),None)
+            if prior:
+                control_text,replaced=re.subn(r'\b(?:it|that)\b',lambda match:prior.name,text,flags=re.I)
+                if replaced:control_catalog=[prior]
+        extended=extra if extra is not None else control_plan(control_text,control_catalog,origin)
+        if extended is not None:
+            result=extended
+        elif words(text) in (['cancel'],['never','mind'],['nevermind']):
             result=Result('Okay.','cancelled')
         elif duration_question(text):
             found=[e for e in catalog if previous and previous.get('source')=='home' and e.entity_id in previous.get('ids',[])]
@@ -90,11 +121,12 @@ class LocalVoice(conversation.ConversationEntity):
             matches=choose(text,[e for e in catalog if e.entity_id in previous['ids']],previous['property']) if not interpret(text)[0] else []
             result=answer(previous['text'],[matches[0][1]],origin) if matches and (len(matches)==1 or matches[0][0]>matches[1][0]) else answer(text,catalog,origin)
         else:result=answer(text,catalog,origin)
-        if result.kind in {'unsupported','not_found'} and not is_write_request(text):
+        if result.kind=='unsupported' and not is_write_request(text):
             speech=NOT_FOUND_REPLY
             if (not user_id or user) and await planner_enabled(self.hass):
                 speech=await ask_planner(self.hass,text)
                 if speech!=NOT_FOUND_REPLY:self.followups.put(key,source='planner',text=text)
+            if speech==NOT_FOUND_REPLY and not await planner_enabled(self.hass):speech="I can help with home devices, weather, timers, time and dates. For schedules or shared lists, enable Planner in the Voice app."
             result=Result(speech)
         if result.choices:self.followups.put(key,source='clarify',ids=[c['entity_id'] for c in result.choices][:20],property=result.property,text=text)
         elif result.kind=='clarify' and 'Which room' in result.speech:self.followups.put(key,source='room',text=canonical_request(text))

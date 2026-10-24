@@ -23,10 +23,10 @@ still required before calling this a verified voice release.
 
 English initially. Also supports humidity, numeric battery readings, motion /
 occupancy, light brightness and on/off queries and controls. This is a growing
-intent vocabulary, **not arbitrary HA troubleshooting knowledge**. Historical
-questions, automation explanations, calendars, media, relative changes, chained
-commands, security actions such as unlocking, and temperature setpoint changes
-are not implemented yet. Unsupported requests do not execute an approximation.
+intent vocabulary, **not arbitrary HA troubleshooting knowledge**. Recent history, media controls, relative brightness, bounded thermostat changes,
+and broader Planner calendars are supported as described below. General HA troubleshooting knowledge,
+chained or conditional commands, security actions such as unlocking, arbitrary music catalog searches,
+and date-specific repeating chore calculations remain outside this deterministic assistant. Unsupported requests do not execute an approximation.
 
 ## Install from the permanent app repository
 
@@ -143,3 +143,16 @@ explanation and are never blindly retried.
 This uses the paired Pixora Home Control app and existing Flow runner over the internet. Planner integration can be off. Local recognition learns up to 64 exact phrases, ignoring punctuation and capitalization, without an LLM or background polling. Anyone using a satellite can run these configured paths. Use only actions you want household speakers to invoke. Repeating the phrase restarts that matching path; independent paths continue. Pausing the Flow prevents new voice runs immediately. Commands already sent can finish. A timeout is uncertain: check Flow history before trying again. Every reply stops listening.
 
 For this update, use **Install / update Assist integration** and restart Home Assistant once before refreshing phrases. Existing voice assistant and speaker settings remain in place.
+
+## Expanded everyday requests
+
+- Time/date run directly on the Yellow using HA's time zone.
+- Current weather uses one Assist-exposed HA weather entity. Forecasts make one on-demand `weather.get_forecasts` call (daily or hourly), limited to 72 entries. The configured provider may need internet. Missing forecast data is not treated as “no rain.”
+- Timers use HA's native timer intents, with the capturing satellite/device and original request context. The satellite must support native timers. Start, named timers, pause, resume, cancel and time remaining are supported, up to 24 hours. No private timer engine, continuous polling, scheduled device commands or auto-retries are added. Text requests without a timer-capable device explain this limitation.
+- Shared, permitted devices can receive thermostat target/mode/on/off, fan percentage/low-medium-high, blind/curtain open-close-position, light color, scene activation and media play/pause/resume/stop/mute/volume commands. Play resumes existing media. Controls are checked against advertised features, thermostat min/max and zero-to-100 percentages. Window-cover commands exclude door/gate/garage classes.
+- Relative brightness uses a fresh reading with a default 10-percentage-point adjustment. Thermostat changes are limited to five degrees per request. Pronouns can refer to one previously named, still-shared device after a new wake word; otherwise a unique room/device is required.
+- “When did the front door last open?” reads one entity's Recorder state changes over the last 24 hours without attributes or a fabricated initial state. At most one Recorder lookup runs at a time, with a five-second answer timeout. No retained background history collector or new database is created. No recorded change means no guessed answer.
+- Planner calendars support weekdays, this/next weekend, week and month, named month/day dates and ISO dates. Next personal appointments use that person's assignments, not unrelated family TV entries. Meals support today/tonight/tomorrow. Calendar search remains read-only and household shared.
+- “What's the value of isKitchenMotion?” reads an existing global Flow variable through the paired Home Control connection, even with the Planner checkbox off. Boolean/number/text values are read as stored, not interpreted as a device status. No variable write is performed. Refresh Voice triggers trains up to 32 variable names; exact read requests can address any valid name in the text UI. Authenticated non-administrator users cannot read Flow variables through this assistant; household satellites have the same configured access as Voice triggers.
+
+After updating: install/update Assist, restart HA once, Prepare added phrases, Refresh Planner phrases if enabled, and Refresh Voice triggers for variable names. Local grammar uses bounded numeric ranges and eight common named timers (pizza, pasta, tea, coffee, laundry, cooking, oven, eggs); typed timer names may be other short plain names. There is no LLM or additional always-on poller. These additions are verified with local fixtures; physical satellite and Yellow timing tests are still required after deployment.

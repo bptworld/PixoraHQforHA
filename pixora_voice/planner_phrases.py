@@ -7,11 +7,17 @@ def update_local_phrases(path):
  path=Path(path)
  if path.exists() and (path.is_symlink() or not path.read_text(encoding='utf-8').startswith(MARKER)):
   raise ValueError('An existing conversation phrase file was preserved because it is not owned by Pixora Voice.')
- sentences=["how long has (it|that) been [open|closed|on|off|locked|unlocked]",
+ sentences=["(what time is it|what is the time|tell me the time|what is the current time)","(what is the date [today]|what day is it|what day is today|tell me the date)","how long has (it|that) been [open|closed|on|off|locked|unlocked]",
  "is (it|that) [still] (open|closed|on|off|locked|unlocked)","(and|what about) (today|tomorrow)",
  "(can you check if|tell me if|do you know if) [the] {name} is (open|closed|on|off|locked|unlocked)",
  "tell me [the] (temperature|humidity) in (here|this room|{area})"]
- write_owned(path,MARKER+json.dumps({'language':'en','intents':{'PixoraVoiceLanguage':{'data':[{'sentences':sentences}]}}},indent=2)+'\n')
+ sentences += [
+ "(what is|what's) [the] weather [like] [outside]", "(what is|what's) it like outside", "(what is|what's) the temperature outside", "will it rain (today|tomorrow)", "(what is|what's) the forecast [for] (today|tomorrow)",
+ "(set|start) [a] timer for {pv_duration} (seconds|minutes|hours)", "(set|start) [a] {pv_duration} (second|minute|hour) timer", "(set|start) [a] {pv_duration} hour [and] {pv_duration_minutes} minute timer", "(set|start) [a] {pv_timer_name} timer for {pv_duration} minutes", "(cancel|pause|resume) [the] [{pv_timer_name}] timer", "how much time is (left|remaining) [on [the] [{pv_timer_name}] timer]",
+ "set [the] {name} to {pv_amount} degrees [fahrenheit|celsius]", "set [the] (thermostat|heat|{name}) to (heat|cool|off|auto)", "turn [the] (heat|thermostat|{name}) (up|down) [by] {pv_delta} degrees", "set [the] {name} [speed] to {pv_amount} percent", "set [the] {name} [speed] to (low|medium|high)", "(open|close) [the] {name}", "(set|make|turn) [the] {name} [to] {pv_color}", "make [the] ({name}|it|that) (brighter|dimmer) [by {pv_amount} percent]", "(activate|run|turn on) [the] {name} scene", "(play|pause|resume|stop|mute|unmute) [the] {name}", "set [the] {name} volume to {pv_amount} percent", "(what is|what's) playing [on [the] {name}]", "when did [the] {name} last (open|close|turn on|turn off|lock|unlock)"
+ ]
+ lists={'pv_amount':{'range':{'from':0,'to':100}},'pv_delta':{'range':{'from':1,'to':5}},'pv_duration':{'range':{'from':1,'to':60}},'pv_duration_minutes':{'range':{'from':1,'to':59}},'pv_color':{'values':['red','green','blue','white','yellow','orange','purple','pink']},'pv_timer_name':{'values':['pizza','pasta','tea','coffee','laundry','cooking','oven','eggs']}}
+ write_owned(path,MARKER+json.dumps({'language':'en','intents':{'PixoraVoiceLanguage':{'data':[{'sentences':sentences}]}},'lists':lists},indent=2)+'\n')
 def write_owned(path, content):
  path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
  if path.is_symlink() or any(p.is_symlink() for p in path.parents):raise ValueError('Planner settings and phrases cannot use symbolic links.')
@@ -50,18 +56,19 @@ def update_phrases(path, vocabulary=None):
   sides=re.split(r'\s+(?:vs\.?|versus|at)\s+|\s*@\s*',title,flags=re.I)
   if len(sides)==2:teams.extend(spoken(side) for side in sides if spoken(side))
  teams=list(dict.fromkeys(teams))[:32]
- sentences=["(what is|what's) on [the] [Planner] (calendar|schedule|agenda) [today|tomorrow]","(what is|what's) for (dinner|lunch|breakfast) [today|tomorrow]","what are [the] [Planner] (chores|groceries|pantry items|notes|messages|lists|countdowns|alarms|routines)"]
+ sentences=["(what is|what's) on [the] [Planner] (calendar|schedule|agenda) [today|tonight|tomorrow|this weekend|next weekend|this week|next week|this month|next month|monday|tuesday|wednesday|thursday|friday|saturday|sunday]","(what is|what's) for (dinner|lunch|breakfast) [today|tonight|tomorrow]","what are [the] [Planner] (chores|groceries|pantry items|notes|messages|lists|countdowns|alarms|routines)"]
+ sentences += ["(what is|what's) happening (today|tomorrow|this weekend|next weekend|this week|next week|this month|next month)"]
  lists={}
  if people:
-  lists['pv_person']={'values':people};sentences += ["(what is|what's) {pv_person} (schedule|calendar|agenda) [for] [today|tomorrow]","is {pv_person} [at] (home|away)","where is {pv_person}"]
+  lists['pv_person']={'values':people};sentences += ["(what is|what's) {pv_person} (schedule|calendar|agenda) [for] [today|tonight|tomorrow|this weekend|next weekend|this week|next week|this month|next month|monday|tuesday|wednesday|thursday|friday|saturday|sunday]","is {pv_person} [at] (home|away)","where is {pv_person}","when is {pv_person} [next] appointment"]
  if teams:
-  lists['pv_team']={'values':teams};sentences += ["(what time is|when is) [the] {pv_team} [next] game [on] [today|tomorrow]","(is|are) [the] {pv_team} playing [today|tomorrow]","(do|does|will) [the] {pv_team} play [today|tomorrow]"]
+  lists['pv_team']={'values':teams};sentences += ["(what time is|when is) [the] {pv_team} [next] game [on] [today|tonight|tomorrow|this weekend|next weekend|this week|next week|this month|next month|monday|tuesday|wednesday|thursday|friday|saturday|sunday]","(is|are) [the] {pv_team} playing [today|tonight|tomorrow|this weekend|next weekend|this week|next week|this month|next month|monday|tuesday|wednesday|thursday|friday|saturday|sunday]","(do|does|will) [the] {pv_team} play [today|tonight|tomorrow|this weekend|next weekend|this week|next week|this month|next month|monday|tuesday|wednesday|thursday|friday|saturday|sunday]"]
  if events:
   lists['pv_calendar_event']={'values':events};sentences += ["(what time is|when is) [the] {pv_calendar_event} [on] [today|tonight|tomorrow]","(is|are) [the] {pv_calendar_event} on (today|tonight|tomorrow)","(tell me about|find|search for|read) [the] {pv_calendar_event} [today|tonight|tomorrow]"]
  payload={'language':'en','intents':{'PixoraPlanner':{'data':[{'sentences':sentences}]}},'lists':lists}
  write_owned(path,MARKER+json.dumps(payload,ensure_ascii=False,indent=2)+'\n')
 
-def update_voice_phrases(path,phrases):
+def update_voice_phrases(path,phrases,variables=None):
  path=Path(path)
  if path.exists() and (path.is_symlink() or not path.read_text(encoding='utf-8').startswith(MARKER)):
   raise ValueError('An existing voice trigger phrase file was preserved because it is not owned by Pixora Voice.')
@@ -71,4 +78,14 @@ def update_voice_phrases(path,phrases):
  if values:
   payload={'language':'en','intents':{'PixoraVoiceFlow':{'data':[{'sentences':['{pv_flow_phrase}']}] }},'lists':{'pv_flow_phrase':{'values':values}}}
  else:payload={'language':'en','intents':{}}
+ variables=variables or []
+ if not isinstance(variables,list) or len(variables)>32 or any(not isinstance(v,str) or not 1<=len(v)<=70 for v in variables):raise ValueError('Use up to 32 short variable names.')
+ names=[]
+ for value in variables:
+  spoken=re.sub(r'([a-z])([A-Z])',r'\1 \2',value)
+  spoken=' '.join(re.findall(r'[a-z0-9]+',spoken.lower()))
+  if spoken:names.append(spoken)
+ if names:
+  payload.setdefault('lists',{})['pv_flow_variable']={'values':list(dict.fromkeys(names))}
+  payload['intents']['PixoraVoiceVariable']={'data':[{'sentences':["(what is|what's) [the] value of [the] {pv_flow_variable}","read [the] {pv_flow_variable} variable","(what is|what's) [the] {pv_flow_variable} variable"]}]}
  write_owned(path,MARKER+json.dumps(payload,indent=2)+'\n')

@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.8'
+VERSION='0.1.9'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -117,7 +117,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             vocabulary=result.get('service_response',{})
             if vocabulary.get('available') is not True:raise ValueError('Flows did not respond. Check the paired Home Control app and updated Assist integration.')
             values=vocabulary.get('phrases',[])
-            await asyncio.to_thread(update_voice_phrases,phrase_file.with_name('pixora_voice_flows.yaml'),values)
+            await asyncio.to_thread(update_voice_phrases,phrase_file.with_name('pixora_voice_flows.yaml'),values,vocabulary.get('variables',[]))
             await asyncio.to_thread(write_owned,config_root/'.storage'/'pixora_voice_flows.json',json.dumps(values))
             await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
             return web.json_response({'message':str(len(values))+' voice trigger phrases saved. Speech-to-Phrase is restarting to learn them. Wait for training before speaking.'})

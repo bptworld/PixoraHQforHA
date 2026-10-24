@@ -58,6 +58,14 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         with patch('custom_components.pixora_voice.flows.matches',AsyncMock(return_value=True)),patch('custom_components.pixora_voice.flows.ask',AsyncMock()) as start:
             reply=await self.ask('Good night')
             self.assertIn('administrator',reply.speech);self.assertFalse(reply.continue_conversation);start.assert_not_awaited()
+    async def test_clock_bypasses_planner_and_stops_listening(self):
+        from unittest.mock import patch
+        self.hass.config=NS(time_zone='America/New_York')
+        with patch('custom_components.pixora_voice.planner.ask',AsyncMock()) as planner_ask:
+            reply=await self.ask('what time is it')
+            self.assertTrue(reply.speech.startswith("It's "));self.assertFalse(reply.continue_conversation)
+            planner_ask.assert_not_awaited();self.hass.services.async_call.assert_not_awaited()
+
     async def test_context_area_and_original_context_in_service_call(self):
         r=await self.ask('Turn on the ceiling light');self.assertIn('Okay, turning on',r.speech)
         call=self.hass.services.async_call.await_args;self.assertEqual(call.args[:2],('light','turn_on'));self.assertEqual(call.args[2]['entity_id'],'light.living');self.assertIs(call.kwargs['context'],self.context)
