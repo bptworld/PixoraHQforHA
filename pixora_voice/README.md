@@ -4,7 +4,7 @@ An initial implementation of a standalone hub app and native Assist conversation
 agent. It uses HA state, domains, device classes, areas and aliases instead of an
 LLM. No Pixora account, remote language model or cloud command transport.
 
-**IN BETA TESTING — not ready for everyday use. Keep your usual controls and assistant available.**
+**IN BETA TESTING. Keep your usual controls and assistant available.**
 Matching and adapter tests use fixture devices. A container build, native HA
 integration load, speech recognition coverage and physical satellite tests are
 still required before calling this a verified voice release.

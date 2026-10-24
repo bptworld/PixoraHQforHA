@@ -1,3 +1,7 @@
+# 1.2.43
+
+- Use the same LED symbol on the Home Assistant app card and Information page as the Studio sidebar, replacing the generic puzzle-piece icon.
+
 # 1.2.42
 
 - Recover automatically after a failed special graphic instead of leaving displays permanently paused. Discard the failed graphic and queued tail, check the same panel until its active content finishes, then continue normal playback and future events without replaying uncertain writes. Recover older saved priority failures after restart and preserve explicit pauses.

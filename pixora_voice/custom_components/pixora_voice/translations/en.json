@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Pixora Voice (Beta)",
-        "description": "IN BETA TESTING - not ready for everyday use. Add a local, rule-based conversation agent. Uses only entities exposed to Assist. Select Pixora Voice in your local voice assistant afterward. Brought to you by PixoraHQ.com."
+        "description": "IN BETA TESTING. Add a local, rule-based conversation agent. Uses only entities exposed to Assist. Select Pixora Voice in your local voice assistant afterward. Brought to you by PixoraHQ.com."
       }
     },
     "abort": {
