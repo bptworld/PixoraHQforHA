@@ -5,7 +5,7 @@ from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.auth.permissions.const import POLICY_READ,POLICY_CONTROL
 from homeassistant.helpers import area_registry as ar,device_registry as dr,entity_registry as er
 from homeassistant.exceptions import HomeAssistantError
-from .engine import Entity,Result,answer,words,duration_answer,canonical_request
+from .engine import Entity,Result,answer,words,duration_answer,canonical_request,NOT_FOUND_REPLY
 from .context import Followups,planner_followup,duration_question,reading_followup
 
 
@@ -40,7 +40,7 @@ class LocalVoice(conversation.ConversationEntity):
         key=self.followups.key(user_input,chat_log.conversation_id)
         previous=self.followups.get(key)
         self.followups.clear(key)
-        from .planner import is_planner_question,ask as ask_planner
+        from .planner import is_planner_question,ask as ask_planner,enabled as planner_enabled,is_write_request
         planner_text=planner_followup(user_input.text,previous)
         if planner_text or is_planner_question(user_input.text):
             uid=user_input.context.user_id
@@ -83,6 +83,12 @@ class LocalVoice(conversation.ConversationEntity):
             matches=choose(text,[e for e in catalog if e.entity_id in previous['ids']],previous['property']) if not interpret(text)[0] else []
             result=answer(previous['text'],[matches[0][1]],origin) if matches and (len(matches)==1 or matches[0][0]>matches[1][0]) else answer(text,catalog,origin)
         else:result=answer(text,catalog,origin)
+        if result.kind in {'unsupported','not_found'} and not is_write_request(text):
+            speech=NOT_FOUND_REPLY
+            if (not user_id or user) and await planner_enabled(self.hass):
+                speech=await ask_planner(self.hass,text)
+                if speech!=NOT_FOUND_REPLY:self.followups.put(key,source='planner',text=text)
+            result=Result(speech)
         if result.choices:self.followups.put(key,source='clarify',ids=[c['entity_id'] for c in result.choices][:20],property=result.property,text=text)
         elif result.kind=='clarify' and 'Which room' in result.speech:self.followups.put(key,source='room',text=canonical_request(text))
         if result.command:

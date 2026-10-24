@@ -1,0 +1,4 @@
+# Local Voice validation, including real Speech-to-Phrase grammar recognition.
+aiohttp>=3.11,<4
+hassil==3.12.1
+PyYAML>=6,<7

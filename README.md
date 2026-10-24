@@ -52,3 +52,10 @@ releasing the others. Public contents are limited to these HA apps and their
 supporting documentation/tests and compiled USB installers; private server code and firmware source stay out.
 
 Create your own LED cards: see the [Home Assistant AI creator brief](https://github.com/bptworld/PixoraHQforHA/blob/main/pixora_led_displays/Pixora-Codex-Card-Brief.md) and import trusted Python files in LED Studio’s **My Apps** tab (1.2.24+).
+
+## Voice development checks
+
+In a local Python environment, install `tests/voice-requirements.txt`, then run
+`python -m unittest discover -s tests -p "voice_test_*.py"`.
+These checks use fixture Home Assistant data and include recognition against the
+generated speech grammar; they do not change an installed Home Assistant system.

@@ -7,6 +7,24 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice'))
 from planner_phrases import update_phrases,write_owned,MARKER
 from custom_components.pixora_voice import planner
 class PhraseTests(unittest.TestCase):
+ def test_manual_calendar_team_and_search_are_recognized(self):
+  from hassil import Intents,recognize
+  with tempfile.TemporaryDirectory() as d:
+   p=Path(d)/'phrases.yaml';update_phrases(p,{'events':['Red Sox vs Yankees','School concert (spring)']})
+   value=json.loads(p.read_text()[len(MARKER):]);intents=Intents.from_dict(value)
+   for text in ['are the Red Sox playing tomorrow','do the Yankees play today','tell me about Red Sox vs Yankees','when is School concert spring tomorrow']:
+    self.assertIsNotNone(recognize(text,intents),text)
+   self.assertLessEqual(len(value['lists']['pv_team']['values']),32)
+
+ def test_playing_questions_use_saved_team_vocabulary(self):
+  with tempfile.TemporaryDirectory() as d:
+   p=Path(d)/'phrases.yaml';update_phrases(p,{'teams':['Boston Red Sox'],'events':['School concert']})
+   value=json.loads(p.read_text()[len(MARKER):])
+   self.assertIn('Red Sox',value['lists']['pv_team']['values'])
+   sentences=value['intents']['PixoraPlanner']['data'][0]['sentences']
+   self.assertIn('(is|are) [the] {pv_team} playing [today|tomorrow]',sentences)
+   self.assertIn('School concert',value['lists']['pv_calendar_event']['values'])
+
  def test_owned_phrases_and_preserve_foreign_file(self):
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'phrases.yaml';update_phrases(p,{'people':['Bryan','Amy','bad{slot}'],'teams':['Boston Bruins']})
@@ -18,6 +36,14 @@ class PhraseTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'settings.json';write_owned(p,'{"enabled":true}');self.assertTrue(json.loads(p.read_text())['enabled'])
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
+ async def test_red_sox_question_routes_to_planner_without_game_keyword(self):
+  self.assertTrue(planner.is_planner_question('are the red sox playing tomorrow?'))
+  self.assertTrue(planner.is_planner_question('Are the Boston Red Sox playing today?'))
+  self.assertFalse(planner.is_planner_question('turn on the ceiling light'))
+  self.assertFalse(planner.is_planner_question('is the front door open?'))
+  self.assertTrue(planner.is_planner_question('Are the Kraken playing tomorrow?'))
+  self.assertTrue(planner.is_planner_question('What time is the school concert tomorrow?'))
+
  async def test_connection_failure_speaks_and_cleans_pending(self):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);(root/'.storage').mkdir();(root/'.storage'/planner.SETTINGS).write_text('{"enabled":true}')

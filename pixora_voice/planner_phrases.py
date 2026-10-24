@@ -34,14 +34,26 @@ def update_phrases(path, vocabulary=None):
   if not isinstance(values,list):return []
   return list(dict.fromkeys(v.strip() for v in values if isinstance(v,str) and re.fullmatch(r"[\w .’'-]{1,70}",v.strip())))[:limit]
  people=names('people',12);teams=names('teams',8)
+ raw_events=vocabulary.get('events',[])
+ raw_events=[v.strip() for v in raw_events if isinstance(v,str) and 0<len(v.strip())<=70][:24] if isinstance(raw_events,list) else []
+ def spoken(value):
+  return re.sub(r'\s+',' ',re.sub(r"[^\w .’'-]",' ',value.replace('&',' and ').replace('@',' at '))).strip()
+ events=list(dict.fromkeys(spoken(v) for v in raw_events if spoken(v)))
  people=list(dict.fromkeys(people+[n.split()[0] for n in people]))
  people=list(dict.fromkeys(people+[n+"'s" for n in people]+[n+'s' for n in people]))
  teams=list(dict.fromkeys(teams+[' '.join(n.split()[1:]) for n in teams if len(n.split())>1]))
+ # Manual and imported fixtures need no sports-provider metadata.
+ for title in raw_events:
+  sides=re.split(r'\s+(?:vs\.?|versus|at)\s+|\s*@\s*',title,flags=re.I)
+  if len(sides)==2:teams.extend(spoken(side) for side in sides if spoken(side))
+ teams=list(dict.fromkeys(teams))[:32]
  sentences=["(what is|what's) on [the] [Planner] (calendar|schedule|agenda) [today|tomorrow]","(what is|what's) for (dinner|lunch|breakfast) [today|tomorrow]","what are [the] [Planner] (chores|groceries|pantry items|notes|messages|lists|countdowns|alarms|routines)"]
  lists={}
  if people:
   lists['pv_person']={'values':people};sentences += ["(what is|what's) {pv_person} (schedule|calendar|agenda) [for] [today|tomorrow]","is {pv_person} [at] (home|away)","where is {pv_person}"]
  if teams:
-  lists['pv_team']={'values':teams};sentences += ["(what time is|when is) [the] {pv_team} [next] game [on] [today|tomorrow]"]
+  lists['pv_team']={'values':teams};sentences += ["(what time is|when is) [the] {pv_team} [next] game [on] [today|tomorrow]","(is|are) [the] {pv_team} playing [today|tomorrow]","(do|does|will) [the] {pv_team} play [today|tomorrow]"]
+ if events:
+  lists['pv_calendar_event']={'values':events};sentences += ["(what time is|when is) [the] {pv_calendar_event} [today|tomorrow]","(tell me about|find|search for|read) [the] {pv_calendar_event} [today|tomorrow]"]
  payload={'language':'en','intents':{'PixoraPlanner':{'data':[{'sentences':sentences}]}},'lists':lists}
  write_owned(path,MARKER+json.dumps(payload,ensure_ascii=False,indent=2)+'\n')

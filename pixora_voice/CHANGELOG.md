@@ -1,3 +1,10 @@
+## 0.1.6
+
+- Search shared Planner information for unanswered read-only questions instead of requiring a fixed topic or team name. Keep local device commands, permissions and uncertainty handling unchanged, and stop listening after every reply.
+- Search all shared calendar events by their saved title/team, including manually added and imported entries. If no information matches, reply: “Sorry, I can't find the information you're looking for.”
+- Include playing/play questions and saved calendar titles in the bounded local speech phrases. Refresh Planner phrases after updating the companion integration to train the new spoken forms.
+- Recognize teams named in manual calendar fixtures, preserve upcoming/date/person constraints during fallback, distinguish calendar reservations from meal plans, and search full note text with short matching excerpts. Treat command words inside a read-only question as search terms.
+
 ## 0.1.5
 
 - Simplify Voice descriptions, setup text and documentation while retaining the beta label.

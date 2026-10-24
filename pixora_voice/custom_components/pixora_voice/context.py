@@ -27,7 +27,7 @@ def planner_followup(text,previous):
     q=' '.join(words(text))
     if q not in {'and tomorrow','what about tomorrow','and today','what about today'}:return None
     original=previous['text']
-    if not re.search(r'\b(schedule|calendar|agenda|appointments?|events?|game)\b',original,re.I):return None
+    if not re.search(r'\b(schedule|calendar|agenda|appointments?|events?|games?|play|playing)\b',original,re.I):return None
     day='tomorrow' if q.endswith('tomorrow') else 'today'
     return re.sub(r'\b(today|tomorrow)\b',day,original,flags=re.I) if re.search(r'\b(today|tomorrow)\b',original,re.I) else original.rstrip('?. ')+ ' '+day
 

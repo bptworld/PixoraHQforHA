@@ -4,11 +4,17 @@ from homeassistant.exceptions import HomeAssistantError
 from pathlib import Path
 DOMAIN='pixora_voice'
 SETTINGS='pixora_voice_planner.json'
+def is_write_request(text):
+ from .engine import canonical_request
+ q=canonical_request(str(text)).lower()
+ return bool(re.match(r"^(?:(?:do not|don't|dont|never) )?(?:turn|switch|set|dim|brighten|delete|remove|add|create|send|buy|order|cancel|reschedule|complete|mark|move)\b",q))
+
 def is_planner_question(text):
  from .engine import canonical_request
  q=canonical_request(str(text)).lower()
  if re.match(r'^(?:(?:can|could|would) you |please )?(turn|switch|set|dim|brighten)\b',q) and 'planner' not in q:return False
- return bool(re.search(r"\b(planner|schedule|calendar|agenda|appointments?|events?|games?|bruins|patriots|celtics|dinner|lunch|breakfast|meals?|menu|chores?|tasks?|grocer(?:y|ies)|shopping|pantry|notes?|messages?|countdowns?|alarms?|routines?|lists?)\b",q) or re.match(r'^(is|are|where)\b.*\b(home|away|arrived)\b',q) or re.match(r'^where is \w',q))
+ calendar_search=re.match(r'^(?:when\b|what time\b|(?:is|are|do|does|will)\b.+\bplay(?:ing)?\b)',q)
+ return bool(calendar_search or re.search(r"\b(planner|schedule|calendar|agenda|appointments?|events?|games?|dinner|lunch|breakfast|meals?|menu|chores?|tasks?|grocer(?:y|ies)|shopping|pantry|notes?|messages?|countdowns?|alarms?|routines?|lists?)\b",q) or re.match(r'^(is|are|where)\b.*\b(home|away|arrived)\b',q) or re.match(r'^where is \w',q))
 async def enabled(hass):
  def read():
   try:
@@ -26,7 +32,7 @@ def install_reply_service(hass):
   raw=await ask(hass,'__pixora_voice_vocabulary__')
   try:value=json.loads(raw)
   except ValueError:return {'available':False}
-  return {'available':True,'people':value.get('people',[]),'teams':value.get('teams',[])} if isinstance(value,dict) else {'available':False}
+  return {'available':True,'people':value.get('people',[]),'teams':value.get('teams',[]),'events':value.get('events',[])} if isinstance(value,dict) else {'available':False}
  if not hass.services.has_service(DOMAIN,'planner_vocabulary'):
   from homeassistant.core import SupportsResponse
   hass.services.async_register(DOMAIN,'planner_vocabulary',vocabulary,supports_response=SupportsResponse.ONLY)

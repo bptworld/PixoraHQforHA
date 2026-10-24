@@ -4,6 +4,8 @@ from datetime import datetime,timezone
 import re
 import unicodedata
 
+NOT_FOUND_REPLY = "Sorry, I can't find the information you're looking for."
+
 
 def words(text):
     text=unicodedata.normalize('NFKC',str(text)).lower().replace('’',"'")
@@ -230,7 +232,7 @@ def answer(text,entities,area=''):
         return Result('Please ask one short question about your home.','unsupported')
     text=canonical_request(text)
     prop,command=interpret(text)
-    if not prop:return Result('I do not understand that request yet. Try asking whether a door is open, whether a lock is locked, or a temperature reading.','unsupported')
+    if not prop:return Result(NOT_FOUND_REPLY,'unsupported')
     if 'here' in words(text) and not area:return Result("Which room do you mean? I don't know which room this speaker is in yet.",'clarify',property=prop)
     room_reading=prop in {'temperature','humidity'} and not target_words(text)
     if room_reading and not area:return Result('Which room do you mean? Please include the room name.','clarify',property=prop)

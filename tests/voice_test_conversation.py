@@ -141,4 +141,44 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
             self.request.device_id='other'
             await self.ask('And tomorrow?');self.assertEqual(ask.await_count,2)
 
+    async def test_unknown_question_searches_enabled_planner(self):
+        from unittest.mock import patch
+        with patch('custom_components.pixora_voice.planner.enabled',new=AsyncMock(return_value=True)), patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value='School concert is at Town Hall.')) as ask:
+            result=await self.ask('Tell me about the school concert')
+            ask.assert_awaited_once_with(self.hass,'Tell me about the school concert')
+            self.assertIn('Town Hall',result.speech)
+            self.assertFalse(result.continue_conversation)
+            self.hass.services.async_call.assert_not_awaited()
+
+    async def test_missing_answer_uses_requested_fallback(self):
+        from unittest.mock import patch
+        from custom_components.pixora_voice.engine import NOT_FOUND_REPLY
+        with patch('custom_components.pixora_voice.planner.enabled',new=AsyncMock(return_value=True)), patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value=NOT_FOUND_REPLY)):
+            result=await self.ask('Tell me about the lunar cheese festival')
+            self.assertEqual(result.speech,NOT_FOUND_REPLY)
+            self.assertFalse(result.continue_conversation)
+
+    async def test_playing_question_followup_keeps_calendar_subject(self):
+        from unittest.mock import patch
+        with patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value='A shared game.')) as ask:
+            await self.ask('Are the Kraken playing today?')
+            result=await self.ask('And tomorrow?')
+            self.assertEqual(ask.await_args.args[1],'Are the Kraken playing tomorrow?')
+            self.assertFalse(result.continue_conversation)
+
+    async def test_unknown_device_command_never_falls_through_to_search(self):
+        from unittest.mock import patch
+        with patch('custom_components.pixora_voice.planner.ask',new=AsyncMock()) as ask:
+            await self.ask('Turn on the unknown lamp')
+            ask.assert_not_awaited()
+            self.hass.services.async_call.assert_not_awaited()
+
+    async def test_command_word_inside_read_only_question_still_searches(self):
+        from unittest.mock import patch
+        with patch('custom_components.pixora_voice.planner.enabled',new=AsyncMock(return_value=True)), patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value='The manual is in the drawer.')) as ask:
+            reply=await self.ask('Tell me about the TV set manual')
+            ask.assert_awaited_once_with(self.hass,'Tell me about the TV set manual')
+            self.assertIn('drawer',reply.speech)
+            self.hass.services.async_call.assert_not_awaited()
+
 if __name__=='__main__':unittest.main()
