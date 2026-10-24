@@ -11,7 +11,7 @@ from engine import Store, Engine
 from ha import HomeAssistant
 from policy import validate, target, next_period, service_for, observed, number
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 ROOT = Path(__file__).parent
 
 
@@ -151,7 +151,15 @@ def make_app(root=Path("/data"), test_ha=None):
     async def background():
         while True:
             await app["engine"].tick()
-            await asyncio.sleep(5)
+            wake = getattr(app["ha"], "wake", None)
+            if wake is None:
+                await asyncio.sleep(5)
+            else:
+                try:
+                    await asyncio.wait_for(wake.wait(), 5)
+                except asyncio.TimeoutError:
+                    pass
+                wake.clear()
 
     async def lifecycle(application):
         async with ClientSession() as session:

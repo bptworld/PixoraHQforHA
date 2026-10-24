@@ -138,7 +138,14 @@ class LocalVoice(conversation.ConversationEntity):
                 result=Result("I can't do that with this device. It doesn't support that control.",'unsupported')
             else:
                 try:
-                    await asyncio.wait_for(self.hass.services.async_call(result.command['domain'],result.command['service'],result.command['data'],blocking=True,context=user_input.context),10)
+                    reply = None
+                    if result.command['domain'] == 'climate':
+                        from .thermostat import route
+                        reply = await route(self.hass, result.command)
+                    if reply is not None:
+                        result = Result(reply)
+                    else:
+                        await asyncio.wait_for(self.hass.services.async_call(result.command['domain'],result.command['service'],result.command['data'],blocking=True,context=user_input.context),10)
                 except (HomeAssistantError,asyncio.TimeoutError):
                     # The device may have accepted the command. Never blindly retry.
                     result=Result("I'm not sure whether that command went through. Please check the device before trying again.",'uncertain')

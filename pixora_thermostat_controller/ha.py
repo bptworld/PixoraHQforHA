@@ -13,6 +13,8 @@ class HomeAssistant:
         self.timezone, self.unit = "UTC", "C"
         self.notice = "Connecting to Home Assistant."
         self.actions = asyncio.Queue(maxsize=32)
+        self.voice = asyncio.Queue(maxsize=16)
+        self.wake = asyncio.Event()
 
     async def request(self, path, data=None):
         if not self.token:
@@ -69,6 +71,7 @@ class HomeAssistant:
                     await ws.send_json({"id": 1, "type": "subscribe_events", "event_type": "state_changed"})
                     await ws.send_json({"id": 2, "type": "get_states"})
                     await ws.send_json({"id": 3, "type": "subscribe_events", "event_type": "mobile_app_notification_action"})
+                    await ws.send_json({"id": 4, "type": "subscribe_events", "event_type": "pixora_thermostat_voice_request"})
                     initial = False
                     async for message in ws:
                         if message.type != WSMsgType.TEXT:
@@ -88,6 +91,11 @@ class HomeAssistant:
                             initial = self.connected = True
                             self.notice, delay = "", 2
                         elif packet.get("type") == "event":
+                            if packet.get("event", {}).get("event_type") == "pixora_thermostat_voice_request":
+                                if not self.voice.full():
+                                    self.voice.put_nowait(packet["event"].get("data", {}))
+                                    self.wake.set()
+                                continue
                             if packet.get("event", {}).get("event_type") == "mobile_app_notification_action":
                                 action = packet["event"].get("data", {}).get("action", "")
                                 if isinstance(action, str) and action.startswith("pixora_thermostat:") and not self.actions.full():

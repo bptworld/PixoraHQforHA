@@ -93,3 +93,8 @@ updates retain the same slug and `/data` storage; no reinstall is required.
 
 This app is separate from Pixora Home Control and server Flows. It does not edit
 or replace existing Flows, thermostats, helpers or HA automations.
+
+### Voice thermostat overrides
+Update both Pixora Voice and Pixora Thermostat Controller. Use Voice's Setup & maintenance to install/update Assist, then restart Home Assistant once. Temperature requests such as "Set the thermostat to 72 degrees" create an override for the controller's configured manual-hold duration. Relative changes work when a current target is readable. Window/door and outdoor protections remain active; the schedule resumes after expiry. Single-temperature requests require a heat or cool schedule/override, rather than off or heat/cool range mode. Use controller settings for managed thermostat mode/on/off changes. Disabled controllers reject voice overrides. Assist exposure, speaker room and user control permissions still apply.
+
+Voice climate commands require the running Thermostat Controller app to check ownership. An explicit unmanaged response permits ordinary HA control; a missing response never permits a direct fallback or automatic retry. No cloud, LLM, added background polling or continued listening.

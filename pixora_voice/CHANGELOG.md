@@ -1,3 +1,7 @@
+## 0.1.10
+- Voice temperature changes become timed controller overrides. Window and outdoor protection retain priority. No direct fallback on connection failure.
+- Update both apps, install/update Assist in Voice setup, then restart HA once. No new speech phrases required.
+
 ## 0.1.9
 - Add local time/date, configured HA weather and bounded forecasts, HA-native satellite timers, broader device controls and relative adjustments, and one-device/24-hour Recorder history questions.
 - Add read-only global Flow variable answers and a bounded spoken variable vocabulary. No variable writes or new Flow engine.

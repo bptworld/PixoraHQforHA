@@ -1,7 +1,7 @@
 {
   "domain": "pixora_voice",
   "name": "Pixora Voice",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "config_flow": true,
   "documentation": "https://github.com/bptworld/PixoraHQforHA/tree/main/pixora_voice",
   "codeowners": [

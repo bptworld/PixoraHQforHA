@@ -1,3 +1,8 @@
+## 0.1.1
+- Fix Add thermostat and Add period on non-HTTPS local Home Assistant addresses. Show a visible message if setup cannot open.
+- Voice temperature changes become timed controller overrides. Window and outdoor protection retain priority. No direct fallback on connection failure.
+- Update both apps, install/update Assist in Voice setup, then restart HA once. No new speech phrases required.
+
 ## 0.1.0
 
 - First local HA app beta: weekly heat/cool schedules, timed/next-period overrides

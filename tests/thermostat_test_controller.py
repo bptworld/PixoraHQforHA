@@ -5,6 +5,8 @@ import json
 import sys
 import tempfile
 import unittest
+import time
+from unittest.mock import AsyncMock
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pixora_thermostat_controller"))
@@ -137,6 +139,37 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         await self.tick()
         self.assertEqual(self.runtime()["approval"]["decision"], "pending")
         self.assertFalse(self.ha.device_calls())
+
+    async def test_voice_override_is_timed_and_window_guard_wins(self):
+        self.ha.voice = asyncio.Queue(); self.ha.request = AsyncMock()
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick(); await self.tick(180); await self.tick()
+        req = {"request_id": "a" * 32, "expires_at": time.time() + 10, "entity_id": "climate.living", "service": "set_temperature", "temperature": 74}
+        self.ha.voice.put_nowait(req); await self.tick()
+        hold = self.runtime()["override"]
+        self.assertEqual(hold["target"]["heat"], 74)
+        self.assertEqual(datetime.fromisoformat(hold["until"]), self.now + timedelta(minutes=120))
+        self.assertEqual(self.ha.states["climate.living"]["attributes"]["temperature"], 60)
+        count = len(self.ha.device_calls())
+        self.ha.voice.put_nowait(req); await self.tick()
+        self.assertEqual(len(self.ha.device_calls()), count)
+        self.ha.states["binary_sensor.window"]["state"] = "off"
+        await self.tick(); await self.tick(60)
+        self.assertEqual(self.ha.device_calls()[-1][1]["temperature"], 74)
+
+    async def test_voice_outdoor_guard_and_disabled_expired_requests(self):
+        self.ha.voice = asyncio.Queue(); self.ha.request = AsyncMock()
+        self.outdoor(); self.ha.states["sensor.outdoor"]["state"] = "55"
+        await self.tick(); await self.tick()
+        req = {"request_id": "b" * 32, "expires_at": time.time() + 10, "entity_id": "climate.living", "service": "set_temperature", "temperature": 74}
+        self.ha.voice.put_nowait(req); await self.tick()
+        self.assertEqual(self.runtime()["override"]["target"]["heat"], 74)
+        self.assertEqual(self.ha.states["climate.living"]["state"], "off")
+        self.ha.voice.put_nowait({**req, "request_id": "c" * 32, "expires_at": time.time() - 1, "temperature": 76})
+        await self.tick(); self.assertEqual(self.runtime()["override"]["target"]["heat"], 74)
+        data = copy.deepcopy(self.store.data); data["zones"][0]["enabled"] = False; self.store.write(data)
+        self.ha.voice.put_nowait({**req, "request_id": "d" * 32, "temperature": 76})
+        await self.tick(); self.assertEqual(self.runtime()["override"]["target"]["heat"], 74)
 
     async def test_idle_schedule_sends_no_commands(self):
         await self.tick(); await self.tick(5)

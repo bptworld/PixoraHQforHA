@@ -5,6 +5,9 @@ import json
 import os
 import tempfile
 import secrets
+import time
+import math
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from policy import schedule_at, next_period, target, temperature, observed, same, service_for
@@ -64,9 +67,14 @@ class Engine:
         self.lock = asyncio.Lock()
         self.timers = {}
         self.status = {}
+        self.voice_seen = deque(maxlen=64)
 
     async def tick(self):
         async with self.lock:
+            voice = getattr(self.ha, "voice", None)
+            while voice is not None and not voice.empty():
+                request = voice.get_nowait()
+                await self.handle_voice(request)
             while not self.ha.actions.empty():
                 action = self.ha.actions.get_nowait()
                 try:
@@ -81,6 +89,53 @@ class Engine:
                     await self.evaluate(zone)
                 except (ValueError, OSError, TypeError, KeyError) as exc:
                     self.status[zone["id"]] = {"reason": "Needs attention", "detail": str(exc)[:240]}
+
+    async def handle_voice(self, request):
+        ident = request.get("request_id") if isinstance(request, dict) else None
+        expires = request.get("expires_at") if isinstance(request, dict) else None
+        if not isinstance(ident, str) or len(ident) != 32 or ident in self.voice_seen:
+            return
+        if not isinstance(expires, (int, float)) or not math.isfinite(expires) or not time.time() < expires <= time.time() + 15:
+            return
+        self.voice_seen.append(ident)
+        reply = {"request_id": ident}
+        z = next((z for z in self.store.data["zones"] if z["entity"] == request.get("entity_id")), None)
+        try:
+            if not self.ha.connected:
+                raise ValueError("Home Assistant is reconnecting. I haven't changed the thermostat.")
+            if z is None:
+                reply["unmanaged"] = True
+            else:
+                runtime = copy.deepcopy(self.store.data["runtime"].get(z["id"], {}))
+                if not z["enabled"]:
+                    raise ValueError("That thermostat controller is disabled. Enable it before asking for an override.")
+                if runtime.get("pending") or runtime.get("blocked"):
+                    raise ValueError("Please check the pending thermostat command before asking for another change.")
+                if request.get("service") != "set_temperature":
+                    raise ValueError("For a managed thermostat, please ask for a temperature. Mode changes belong in Thermostat Controller.")
+                state = self.ha.states.get(z["entity"])
+                if not state:
+                    raise ValueError("I can't reach that thermostat right now.")
+                override = runtime.get("override")
+                wanted = copy.deepcopy(override["target"] if override and datetime.fromisoformat(override["until"]) > self.now() else target(schedule_at(z["schedule"], self.now(), self.ha.timezone)))
+                if wanted["mode"] not in {"heat", "cool"}:
+                    raise ValueError("Please choose heat or cool in the controller before requesting one temperature.")
+                value = request.get("temperature")
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                    raise ValueError("Please ask for a valid temperature.")
+                wanted[wanted["mode"]] = value
+                service_for(wanted, state, z["unit"], self.ha.unit, self.ha.services)
+                runtime["override"] = {"target": wanted, "until": (self.now() + timedelta(minutes=z["manualMinutes"])).isoformat(), "source": "Voice override"}
+                self.store.patch_runtime(z["id"], runtime, "Voice timed override saved; window and outdoor protections remain active.")
+                reply["speech"] = f"Okay, I've saved a {z['manualMinutes']}-minute override at {value:g} degrees for {z['name']}. Window and outdoor protections still apply."
+        except ValueError as exc:
+            reply["speech"] = str(exc)
+        except (KeyError, TypeError, OSError):
+            reply["speech"] = "I couldn't save that thermostat override. Please check the controller; I haven't bypassed its protections."
+        try:
+            await self.ha.request("events/pixora_thermostat_voice_reply", reply)
+        except (ValueError, OSError, asyncio.TimeoutError):
+            pass  # No command or override replay after uncertain delivery.
 
     def handle_approval(self, action):
         for z in self.store.data["zones"]:
