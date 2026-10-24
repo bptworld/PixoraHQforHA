@@ -87,8 +87,48 @@ class Engine:
             for zone in copy.deepcopy(self.store.data["zones"]):
                 try:
                     await self.evaluate(zone)
+                    issue = self.status.get(zone["id"], {})
+                    await self.issue_notice(zone, issue.get("detail", "") if issue.get("reason") == "Check thermostat" else "", "failure")
                 except (ValueError, OSError, TypeError, KeyError) as exc:
                     self.status[zone["id"]] = {"reason": "Needs attention", "detail": str(exc)[:240]}
+                    try:
+                        await self.issue_notice(zone, str(exc)[:240], "sensor" if "unavailable" in str(exc).lower() else "failure")
+                    except (ValueError, OSError, TypeError, KeyError):
+                        pass
+
+    async def issue_notice(self, z, message, category):
+        if not z["enabled"] or not self.ha.connected:
+            return
+        runtime = copy.deepcopy(self.store.data["runtime"].get(z["id"], {}))
+        if runtime.get("issue", "") == message:
+            return
+        runtime["issue"] = message
+        self.store.patch_runtime(z["id"], runtime)
+        if message and z.get("alerts", {}).get(category, True) and z["notify"]["service"] in self.ha.services:
+            try:
+                await self.ha.call(z["notify"]["service"], {"title": z["name"], "message": message})
+            except (ValueError, OSError, asyncio.TimeoutError):
+                pass
+
+    async def preview(self, z):
+        # Copies are bounded by the controller/catalog limits. No real store or
+        # service is reachable through this simulation.
+        store = copy.copy(self.store)
+        store.data = copy.deepcopy(self.store.data)
+        store.write = lambda value: setattr(store, "data", copy.deepcopy(value))
+        ha = copy.copy(self.ha)
+        ha.states = copy.deepcopy(self.ha.states)
+        calls = []
+        async def capture(service, fields):
+            calls.append({"service": service, "data": fields})
+        ha.call = capture
+        shadow = Engine(store, ha, self.now)
+        shadow.timers = copy.deepcopy(self.timers)
+        try:
+            await shadow.evaluate(copy.deepcopy(z))
+        except (ValueError, OSError, TypeError, KeyError) as exc:
+            shadow.status[z["id"]] = {"reason": "Needs attention", "detail": str(exc)}
+        return {"status": shadow.status.get(z["id"], {}), "wouldSend": calls, "readOnly": True}
 
     async def handle_voice(self, request):
         ident = request.get("request_id") if isinstance(request, dict) else None
@@ -107,10 +147,29 @@ class Engine:
                 reply["unmanaged"] = True
             else:
                 runtime = copy.deepcopy(self.store.data["runtime"].get(z["id"], {}))
-                if not z["enabled"]:
+                if not z["enabled"] and request.get("service") != "controller_status":
                     raise ValueError("That thermostat controller is disabled. Enable it before asking for an override.")
-                if runtime.get("pending") or runtime.get("blocked"):
+                if request.get("service") not in {"controller_status", "controller_resume"} and (runtime.get("pending") or runtime.get("blocked")):
                     raise ValueError("Please check the pending thermostat command before asking for another change.")
+                if request.get("service") == "controller_status":
+                    status = self.status.get(z["id"], {}) if z["enabled"] else {"reason": "Disabled", "detail": "Automatic control is disabled; the thermostat keeps its current settings."}
+                    hold = runtime.get("override")
+                    reply["speech"] = z["name"] + ": " + status.get("reason", "Starting") + ". " + status.get("detail", "")
+                    if hold:
+                        remaining = max(0, int((datetime.fromisoformat(hold["until"]) - self.now()).total_seconds() / 60))
+                        reply["speech"] += (" Away hold ends when the selected person returns." if hold.get("returnPerson") else f" The override has about {remaining} minutes left.")
+                    else:
+                        reply["speech"] += " There is no active override."
+                    await self.ha.request("events/pixora_thermostat_voice_reply", reply)
+                    return
+                if request.get("service") == "controller_resume":
+                    if runtime.get("pending") or runtime.get("blocked"):
+                        raise ValueError("Please check the pending thermostat command first.")
+                    runtime["override"] = None
+                    self.store.patch_runtime(z["id"], runtime, "Voice resumed schedule; protection remains active.")
+                    reply["speech"] = "Okay, I've resumed the schedule. Window and outdoor protections still apply."
+                    await self.ha.request("events/pixora_thermostat_voice_reply", reply)
+                    return
                 if request.get("service") != "set_temperature":
                     raise ValueError("For a managed thermostat, please ask for a temperature. Mode changes belong in Thermostat Controller.")
                 state = self.ha.states.get(z["entity"])
@@ -196,6 +255,12 @@ class Engine:
         override = runtime.get("override")
         if override and datetime.fromisoformat(override["until"]) <= now:
             runtime["override"] = override = None
+        if override and override.get("returnPerson"):
+            person = self.ha.states.get(override["returnPerson"], {})
+            if person.get("state") not in {None, "unknown", "unavailable", "home"}:
+                override["seenAway"] = True
+            elif person.get("state") == "home" and override.get("seenAway"):
+                runtime["override"] = override = None
         # Physical/app changes become a bounded manual hold instead of a control fight.
         if runtime.get("last") and not same(actual, runtime["last"]):
             if not runtime.get("window") and not runtime.get("outdoor") or actual["mode"] == "off":
@@ -207,7 +272,7 @@ class Engine:
         if not desired:
             raise ValueError("No schedule is configured.")
         reason = "Temporary override" if override else "Schedule"
-        detail = ("Until " + override["until"]) if override else "Period starting " + row["time"]
+        detail = ("Until " + override["until"]) if override else row.get("name", "Period starting " + row["time"]) + " at " + row["time"]
 
         opened, unknown = [], []
         contacts = timers.setdefault("contacts", {})
@@ -299,7 +364,7 @@ class Engine:
         flags = {"window": bool(runtime.get("window")), "outdoor": bool(runtime.get("outdoor"))}
         self.status[ident] = {"reason": reason, "detail": detail, "target": desired, "actual": actual, "outdoor": outside,
                               "open": opened, "openSince": timers.get("open").isoformat() if timers.get("open") else None,
-                              "override": override, "nextPeriod": next_period(z["schedule"], now, self.ha.timezone).isoformat()}
+                              "override": override, "schedule": {"name": row.get("name", "Period starting " + row["time"]), "time": row["time"], "target": target(row)}, "protection": flags, "nextPeriod": next_period(z["schedule"], now, self.ha.timezone).isoformat()}
         if not same(actual, desired):
             action, fields = service_for(desired, state, z["unit"], self.ha.unit, self.ha.services)
             # Write the claim before the network request. A crash/timeout is never replayed.
@@ -323,7 +388,7 @@ class Engine:
             # Durable claim also prevents notification replay after a crash.
             self.store.patch_runtime(ident, runtime, text)
             service = z["notify"]["service"]
-            if service:
+            if service and z.get("alerts", {}).get("setback" if active else "restore", True):
                 try:
                     if service not in self.ha.services:
                         raise ValueError("Notification destination is unavailable.")

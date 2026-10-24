@@ -101,6 +101,12 @@ class PolicyTests(unittest.TestCase):
             service_for({"mode": "heat", "heat": 70.5}, state, "F", "F", ha.services)
         service_for({"mode": "heat", "heat": 70}, state, "F", "F", ha.services)
 
+    def test_period_names_validate_and_survive_copy(self):
+        z = zone(); z["schedule"][0]["name"] = "Wake up"
+        self.assertEqual(validate({"zones": [z]})["zones"][0]["schedule"][0]["name"], "Wake up")
+        z["schedule"][0]["name"] = " "
+        with self.assertRaises(ValueError): validate({"zones": [z]})
+
     def test_store_corruption_is_not_reset(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "controller.json"; p.write_text("bad")
@@ -170,6 +176,73 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         data = copy.deepcopy(self.store.data); data["zones"][0]["enabled"] = False; self.store.write(data)
         self.ha.voice.put_nowait({**req, "request_id": "d" * 32, "temperature": 76})
         await self.tick(); self.assertEqual(self.runtime()["override"]["target"]["heat"], 74)
+
+    async def test_preview_has_no_real_writes_or_service_calls(self):
+        await self.tick()
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick(); self.now += timedelta(minutes=4)
+        before = copy.deepcopy(self.store.data)
+        calls = len(self.ha.calls)
+        preview = await self.engine.preview(self.z)
+        self.assertTrue(preview["readOnly"])
+        self.assertEqual(preview["status"]["target"]["heat"], 60)
+        self.assertEqual(self.store.data, before)
+        self.assertEqual(len(self.ha.calls), calls)
+
+    async def test_return_home_hold_waits_for_away_then_known_home(self):
+        await self.tick()
+        runtime = copy.deepcopy(self.runtime())
+        runtime["override"] = {"target": {"mode": "heat", "heat": 65}, "until": datetime.max.replace(tzinfo=timezone.utc).isoformat(), "returnPerson": "person.bryan", "seenAway": False}
+        self.store.patch_runtime("living", runtime)
+        self.ha.states["person.bryan"] = {"state": "home"}
+        await self.tick(); await self.tick()
+        self.assertIsNotNone(self.runtime()["override"])
+        self.ha.states["person.bryan"]["state"] = "not_home"
+        await self.tick()
+        self.ha.states["person.bryan"]["state"] = "unavailable"
+        await self.tick(); self.assertIsNotNone(self.runtime()["override"])
+        self.ha.states["person.bryan"]["state"] = "home"
+        await self.tick(); self.assertIsNone(self.runtime()["override"])
+        self.assertEqual(self.ha.device_calls()[-1][1]["temperature"], 70)
+
+    async def test_sensor_alert_deduplicates_and_respects_choice(self):
+        self.ha.states["binary_sensor.window"]["state"] = "unavailable"
+        await self.tick(); await self.tick()
+        self.assertEqual(len(self.ha.notifications()), 1)
+        self.assertFalse(self.ha.device_calls())
+        self.ha.states["binary_sensor.window"]["state"] = "off"
+        await self.tick()
+        data = copy.deepcopy(self.store.data)
+        data["zones"][0]["alerts"] = {"sensor": False, "failure": True, "restore": True, "setback": True}
+        self.store.write(data)
+        self.ha.states["binary_sensor.window"]["state"] = "unavailable"
+        await self.tick(); self.assertEqual(len(self.ha.notifications()), 1)
+
+    async def test_voice_status_and_resume_do_not_clear_protection(self):
+        self.ha.voice = asyncio.Queue(); self.ha.request = AsyncMock()
+        self.outdoor(); self.ha.states["sensor.outdoor"]["state"] = "55"
+        await self.tick(); await self.tick()
+        runtime = copy.deepcopy(self.runtime())
+        runtime["override"] = {"target": {"mode": "heat", "heat": 74}, "until": (self.now + timedelta(hours=1)).isoformat()}
+        self.store.patch_runtime("living", runtime)
+        base = {"expires_at": time.time() + 10, "entity_id": "climate.living"}
+        self.ha.voice.put_nowait({**base, "request_id": "e" * 32, "service": "controller_status"})
+        await self.tick()
+        self.assertIn("Outdoor heat lockout", self.ha.request.call_args.args[1]["speech"])
+        self.ha.voice.put_nowait({**base, "request_id": "f" * 32, "service": "controller_resume"})
+        await self.tick()
+        self.assertIsNone(self.runtime()["override"])
+        self.assertTrue(self.runtime()["outdoor"])
+        self.assertEqual(self.ha.states["climate.living"]["state"], "off")
+
+    async def test_disabled_voice_status_is_read_only(self):
+        self.ha.voice = asyncio.Queue(); self.ha.request = AsyncMock()
+        data = copy.deepcopy(self.store.data); data["zones"][0]["enabled"] = False; self.store.write(data)
+        self.ha.voice.put_nowait({"request_id": "9" * 32, "expires_at": time.time() + 10, "entity_id": "climate.living", "service": "controller_status"})
+        await self.tick()
+        self.assertIn("Disabled", self.ha.request.call_args.args[1]["speech"])
+        self.assertFalse(self.ha.calls)
+        self.assertFalse(self.store.data["zones"][0]["enabled"])
 
     async def test_idle_schedule_sends_no_commands(self):
         await self.tick(); await self.tick(5)

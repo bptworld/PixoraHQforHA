@@ -1,3 +1,7 @@
+## 0.1.2
+- Add thermostat Voice status, hold duration and resume-schedule requests. Refresh local phrases after updating Assist.
+- Controller adds date/return-home holds, day copying, notification choices, read-only protection previews and settings backup/restore. Restored controllers are disabled.
+
 ## 0.1.1
 - Fix Add thermostat and Add period on non-HTTPS local Home Assistant addresses. Show a visible message if setup cannot open.
 - Voice temperature changes become timed controller overrides. Window and outdoor protection retain priority. No direct fallback on connection failure.

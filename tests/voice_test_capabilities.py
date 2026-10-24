@@ -97,7 +97,7 @@ class SpeechCoverageTests(unittest.TestCase):
    payload=json.loads(path.read_text(encoding='utf-8').removeprefix(MARKER))
    payload['lists']['name']={'values':['thermostat','kitchen fan','kitchen blinds','ceiling light','Movie','Living Room TV','front door']};payload['lists']['area']={'values':['Kitchen','Living Room']}
    intents=Intents.from_dict(payload)
-   for text in ('what time is it','will it rain tomorrow','set a timer for ten minutes','pause the timer','set the thermostat to seventy two degrees','turn the heat up two degrees','set kitchen fan to high','close kitchen blinds','set ceiling light to red','make it brighter','activate Movie scene','pause the Living Room TV','when did the front door last open'):
+   for text in ('why is the heat off','what is the thermostat status','how long is the thermostat override','resume the thermostat schedule','what time is it','will it rain tomorrow','set a timer for ten minutes','pause the timer','set the thermostat to seventy two degrees','turn the heat up two degrees','set kitchen fan to high','close kitchen blinds','set ceiling light to red','make it brighter','activate Movie scene','pause the Living Room TV','when did the front door last open'):
     self.assertIsNotNone(recognize(text,intents),text)
    self.assertLess(path.stat().st_size,12000)
  def test_planner_dates_and_variable_names(self):
@@ -140,3 +140,11 @@ class AdapterCapabilityTests(unittest.IsolatedAsyncioTestCase):
    result=await self.ask("What's the value of isKitchenMotion?")
    self.assertEqual(result.speech,'isKitchenMotion is true.');self.assertFalse(result.continue_conversation);read.assert_awaited_once_with(self.hass,'__pixora_voice_variable__:isKitchenMotion')
 if __name__=='__main__':unittest.main()
+
+class ThermostatRequestTests(unittest.TestCase):
+ def test_named_requests_and_unrelated_topics(self):
+  from custom_components.pixora_voice.thermostat import request_kind
+  for text, kind in [('Resume Nest schedule','controller_resume'),('What is Nest status','controller_status'),('How long is Nest override','controller_status'),('Why is Nest off','controller_status')]:
+   self.assertEqual(request_kind(text,['Nest']),kind)
+  self.assertIsNone(request_kind('Why is the light off',['Nest']))
+  self.assertIsNone(request_kind('What is Amy status',['Nest']))

@@ -3,7 +3,7 @@ import asyncio
 import copy
 import json
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 from aiohttp import ClientSession, web
@@ -11,7 +11,7 @@ from engine import Store, Engine
 from ha import HomeAssistant
 from policy import validate, target, next_period, service_for, observed, number
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 ROOT = Path(__file__).parent
 
 
@@ -63,7 +63,12 @@ def make_app(root=Path("/data"), test_ha=None):
         async with engine.lock:
             if type(body.get("revision")) is not int or body.get("revision") != store.data["revision"]:
                 return web.json_response({"error": "Settings changed in another window. Reload before saving."}, status=409)
-            value = validate({"zones": body.get("zones")})
+            incoming = copy.deepcopy(body.get("zones"))
+            if body.get("restore") is True and isinstance(incoming, list):
+                for item in incoming:
+                    if isinstance(item, dict):
+                        item["enabled"] = False
+            value = validate({"zones": incoming})
             old = {z["id"]: z for z in store.data["zones"]}
             # Validate live capabilities before allowing an enabled configuration.
             if any(z["enabled"] for z in value["zones"]) and not ha.connected:
@@ -94,9 +99,11 @@ def make_app(root=Path("/data"), test_ha=None):
             saved = copy.deepcopy(store.data)
             saved.update(zones=value["zones"], revision=saved["revision"] + 1)
             saved["runtime"] = {z["id"]: saved["runtime"].get(z["id"], {}) if old.get(z["id"], {}).get("entity") == z["entity"] else {} for z in value["zones"]}
+            if body.get("restore") is True:
+                saved["runtime"] = {}
             for z in value["zones"]:
                 if old.get(z["id"], {}).get("outdoor") != z["outdoor"] or old.get(z["id"], {}).get("notify") != z["notify"] or old.get(z["id"], {}).get("enabled") != z["enabled"]:
-                    saved["runtime"][z["id"]].pop("approval", None)
+                    saved["runtime"].get(z["id"], {}).pop("approval", None)
             store.write(saved)
             # Preserve observations for unchanged protection settings, including
             # when a different controller or just its display name is edited.
@@ -120,6 +127,8 @@ def make_app(root=Path("/data"), test_ha=None):
                 raise ValueError("Controller not found.")
             runtime = copy.deepcopy(store.data["runtime"].get(z["id"], {}))
             kind = body.get("action")
+            if kind == "preview":
+                return web.json_response(await engine.preview(z))
             if kind == "override":
                 if not ha.connected or not z["enabled"]:
                     raise ValueError("Enable this controller and wait for Home Assistant before setting an override.")
@@ -128,7 +137,18 @@ def make_app(root=Path("/data"), test_ha=None):
                 until = next_period(z["schedule"], engine.now(), ha.timezone) if body.get("untilNext") is True else engine.now() + timedelta(minutes=number(body.get("minutes"), 5, 1440, "Override minutes"))
                 if not until:
                     raise ValueError("No next schedule period is available.")
-                runtime["override"] = {"target": wanted, "until": until.isoformat(), "source": "Controller override"}
+                person = body.get("returnPerson")
+                if person:
+                    if not isinstance(person, str) or not person.startswith("person.") or person not in ha.states:
+                        raise ValueError("Choose a Home Assistant person for return-home holds.")
+                    until = datetime.max.replace(tzinfo=timezone.utc)
+                elif body.get("until"):
+                    until = datetime.fromisoformat(body["until"])
+                    if until.tzinfo is None or not engine.now() < until <= engine.now() + timedelta(days=366):
+                        raise ValueError("Choose a hold end within the next year.")
+                runtime["override"] = {"target": wanted, "until": until.isoformat(), "source": "Away hold" if person or body.get("until") else "Controller override"}
+                if person:
+                    runtime["override"].update(returnPerson=person, seenAway=ha.states[person].get("state") not in {None, "home", "unknown", "unavailable"})
             elif kind == "resume":
                 runtime["override"] = None
             elif kind == "checked":

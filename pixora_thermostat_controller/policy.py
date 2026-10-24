@@ -63,6 +63,9 @@ def validate(value):
             raise ValueError("Choose a notification recipient for protection alerts.")
         if outside["enabled"] and outside["mode"] == "ask" and not notice["service"].startswith("notify.mobile_app_"):
             raise ValueError("Ask first needs a Home Assistant Companion mobile-app notification destination.")
+        alerts = z.setdefault("alerts", {"setback": True, "restore": True, "sensor": True, "failure": True})
+        if not isinstance(alerts, dict) or set(alerts) != {"setback", "restore", "sensor", "failure"} or any(type(v) is not bool for v in alerts.values()):
+            raise ValueError("Choose valid notification options.")
         schedules = z.get("schedule")
         if not isinstance(schedules, list) or len(schedules) > 64:
             raise ValueError("Use up to 64 weekly schedule periods.")
@@ -71,6 +74,8 @@ def validate(value):
             if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,64}", row["id"]) or row["id"] in periods:
                 raise ValueError("Use unique schedule period identities.")
             periods.add(row["id"])
+            if "name" in row and (not isinstance(row["name"], str) or not 1 <= len(row["name"].strip()) <= 80):
+                raise ValueError("Period names must contain 1 to 80 characters.")
             days = row.get("days")
             if not isinstance(days, list) or not days or any(type(d) is not int or not 0 <= d <= 6 for d in days) or len(set(days)) != len(days):
                 raise ValueError("Choose the days for each period.")

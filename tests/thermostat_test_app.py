@@ -76,6 +76,27 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         await self.save(z, revision=2)
         self.assertGreaterEqual(engine.timers[z["id"]]["contacts"]["binary_sensor.window"]["at"], started)
 
+    async def test_restore_disables_and_clears_runtime(self):
+        await self.save()
+        store = self.app["store"]
+        store.patch_runtime("living", {"override": {"target": {"mode": "heat", "heat": 72}, "until": "2027-01-01T00:00:00+00:00"}})
+        count = len(self.ha.calls)
+        result = await route(self.app, "POST", "/api/settings")(request({"revision": 1, "zones": [zone()], "restore": True}))
+        self.assertEqual(result.status, 200)
+        self.assertFalse(store.data["zones"][0]["enabled"])
+        self.assertEqual(store.data["runtime"], {})
+        self.assertEqual(len(self.ha.calls), count)
+
+    async def test_vacation_date_validation_and_expiry(self):
+        from datetime import timedelta
+        await self.save()
+        now = self.app["engine"].now()
+        data = {"id": "living", "action": "override", "target": {"mode": "heat", "heat": 65}, "minutes": 120, "until": (now + timedelta(days=3)).isoformat()}
+        action = route(self.app, "POST", "/api/action")
+        await action(request(data))
+        self.assertEqual(self.app["store"].data["runtime"]["living"]["override"]["until"], data["until"])
+        with self.assertRaises(ValueError): await action(request({**data, "until": (now - timedelta(days=1)).isoformat()}))
+
     async def test_disabled_setup_never_sends_commands(self):
         z = zone(); z["enabled"] = False
         self.ha.states["climate.living"]["attributes"]["temperature"] = 65

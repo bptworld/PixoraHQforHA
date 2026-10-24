@@ -11,7 +11,8 @@ def update_local_phrases(path):
  "is (it|that) [still] (open|closed|on|off|locked|unlocked)","(and|what about) (today|tomorrow)",
  "(can you check if|tell me if|do you know if) [the] {name} is (open|closed|on|off|locked|unlocked)",
  "tell me [the] (temperature|humidity) in (here|this room|{area})"]
- sentences += [
+ sentences += ["why is [the] (heat|thermostat) off", "why is [the] {name} off", "how long is [the] thermostat override", "how long is [the] {name} override", "what is [the] thermostat status", "what is [the] {name} status", "resume [the] thermostat schedule", "resume [the] {name} schedule",
+
  "(what is|what's) [the] weather [like] [outside]", "(what is|what's) it like outside", "(what is|what's) the temperature outside", "will it rain (today|tomorrow)", "(what is|what's) the forecast [for] (today|tomorrow)",
  "(set|start) [a] timer for {pv_duration} (seconds|minutes|hours)", "(set|start) [a] {pv_duration} (second|minute|hour) timer", "(set|start) [a] {pv_duration} hour [and] {pv_duration_minutes} minute timer", "(set|start) [a] {pv_timer_name} timer for {pv_duration} minutes", "(cancel|pause|resume) [the] [{pv_timer_name}] timer", "how much time is (left|remaining) [on [the] [{pv_timer_name}] timer]",
  "set [the] {name} to {pv_amount} degrees [fahrenheit|celsius]", "set [the] (thermostat|heat|{name}) to (heat|cool|off|auto)", "turn [the] (heat|thermostat|{name}) (up|down) [by] {pv_delta} degrees", "set [the] {name} [speed] to {pv_amount} percent", "set [the] {name} [speed] to (low|medium|high)", "(open|close) [the] {name}", "(set|make|turn) [the] {name} [to] {pv_color}", "make [the] ({name}|it|that) (brighter|dimmer) [by {pv_amount} percent]", "(activate|run|turn on) [the] {name} scene", "(play|pause|resume|stop|mute|unmute) [the] {name}", "set [the] {name} volume to {pv_amount} percent", "(what is|what's) playing [on [the] {name}]", "when did [the] {name} last (open|close|turn on|turn off|lock|unlock)"

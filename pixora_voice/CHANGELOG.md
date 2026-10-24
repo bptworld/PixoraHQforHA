@@ -1,3 +1,7 @@
+## 0.1.11
+- Add thermostat Voice status, hold duration and resume-schedule requests. Refresh local phrases after updating Assist.
+- Controller adds date/return-home holds, day copying, notification choices, read-only protection previews and settings backup/restore. Restored controllers are disabled.
+
 ## 0.1.10
 - Voice temperature changes become timed controller overrides. Window and outdoor protection retain priority. No direct fallback on connection failure.
 - Update both apps, install/update Assist in Voice setup, then restart HA once. No new speech phrases required.

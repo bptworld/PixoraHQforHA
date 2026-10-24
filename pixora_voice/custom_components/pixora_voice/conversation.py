@@ -66,9 +66,10 @@ class LocalVoice(conversation.ConversationEntity):
         if timer:
             chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=timer))
             return self.finish(user_input,chat_log)
+        from .thermostat import request_kind as thermostat_kind, plan as thermostat_plan
         from .extra_reads import request_kind
         planner_text=planner_followup(user_input.text,previous)
-        if not request_kind(user_input.text) and (planner_text or is_planner_question(user_input.text)):
+        if not thermostat_kind(user_input.text, [str(s.name) for s in self.hass.states.async_all() if s.entity_id.startswith("climate.")]) and not request_kind(user_input.text) and (planner_text or is_planner_question(user_input.text)):
             uid=user_input.context.user_id
             allowed=not uid or await self.hass.auth.async_get_user(uid)
             speech=await ask_planner(self.hass,planner_text or user_input.text) if allowed else "I can't read Planner from this account. Please check its permissions."
@@ -100,7 +101,8 @@ class LocalVoice(conversation.ConversationEntity):
             if prior:
                 control_text,replaced=re.subn(r'\b(?:it|that)\b',lambda match:prior.name,text,flags=re.I)
                 if replaced:control_catalog=[prior]
-        extended=extra if extra is not None else control_plan(control_text,control_catalog,origin)
+        extended=thermostat_plan(text,catalog,origin)
+        if extended is None:extended=extra if extra is not None else control_plan(control_text,control_catalog,origin)
         if extended is not None:
             result=extended
         elif words(text) in (['cancel'],['never','mind'],['nevermind']):
@@ -134,7 +136,7 @@ class LocalVoice(conversation.ConversationEntity):
             ids=result.entities
             if user_id and (not user or any(not user.permissions.check_entity(eid,POLICY_CONTROL) for eid in ids)):
                 result=Result("I can't control those devices from this account. Please check its permissions.",'denied')
-            elif not self.hass.services.has_service(result.command['domain'],result.command['service']):
+            elif result.command['service'] not in {'controller_status','controller_resume'} and not self.hass.services.has_service(result.command['domain'],result.command['service']):
                 result=Result("I can't do that with this device. It doesn't support that control.",'unsupported')
             else:
                 try:
