@@ -17,12 +17,12 @@ async def matches(hass,text):return any(normalized(p)==normalized(text) for p in
 
 async def ask(hass,text):
  pending=hass.data.setdefault(DOMAIN,{}).setdefault('flow_pending',{})
- if len(pending)>=2:return 'A voice Flow request is still being confirmed. Please check its history.'
+ if len(pending)>=2:return "I'm still waiting to hear back about a Flow. Please check its history before trying again."
  ident=secrets.token_hex(16);future=asyncio.get_running_loop().create_future();pending[ident]=future
  try:
   hass.bus.async_fire('pixora_voice_flow_request',{'request_id':ident,'text':text[:500],'expires_at':time.time()+10})
   return await asyncio.wait_for(future,8)
- except (asyncio.TimeoutError,HomeAssistantError,OSError):return 'I could not confirm the Flow request. Check Flow history before trying again.'
+ except (asyncio.TimeoutError,HomeAssistantError,OSError):return "I'm not sure whether that Flow started. Please check its history before trying again."
  finally:pending.pop(ident,None)
 
 def install_services(hass):

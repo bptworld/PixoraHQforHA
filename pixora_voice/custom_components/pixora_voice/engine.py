@@ -83,7 +83,7 @@ def canonical_request(text):
 
 def duration_answer(entity,now=None):
     """Describe only the current reported state's age, without history downloads."""
-    if entity.state in {'unknown','unavailable','None',''}:return Result(f"I can't check {spoken_name(entity)} right now. Its sensor is unavailable.",'unavailable')
+    if entity.state in {'unknown','unavailable','None',''}:return Result(f"I can't check {spoken_name(entity)} right now. It’s unavailable at the moment.",'unavailable')
     changed=entity.last_changed;now=now or datetime.now(timezone.utc)
     if not isinstance(changed,datetime) or changed.tzinfo is None or changed>now:return Result("I don't have a reliable time for that reading.",'unavailable')
     seconds=int((now-changed).total_seconds())
@@ -92,7 +92,7 @@ def duration_answer(entity,now=None):
         count,unit=(seconds//60,'minute') if seconds<3600 else (seconds//3600,'hour') if seconds<86400 else (seconds//86400,'day')
         age=f'{count} {unit}'+('s' if count!=1 else '')
     state={'on':'open','off':'closed'}.get(entity.state,entity.state) if entity.domain=='binary_sensor' and capable(entity,'opening','') else entity.state
-    return Result(f'{subject(entity)} has reported {state} for {age}.',entities=[entity.entity_id])
+    return Result(f'{subject(entity)} has been reporting {state} for {age}.',entities=[entity.entity_id])
 
 
 def capable(entity,prop,text):
@@ -145,7 +145,7 @@ def spoken_list(names):
 
 def describe(entity,prop):
     name=subject(entity);state=str(entity.state);attrs=entity.attributes
-    if state in {'unknown','unavailable','None',''}:return f"I can't check {spoken_name(entity)} right now. Its sensor is unavailable."
+    if state in {'unknown','unavailable','None',''}:return f"I can't check {spoken_name(entity)} right now. It’s unavailable at the moment."
     if prop=='opening':
         value={'on':'open','off':'closed'}.get(state,state) if entity.domain=='binary_sensor' else state
         if value not in {'open','closed','opening','closing'}:return f"I can't tell whether {spoken_name(entity)} is open or closed right now."
@@ -176,6 +176,29 @@ def describe(entity,prop):
     if prop=='humidity':return f"The humidity in {entity.area or spoken_name(entity)} is {value} percent."
     if prop=='battery':return f'{name} has {value} percent battery left.'
     return f'{name} is {value}{" "+unit if unit else ""}.'
+
+
+def reply_to_question(entity,prop,text):
+    """Answer yes/no questions directly only when the reported state proves it."""
+    speech=describe(entity,prop)
+    if not re.match(r'^(is|are|does|do)\b',text,re.I):return speech
+    state=str(entity.state);query=set(words(text));actual=None;wanted=None
+    if prop=='opening':
+        actual={'on':'open','off':'closed'}.get(state,state) if entity.domain=='binary_sensor' else state
+        wanted=next((w for w in ('open','closed') if w in query),None)
+        if actual not in {'open','closed'}:return speech
+    elif prop in {'power','lock'}:
+        actual=state;wanted=next((w for w in (('on','off') if prop=='power' else ('locked','unlocked')) if w in query),None)
+        if actual not in ({'on','off'} if prop=='power' else {'locked','unlocked'}):return speech
+    elif prop in {'heating','cooling'}:
+        action=entity.attributes.get('hvac_action')
+        if state in {'unknown','unavailable','None',''} or action not in {'idle','off','heating','cooling','drying','fan'}:return speech
+        actual=action==prop;wanted='off' not in query
+    elif prop=='motion':
+        if state not in {'on','off'}:return speech
+        actual=state;wanted='off' if query & {'clear','unoccupied'} else 'on' if query & {'occupied','activity','motion','detected'} else None
+    if wanted is None:return speech
+    return ('Yes, ' if actual==wanted else 'No, ')+speech[0].lower()+speech[1:]
 
 
 def interpret(text):
@@ -229,21 +252,21 @@ def choose(text,entities,prop,area=''):
 
 def answer(text,entities,area=''):
     if not isinstance(text,str) or not text.strip() or len(text)>500:
-        return Result('Please ask one short question about your home.','unsupported')
+        return Result('What would you like to know about your home? Try asking one thing at a time.','unsupported')
     text=canonical_request(text)
     prop,command=interpret(text)
     if not prop:return Result(NOT_FOUND_REPLY,'unsupported')
     if 'here' in words(text) and not area:return Result("Which room do you mean? I don't know which room this speaker is in yet.",'clarify',property=prop)
     room_reading=prop in {'temperature','humidity'} and not target_words(text)
-    if room_reading and not area:return Result('Which room do you mean? Please include the room name.','clarify',property=prop)
-    if set(words(text))&{'it','them','those'} and not target_words(text):return Result('Which device do you mean? Please include its name.','clarify',property=prop)
+    if room_reading and not area:return Result('Which room do you mean? Say the room name so I can check the right place.','clarify',property=prop)
+    if set(words(text))&{'it','them','those'} and not target_words(text):return Result('Which device do you mean? Say its name so I can check the right one.','clarify',property=prop)
     candidates=choose(text,entities,prop,area)
     if 'here' in words(text):candidates=[pair for pair in candidates if normalized(pair[1].area)==normalized(area)]
     if room_reading and area:candidates=[pair for pair in candidates if normalized(pair[1].area)==normalized(area)]
     explicit_area=any(set(normalized(e.area))<=set(normalized(text)) for e in entities if e.area)
     if command and area and not explicit_area:
         candidates=[pair for pair in candidates if normalized(pair[1].area)==normalized(area)]
-    if not candidates:return Result(f"I can't find a device shared with Assist to check {'whether the heat is running' if prop=='heating' else prop} there.",'not_found',property=prop)
+    if not candidates:return Result("I can't find the right device to check that. Make sure it's shared with Assist, and include its room or name.",'not_found',property=prop)
     # Unqualified room requests use the listening satellite's registered area.
     # An explicit room/entity wins on its own; context only breaks equal matches.
     best=candidates[0][0]
@@ -264,7 +287,7 @@ def answer(text,entities,area=''):
                     speech=(f'All {len(found)} are {desired}.' if len(active)==len(found) else f'{len(active)} of {len(found)} are {desired}.')
                 else:speech=(spoken_list([subject(e) for e in active])+(' is ' if len(active)==1 else ' are ')+desired+'.') if active else f'None of the devices I can check are {desired}.'
                 if unknown:speech+=" I can't confirm "+spoken_list([spoken_name(e) for e in unknown])+'.'
-                if 'how many' in text.lower():speech=f'{len(active)} are {desired}. '+speech
+                if 'how many' in text.lower():speech=f'{len(active)} '+('device is ' if len(active)==1 else 'devices are ')+desired+'. '+speech
                 return Result(speech,entities=[e.entity_id for e in found],property=prop)
         if prop=='opening' and 'open' in words(text) and 'all' not in words(text):
             active=[e for e in found if e.state==('on' if e.domain=='binary_sensor' else 'open')]
@@ -272,26 +295,26 @@ def answer(text,entities,area=''):
             noun='windows' if 'window' in normalized(text) else 'doors' if 'door' in normalized(text) else 'doors or windows'
             speech=(spoken_list([subject(e) for e in active])+(' is open.' if len(active)==1 else ' are open.')) if active else ('None of the '+noun+' I can check are open.' if unknown else 'All the '+noun+' I can check are closed.')
             if unknown:speech+=" I can't check "+spoken_list([spoken_name(e) for e in unknown])+" right now."
-            if 'how many' in text.lower():speech=f'{len(active)} are open. '+speech
+            if 'how many' in text.lower():speech=f'{len(active)} '+('is open. ' if len(active)==1 else 'are open. ')+speech
         else:speech=' '.join(describe(e,prop) for e in found[:20])+(f' There are {len(found)-20} more matches.' if len(found)>20 else '')
         return Result(speech,entities=[e.entity_id for e in found],property=prop)
     best=candidates[0][0];found=[e for score,e in candidates if score==best]
     plural_command=bool(command and set(words(text))&{'lights','lamps','fans','switches'})
-    if plural_command and not area and not explicit_area:return Result('Which room do you mean? Please include the room name.','clarify',property=prop)
+    if plural_command and not area and not explicit_area:return Result('Which room do you mean? Say the room name so I can check the right place.','clarify',property=prop)
     if command and ('all' in words(text) or plural_command):
         found=[e for _,e in candidates]
-        if len({e.domain for e in found})!=1:return Result('Please specify one kind of device, such as all kitchen lights.','clarify',property=prop)
+        if len({e.domain for e in found})!=1:return Result('Which kind of device do you mean? For example, say all kitchen lights.','clarify',property=prop)
         unavailable=[e for e in found if e.state in {'unknown','unavailable'}]
-        if unavailable:return Result('I cannot confirm all those devices are available: '+', '.join(e.name for e in unavailable)+'. No command was sent.','unavailable',property=prop)
+        if unavailable:return Result("I can't reach all of those devices right now: "+', '.join(e.name for e in unavailable)+". I haven't sent a command.",'unavailable',property=prop)
         ids=[e.entity_id for e in found]
         return Result(f"Okay, turning {'off' if command['service']=='turn_off' else 'on'} {len(ids)} {found[0].domain.replace('_',' ')}s.",'command',ids,property=prop,command={'domain':found[0].domain,**command,'data':{**command['data'],'entity_id':ids}})
     if len(found)>1:
         labels=[e.name for e in found[:5]]
-        return Result('Which device did you mean: '+', '.join(labels)+'?','clarify',choices=[{'entity_id':e.entity_id,'name':e.name} for e in found],property=prop)
+        return Result('Which one did you mean: '+', '.join(labels)+'?','clarify',choices=[{'entity_id':e.entity_id,'name':e.name} for e in found],property=prop)
     entity=found[0]
     if command:
-        if entity.state in {'unknown','unavailable'}:return Result(f'{entity.name} is unavailable. I did not send a command.','unavailable',property=prop)
-        if command['service']=='turn_on' and prop=='brightness' and entity.domain!='light':return Result('That device does not support light brightness.','unsupported')
+        if entity.state in {'unknown','unavailable'}:return Result(f"I can't reach {spoken_name(entity)} right now, so I haven't sent a command.",'unavailable',property=prop)
+        if command['service']=='turn_on' and prop=='brightness' and entity.domain!='light':return Result("I can't adjust the brightness on that device.",'unsupported')
         command={'domain':entity.domain,**command,'data':{**command['data'],'entity_id':entity.entity_id}}
         return Result((f"Okay, setting {spoken_name(entity)} to {command['data']['brightness_pct']} percent." if prop=='brightness' else f"Okay, turning {'off' if command['service']=='turn_off' else 'on'} {spoken_name(entity)}."),'command',[entity.entity_id],property=prop,command=command)
-    return Result(describe(entity,prop),entities=[entity.entity_id],property=prop)
+    return Result(reply_to_question(entity,prop,text),entities=[entity.entity_id],property=prop)

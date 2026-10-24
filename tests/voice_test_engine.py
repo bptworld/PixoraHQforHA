@@ -37,7 +37,7 @@ class MatchingTests(unittest.TestCase):
         now=datetime.now(timezone.utc);entity=catalog()[1]
         self.assertIn('reliable time',duration_answer(entity,now).speech)
         entity.last_changed=now-timedelta(minutes=4)
-        self.assertIn('reported closed for 4 minutes',duration_answer(entity,now).speech)
+        self.assertIn('reporting closed for 4 minutes',duration_answer(entity,now).speech)
         entity.state='unavailable';self.assertIn('unavailable',duration_answer(entity,now).speech)
         entity.state='off';entity.last_changed=now+timedelta(minutes=1)
         self.assertIn('reliable time',duration_answer(entity,now).speech)
@@ -95,9 +95,22 @@ class MatchingTests(unittest.TestCase):
     def test_missing_room_never_selects_other_room_for_control(self):
         self.assertIsNone(answer('Turn off all lights',catalog(),'Bedroom').command)
 
+    def test_yes_no_replies_preserve_unknown_and_opposite_states(self):
+        es=catalog()
+        self.assertTrue(answer('Is the front door open?',es).speech.startswith('No,'))
+        self.assertTrue(answer('Is the front door closed?',es).speech.startswith('Yes,'))
+        self.assertTrue(answer('Is the front door unlocked?',es).speech.startswith('Yes,'))
+        self.assertTrue(answer('Is the front door locked?',es).speech.startswith('No,'))
+        es[1].state='unavailable'
+        reply=answer('Is the front door open?',es).speech
+        self.assertNotIn('Yes,',reply);self.assertNotIn('No,',reply);self.assertIn('unavailable',reply)
+        es[4].attributes.pop('hvac_action',None)
+        reply=answer('Is the heat on?',es).speech
+        self.assertNotIn('Yes,',reply);self.assertNotIn('No,',reply);self.assertIn('does not report',reply)
+
     def test_spoken_names_and_readings_are_natural(self):
         es=catalog();es[1].name='Living Room Front Door Sensor';es[1].area='Living Room'
-        self.assertEqual(answer('Is the front door open?',es).speech,'The front door is closed.')
+        self.assertEqual(answer('Is the front door open?',es).speech,'No, the front door is closed.')
         self.assertEqual(answer('Are any windows open?', [e for e in es if e.entity_id!='binary_sensor.kitchen']).speech,'All the windows I can check are closed.')
         self.assertEqual(answer("What's the temperature in here?",es,'Living Room').speech,"It's 68 degrees Fahrenheit in Living Room.")
         self.assertEqual(answer('Turn on the ceiling light',es,'Living Room').speech,'Okay, turning on Ceiling light.')
@@ -117,7 +130,7 @@ class MatchingTests(unittest.TestCase):
         es=catalog();es[8].state='off'
         r=answer('Which kitchen lights are on?',es)
         self.assertEqual(r.speech,'The counter light is on.')
-        self.assertIn('1 are on',answer('How many kitchen lights are on?',es).speech)
+        self.assertIn('1 device is on',answer('How many kitchen lights are on?',es).speech)
         es[9].state='unavailable'
         self.assertIn("can't confirm",answer('Are all kitchen lights off?',es).speech)
 

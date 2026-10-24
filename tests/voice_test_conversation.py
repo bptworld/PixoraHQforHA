@@ -57,7 +57,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import patch
         with patch('custom_components.pixora_voice.flows.matches',AsyncMock(return_value=True)),patch('custom_components.pixora_voice.flows.ask',AsyncMock()) as start:
             reply=await self.ask('Good night')
-            self.assertIn('permission',reply.speech);self.assertFalse(reply.continue_conversation);start.assert_not_awaited()
+            self.assertIn('administrator',reply.speech);self.assertFalse(reply.continue_conversation);start.assert_not_awaited()
     async def test_context_area_and_original_context_in_service_call(self):
         r=await self.ask('Turn on the ceiling light');self.assertIn('Okay, turning on',r.speech)
         call=self.hass.services.async_call.await_args;self.assertEqual(call.args[:2],('light','turn_on'));self.assertEqual(call.args[2]['entity_id'],'light.living');self.assertIs(call.kwargs['context'],self.context)
@@ -70,7 +70,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.control_denied.add('light.kitchen');r=await self.ask('Turn off all kitchen lights');self.assertIn('permission',r.speech);self.hass.services.async_call.assert_not_awaited()
 
     async def test_uncertain_command_not_retried(self):
-        self.hass.services.async_call.side_effect=HAError('uncertain');r=await self.ask('Turn on the ceiling light');self.assertIn('could not confirm',r.speech);self.hass.services.async_call.assert_awaited_once()
+        self.hass.services.async_call.side_effect=HAError('uncertain');r=await self.ask('Turn on the ceiling light');self.assertIn("not sure whether",r.speech);self.hass.services.async_call.assert_awaited_once()
 
     async def test_followup_scoped_to_conversation_and_current_states(self):
         self.request.device_id=None
@@ -97,7 +97,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_timeout_returns_once_and_stops_listening(self):
         self.hass.services.async_call.side_effect=asyncio.TimeoutError
         result=await self.ask('Turn on the ceiling light')
-        self.assertIn('could not confirm',result.speech);self.assertFalse(result.continue_conversation)
+        self.assertIn("not sure whether",result.speech);self.assertFalse(result.continue_conversation)
         self.hass.services.async_call.assert_awaited_once()
 
     async def test_context_survives_new_wake_conversation_but_not_new_user(self):

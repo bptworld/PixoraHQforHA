@@ -45,14 +45,14 @@ class LocalVoice(conversation.ConversationEntity):
         if await matches_flow(self.hass,user_input.text):
             uid=user_input.context.user_id
             user=await self.hass.auth.async_get_user(uid) if uid else None
-            speech=await ask_flow(self.hass,user_input.text) if not uid or user and getattr(user,'is_admin',False) else 'You do not have permission to start voice Flows.'
+            speech=await ask_flow(self.hass,user_input.text) if not uid or user and getattr(user,'is_admin',False) else "I can't start voice Flows from this account. An administrator can help with access."
             chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=speech))
             return self.finish(user_input,chat_log)
         planner_text=planner_followup(user_input.text,previous)
         if planner_text or is_planner_question(user_input.text):
             uid=user_input.context.user_id
             allowed=not uid or await self.hass.auth.async_get_user(uid)
-            speech=await ask_planner(self.hass,planner_text or user_input.text) if allowed else 'You do not have permission to read Planner.'
+            speech=await ask_planner(self.hass,planner_text or user_input.text) if allowed else "I can't read Planner from this account. Please check its permissions."
             if allowed:self.followups.put(key,source='planner',text=planner_text or user_input.text)
             chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=speech))
             return self.finish(user_input,chat_log)
@@ -76,7 +76,7 @@ class LocalVoice(conversation.ConversationEntity):
             result=Result('Okay.','cancelled')
         elif duration_question(text):
             found=[e for e in catalog if previous and previous.get('source')=='home' and e.entity_id in previous.get('ids',[])]
-            result=duration_answer(found[0]) if len(found)==1 else Result('Which device do you mean? Please ask about one device first.','clarify')
+            result=duration_answer(found[0]) if len(found)==1 else Result('Which device do you mean? Ask about it by name first, then ask how long.','clarify')
             if found:result.property=previous.get('property','')
         elif reading_followup(text,previous):
             found=[e for e in catalog if e.entity_id in previous['ids']]
@@ -101,15 +101,15 @@ class LocalVoice(conversation.ConversationEntity):
         if result.command:
             ids=result.entities
             if user_id and (not user or any(not user.permissions.check_entity(eid,POLICY_CONTROL) for eid in ids)):
-                result=Result('You do not have permission to control those devices.','denied')
+                result=Result("I can't control those devices from this account. Please check its permissions.",'denied')
             elif not self.hass.services.has_service(result.command['domain'],result.command['service']):
-                result=Result('That device does not support the requested control.','unsupported')
+                result=Result("I can't do that with this device. It doesn't support that control.",'unsupported')
             else:
                 try:
                     await asyncio.wait_for(self.hass.services.async_call(result.command['domain'],result.command['service'],result.command['data'],blocking=True,context=user_input.context),10)
                 except (HomeAssistantError,asyncio.TimeoutError):
                     # The device may have accepted the command. Never blindly retry.
-                    result=Result('I could not confirm that command. Please check the device.','uncertain')
+                    result=Result("I'm not sure whether that command went through. Please check the device before trying again.",'uncertain')
         if result.entities and not result.command and result.kind=='answer':self.followups.put(key,source='home',ids=result.entities[:20],property=result.property,text=text)
         chat_log.async_add_assistant_content_without_tools(conversation.AssistantContent(agent_id=self.entity_id,content=result.speech))
         return self.finish(user_input,chat_log)

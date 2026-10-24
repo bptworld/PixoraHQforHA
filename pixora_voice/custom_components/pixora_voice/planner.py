@@ -37,12 +37,12 @@ def install_reply_service(hass):
   from homeassistant.core import SupportsResponse
   hass.services.async_register(DOMAIN,'planner_vocabulary',vocabulary,supports_response=SupportsResponse.ONLY)
 async def ask(hass,text):
- if not await enabled(hass):return 'Planner integration is off. You can enable it in the Pixora Voice app.'
+ if not await enabled(hass):return "I'm not connected to Planner yet. You can turn that on in the Pixora Voice app."
  pending=hass.data.setdefault(DOMAIN,{}).setdefault('planner_pending',{})
- if len(pending)>=2:return 'Planner is answering another question. Please try again in a moment.'
+ if len(pending)>=2:return "I'm still checking another Planner question. Give me a moment, then try again."
  ident=secrets.token_hex(16);future=asyncio.get_running_loop().create_future();pending[ident]=future
  try:
   hass.bus.async_fire('pixora_voice_planner_request',{'request_id':ident,'text':text[:500],'timezone':str(getattr(hass.config,'time_zone',''))[:80],'expires_at':time.time()+10})
   return await asyncio.wait_for(future,8)
- except (asyncio.TimeoutError,HomeAssistantError,OSError):return "I can't reach Planner right now. Please try again shortly. Your local home controls still work."
+ except (asyncio.TimeoutError,HomeAssistantError,OSError):return "I can't reach Planner right now. You can still ask me to check or control your local home devices."
  finally:pending.pop(ident,None)

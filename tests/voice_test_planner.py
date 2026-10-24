@@ -67,7 +67,7 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
  async def test_disabled_never_sends(self):
   with tempfile.TemporaryDirectory() as d:
    fired=[];hass=NS(config=NS(path=lambda *p:str(Path(d).joinpath(*p))),data={},bus=NS(async_fire=lambda *a:fired.append(a)))
-   self.assertIn('off',await planner.ask(hass,'calendar today'));self.assertEqual(fired,[])
+   self.assertIn('not connected',await planner.ask(hass,'calendar today'));self.assertEqual(fired,[])
  async def test_reply_correlation_and_cleanup(self):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);(root/'.storage').mkdir();(root/'.storage'/planner.SETTINGS).write_text('{"enabled":true}')

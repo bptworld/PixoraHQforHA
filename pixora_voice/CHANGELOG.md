@@ -1,3 +1,9 @@
+## 0.1.8
+- Use conversational replies across home status, commands, counts, clarification, access problems, unavailable devices, Flow requests and connection failures. Answer yes/no questions directly only when the reported state supports the answer.
+- Planner replies now use natural sentences for schedules, sports, TV, meals, shared lists and search results. Original shared content, dates, values and privacy boundaries are preserved.
+- Keep uncertain commands explicit: check the device or Flow history before trying again. No automatic retries, extra listening, model calls or background polling are added.
+- Update the Assist integration from Setup & maintenance and restart Home Assistant once to load the local reply changes. No phrase refresh is needed for this wording-only update.
+
 ## 0.1.7
 - Recognize natural calendar TV requests such as “Is Fire Country on tonight?” without requiring “New Episode.” Refresh Planner phrases after installing the updated Assist integration. Short title aliases remain bounded.
 - Start existing Pixora Flows with exact configured phrases such as “Good night.” Add a Voice trigger, save and enable the Flow, then use Refresh Voice triggers in this app.
