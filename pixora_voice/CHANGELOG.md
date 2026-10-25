@@ -1,3 +1,6 @@
+## 0.2.2
+- Recognize broader natural calendar and TV search questions and reuse the expanded shared Planner search. App-only release; the Assist bridge stays unchanged.
+
 ## 0.2.1
 - Keep the running Assist files intact when deferring a bridge update; activate them only after Restart now is approved. Prefer matching local device capabilities over Planner keywords, isolate malformed optional settings, and classify unavailable/uncertain spoken answers as failures in the Voice log.
 - Route TV schedule questions such as “What’s on TV tonight?” directly to Planner calendar search. App-only update; the Assist bridge stays unchanged.

@@ -31,6 +31,15 @@ class Registry:
 
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_generic_calendar_and_tv_wording_routes_to_shared_planner_search(self):
+        from unittest.mock import patch
+        for question in ("What's on tonight?",'What are we watching tonight?','Is there anything on TV this evening?'):
+            with patch('runtime.planner.ask',AsyncMock(return_value='A shared calendar answer.')) as planner:
+                reply=await self.ask(question)
+                self.assertEqual(reply.speech,'A shared calendar answer.');self.assertFalse(reply.continue_conversation)
+                planner.assert_awaited_once_with(self.hass,question)
+                self.hass.services.async_call.assert_not_awaited()
+
     async def test_device_capability_wins_over_planner_keywords_in_names(self):
         from unittest.mock import patch
         for name,area in [('Home Office window','Home Office'),('Dinner room window','Dinner Room')]:

@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.2.1'
+VERSION='0.2.2'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 # Assist changes have their own release identity; app-only updates keep this unchanged.
 INTEGRATION_VERSION=json.loads((COMPONENT/'manifest.json').read_text(encoding='utf-8'))['version']
