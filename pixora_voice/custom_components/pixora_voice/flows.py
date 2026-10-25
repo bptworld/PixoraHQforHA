@@ -46,13 +46,20 @@ def install_services(hass):
   try:
    value=getattr(call,'data',None)
    if not isinstance(value,dict) or not isinstance(value.get('phrases'),list) or not isinstance(value.get('variables'),list):raise HomeAssistantError('Choose saved Flow phrases before refreshing speech training.')
-   from .phrase_tools import update_voice_phrases,write_owned,vocabulary_signature
+   from .phrase_tools import update_voice_phrases,write_owned,vocabulary_signature,validate_voice_vocabulary
+   validate_voice_vocabulary(value['phrases'],value['variables'])
+   from .speech_training import uses_groq
+   groq=await uses_groq(hass)
    path=Path('/share/speech-to-phrase/custom_sentences/en/pixora_voice_flows.yaml')
-   changed=await asyncio.to_thread(update_voice_phrases,path,value.get('phrases',[]),value.get('variables',[]))
+   changed=False if groq else await asyncio.to_thread(update_voice_phrases,path,value.get('phrases',[]),value.get('variables',[]))
    await asyncio.to_thread(write_owned,Path(hass.config.path('.storage','pixora_voice_flows.json')),json.dumps(value.get('phrases',[])))
    signature=vocabulary_signature(value['phrases'],value['variables'])
    def progress(status):
     hass.states.async_set('sensor.pixora_voice_training',status,{'friendly_name':'Pixora Voice training','signature':signature,'updated_at':time.time()})
+   if groq:
+    progress('complete')
+    state['flow_refresh_busy']=False
+    return
    if changed is False:
     progress('unchanged')
     state['flow_refresh_busy']=False

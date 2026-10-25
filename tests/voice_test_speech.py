@@ -18,6 +18,19 @@ from speech_settings import read_settings,save_settings,public_settings
 
 
 class SettingsTests(unittest.TestCase):
+    def test_retire_only_owned_phrases_and_keep_verified_recovery(self):
+        from planner_phrases import MARKER,retire_phrase_files
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);active=root/'active';active.mkdir();recovery=root/'recovery'
+            own=active/'pixora_voice_flows.yaml';own.write_text(MARKER+'{}')
+            foreign=active/'pixora_voice_planner.yaml';foreign.write_text('user edited sentences')
+            unrelated=active/'sentences.yaml';unrelated.write_text('my sentences')
+            self.assertEqual(retire_phrase_files(active,recovery),['pixora_voice_flows.yaml'])
+            self.assertFalse(own.exists());self.assertEqual(foreign.read_text(),'user edited sentences')
+            self.assertEqual(unrelated.read_text(),'my sentences')
+            self.assertEqual(next(recovery.glob('*/pixora_voice_flows.yaml')).read_text(),MARKER+'{}')
+            self.assertEqual(retire_phrase_files(active,recovery),[])
+
     def test_key_is_per_hub_preserved_when_blank_and_never_returned(self):
         with tempfile.TemporaryDirectory() as a,tempfile.TemporaryDirectory() as b:
             key='gsk_'+'fake_for_test_'*3

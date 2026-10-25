@@ -28,6 +28,8 @@ class FlowRefreshServiceTests(unittest.IsolatedAsyncioTestCase):
   tools=types.ModuleType('custom_components.pixora_voice.phrase_tools')
   from planner_phrases import vocabulary_signature
   tools.vocabulary_signature=vocabulary_signature
+  from planner_phrases import validate_voice_vocabulary
+  tools.validate_voice_vocabulary=validate_voice_vocabulary
   writes=[];tools.update_voice_phrases=lambda *args:writes.append(('phrases',args))
   tools.write_owned=lambda *args:writes.append(('names',args))
   core=types.ModuleType('homeassistant.core');core.SupportsResponse=types.SimpleNamespace(ONLY='only')
@@ -51,6 +53,12 @@ class FlowRefreshServiceTests(unittest.IsolatedAsyncioTestCase):
     await handlers['refresh_flow_phrases'](types.SimpleNamespace(context=types.SimpleNamespace(user_id='reader'),data={'phrases':['Good night'],'variables':[]}))
    self.assertEqual(len(writes),2)
    self.assertEqual(services.async_call.await_count,1)
+   with patch('custom_components.pixora_voice.speech_training.uses_groq',AsyncMock(return_value=True)):
+    before=len(writes)
+    await handlers['refresh_flow_phrases'](types.SimpleNamespace(data={'phrases':['Good night'],'variables':['isDark']}))
+    self.assertEqual(progress[-1][1],'complete');self.assertEqual(len(writes),before+1)
+    self.assertEqual(writes[-1][0],'names');self.assertEqual(services.async_call.await_count,1)
+    self.assertFalse(hass.data['pixora_voice']['flow_refresh_busy'])
    tools.update_voice_phrases=lambda *args:False
    await handlers['refresh_flow_phrases'](types.SimpleNamespace(data={'phrases':['Good night'],'variables':['isDark']}))
    self.assertEqual(progress[-1][1],'unchanged')

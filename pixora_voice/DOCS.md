@@ -1,3 +1,5 @@
+**Groq needs no phrase files or Speech-to-Phrase app.** In Groq mode, startup and refreshes never create training files or request that app to restart. Use **Remove local phrase files** in Speech recognition to retire Pixora-owned files with a private recovery copy. Flow trigger definitions remain necessary and are preserved.
+
 ## Optional Groq speech (your own key)
 
 Open **Speech recognition** in the Voice app. Enter your Groq API key, enable the audio-sharing checkbox, save and use **Test connection**. Each HA hub stores its own key privately; no shared Pixora key or Render hosting. Select **Pixora Groq Whisper** as Speech-to-text in the HA voice assistant. Keep Pixora Voice (Beta), Piper and Amy Medium for local answers and speech output. Groq receives your recorded request audio and returns text, which follows exactly the same native handler as typed text. The free plan has limits; the app never upgrades billing or retries automatically. Remove saved key disables Groq; switch the assistant back to a local provider. Key changes need no restart or training. Installing this provider needs one confirmed HA restart.

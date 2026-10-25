@@ -107,6 +107,16 @@ class AutomaticRecoveryTests(unittest.IsolatedAsyncioTestCase):
    self.assertTrue(all(call.args==('states',) for call in ha.await_args_list))
 
 class UnchangedUpdateTests(unittest.TestCase):
+ def test_groq_update_never_recreates_local_phrases(self):
+  from speech_settings import save_settings
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);config=root/'config';data=root/'data';install_component(config,data)
+   save_settings(config,{'enabled':True,'key':'gsk_'+'fake_for_test_'*3})
+   manifest=config/'custom_components/pixora_voice/manifest.json';value=json.loads(manifest.read_text());value['version']='0.1.17';manifest.write_text(json.dumps(value))
+   phrases=root/'removed/language.yaml'
+   record=prepare_integration_update(config,data,phrases)
+   self.assertFalse(phrases.exists());self.assertFalse(record['speechNeeded'])
+
  def test_new_code_with_same_language_does_not_retrain_speech(self):
   from planner_phrases import update_local_phrases
   with tempfile.TemporaryDirectory() as folder:

@@ -16,6 +16,30 @@ class Response:
 
 
 class AppTests(unittest.IsolatedAsyncioTestCase):
+    async def test_groq_training_refresh_is_a_noop(self):
+        from speech_settings import save_settings
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);app=make_app(root,root)
+            save_settings(root,{'enabled':True,'key':'gsk_'+'fake_for_test_'*3})
+            handler=next(r.handler for r in app.router.routes() if r.method=='POST' and r.resource.canonical=='/api/phrases')
+            # No HA session exists: any attempted restart/network call fails.
+            reply=await handler(NS())
+            self.assertEqual(reply.status,200);self.assertIn('No training',reply.text)
+
+    async def test_groq_planner_refresh_checks_connection_without_training(self):
+        from speech_settings import save_settings
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);app=make_app(root,root);calls=[]
+            save_settings(root,{'enabled':True,'key':'gsk_'+'fake_for_test_'*3})
+            (root/'.storage/pixora_voice_planner.json').write_text(json.dumps({'enabled':True}))
+            def request(method,url,**kwargs):
+                calls.append(url);return Response(200,{'service_response':{'available':True}})
+            app['session']=NS(request=request)
+            handler=next(r.handler for r in app.router.routes() if r.method=='POST' and r.resource.canonical=='/api/planner/refresh')
+            with patch.dict(os.environ,{'SUPERVISOR_TOKEN':'fake'}):reply=await handler(NS())
+            self.assertEqual(reply.status,200);self.assertIn('does not need phrase files',reply.text)
+            self.assertEqual(len(calls),1);self.assertIn('planner_vocabulary',calls[0])
+
     async def test_speech_settings_never_return_saved_key(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);app=make_app(root,root)

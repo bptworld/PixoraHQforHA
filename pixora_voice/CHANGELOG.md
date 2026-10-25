@@ -1,3 +1,7 @@
+## 0.1.18
+- Groq mode no longer creates local training files or restarts Speech-to-Phrase during startup, updates, Planner refreshes or Flow refreshes. Flow trigger definitions are still saved; successful refreshes report Ready without training.
+- Add removal of recognized Pixora phrase files with a verified private recovery copy. Preserve user sentences and saved Flow trigger definitions.
+
 ## 0.1.17
 - Add optional Groq Whisper with each hub’s own masked API key, explicit audio-sharing opt-in and connection test. Transcription goes directly from HA to Groq; native Pixora handles the same returned text. Local recognition remains available. No new Render service.
 - Explain that recognition failures can be missing trained vocabulary even with clear audio. Add spoken/read-only heat, cooling and thermostat setpoint questions.

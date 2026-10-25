@@ -3,6 +3,8 @@ import asyncio
 import time
 import os
 import hashlib
+import json
+from pathlib import Path
 from aiohttp import ClientTimeout,ClientError
 
 def logs_ready(text):
@@ -13,7 +15,14 @@ def logs_ready(text):
     startup = max(text.rfind('INFO:root: Ready'), text.rfind('speech-to-phrase: starting'))
     return finished >= 0 and finished > started and finished > startup
 
+async def uses_groq(hass):
+    def read():
+        try:return json.loads(Path(hass.config.path('.storage','pixora_voice_speech.json')).read_text()).get('enabled') is True
+        except (OSError,ValueError,AttributeError):return False
+    return await asyncio.to_thread(read)
+
 async def read_status(hass):
+    if await uses_groq(hass):return {'ready':True,'generation':'groq-no-training','training_required':False}
     from homeassistant.components.hassio.const import DATA_COMPONENT
     supervisor = hass.data[DATA_COMPONENT]
     info = await supervisor.send_command('/addons/core_speech-to-phrase/info', method='get', timeout=4)

@@ -90,18 +90,37 @@ def update_phrases(path, vocabulary=None):
  payload={'language':'en','intents':{'PixoraPlanner':{'data':[{'sentences':sentences}]}},'lists':lists}
  return write_phrase_if_changed(path,MARKER+json.dumps(payload,ensure_ascii=False,indent=2)+'\n')
 
+def validate_voice_vocabulary(phrases,variables=None):
+ if not isinstance(phrases,list) or len(phrases)>64 or any(not isinstance(p,str) or not 1<=len(p.strip())<=100 or not re.fullmatch(r"[A-Za-z0-9 .!?'-]+",p) or not re.search(r'[A-Za-z0-9]',p) for p in phrases):
+  raise ValueError('Voice triggers need at most 64 short plain-language phrases.')
+ if variables is not None and (not isinstance(variables,list) or len(variables)>32 or any(not isinstance(v,str) or not 1<=len(v)<=70 for v in variables)):raise ValueError('Use up to 32 short variable names.')
+
+def retire_phrase_files(folder,backup_root):
+ """Archive only recognized Pixora training files; preserve user sentences."""
+ import time
+ folder=Path(folder);backup=Path(backup_root)/str(time.time_ns());removed=[]
+ for name in ('pixora_voice_planner.yaml','pixora_voice_flows.yaml','pixora_voice_language.yaml','pixora_voice.yaml'):
+  path=folder/name
+  if not path.exists():continue
+  if path.is_symlink() or any(p.is_symlink() for p in path.parents):raise ValueError('A symbolic-link phrase file was preserved.')
+  content=path.read_text(encoding='utf-8')
+  legacy='# Bounded additions to local recognition; shared HA name/area lists are reused.\n# Installed separately; never replace the user\'s own sentences.yaml.\n'
+  if not content.startswith(MARKER) and not (name=='pixora_voice.yaml' and content.startswith(legacy)):continue
+  write_owned(backup/name,content)
+  if (backup/name).read_text(encoding='utf-8')!=content:raise ValueError('Phrase recovery copy could not be verified.')
+  path.unlink();removed.append(name)
+ return removed
+
 def update_voice_phrases(path,phrases,variables=None):
  path=Path(path)
  if path.exists() and (path.is_symlink() or not path.read_text(encoding='utf-8').startswith(MARKER)):
   raise ValueError('An existing voice trigger phrase file was preserved because it is not owned by Pixora Voice.')
- if not isinstance(phrases,list) or len(phrases)>64 or any(not isinstance(p,str) or not 1<=len(p.strip())<=100 or not re.fullmatch(r"[A-Za-z0-9 .!?'-]+",p) or not re.search(r'[A-Za-z0-9]',p) for p in phrases):
-  raise ValueError('Voice triggers need at most 64 short plain-language phrases.')
+ validate_voice_vocabulary(phrases,variables)
  values=list(dict.fromkeys(' '.join(re.findall(r'[a-z0-9]+',p.lower())) for p in phrases))
  if values:
   payload={'language':'en','intents':{'PixoraVoiceFlow':{'data':[{'sentences':['{pv_flow_phrase}']}] }},'lists':{'pv_flow_phrase':{'values':values}}}
  else:payload={'language':'en','intents':{}}
  variables=variables or []
- if not isinstance(variables,list) or len(variables)>32 or any(not isinstance(v,str) or not 1<=len(v)<=70 for v in variables):raise ValueError('Use up to 32 short variable names.')
  names=[]
  for value in variables:
   spoken=re.sub(r'([a-z])([A-Z])',r'\1 \2',value)

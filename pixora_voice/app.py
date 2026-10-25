@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.17'
+VERSION='0.1.18'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -43,6 +43,10 @@ def prepare_integration_update(config_root, data_root, phrase_file=None):
     journal = data_root / 'integration-update.json'
     record = json.loads(journal.read_text()) if journal.exists() else {}
     if not isinstance(record, dict):raise ValueError('Integration update record needs attention.')
+    from speech_settings import read_settings
+    if read_settings(config_root).get('enabled'):
+        phrase_file=None
+        record['speechNeeded']=False
     manifest = config_root / 'custom_components/pixora_voice/manifest.json'
     exists = manifest.exists()
     installed = json.loads(manifest.read_text()) if exists else {}
@@ -206,6 +210,14 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
                 return web.json_response({'message':'Connected to Groq. Your saved key was accepted. No audio was sent; test a satellite next.'})
         except (OSError,ValueError,ClientError,asyncio.TimeoutError):
             return web.json_response({'error':'Could not reach Groq. Check your internet connection and saved key. No audio or command was sent.'},status=503)
+    async def retire_speech(request):
+        try:
+            if request.headers.get('X-Pixora-Request')!='1' or not (await asyncio.to_thread(read_settings,config_root)).get('enabled'):
+                return web.json_response({'error':'Enable Groq before removing local phrase files.'},status=400)
+            from planner_phrases import retire_phrase_files
+            removed=await asyncio.to_thread(retire_phrase_files,Path('/share/speech-to-phrase/custom_sentences/en'),data_root/'retired-speech-phrases')
+            return web.json_response({'removed':removed,'message':'Removed '+str(len(removed))+' Pixora training files. A recovery copy stays in the Voice app’s private data. Saved Flow trigger definitions and user-owned sentences were preserved.'})
+        except (OSError,ValueError):return web.json_response({'error':'Phrase cleanup stopped. Files without a verified recovery copy were preserved.'},status=409)
     async def status(request):
         try:available=await agents();error=''
         except (ValueError,asyncio.TimeoutError,ClientError):available=[];error='Home Assistant is reconnecting. Try again shortly.'
@@ -232,6 +244,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             app['update_task']=asyncio.create_task(finish_integration_update(record,config_root,data_root,ha,app['maintenance']))
             return web.json_response({'message':'Restart approved. Voice will check readiness when Home Assistant returns.'})
     from planner_phrases import write_owned,update_phrases,update_local_phrases
+    def groq_enabled():return read_settings(config_root).get('enabled') is True
     planner_file=config_root/'.storage'/'pixora_voice_planner.json'
     phrase_file=Path('/share/speech-to-phrase/custom_sentences/en/pixora_voice_planner.yaml')
     def planner_enabled():
@@ -242,6 +255,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         result=await ha('services/pixora_voice/planner_vocabulary?return_response',{})
         vocabulary=result.get('service_response',{})
         if vocabulary.get('available') is not True:raise ValueError('Planner did not respond. Check that the paired Pixora Home Control app and the updated Assist integration are running.')
+        if await asyncio.to_thread(groq_enabled):return 'Planner is connected. Groq does not need phrase files or training.'
         changed=await asyncio.to_thread(update_phrases,phrase_file,vocabulary)
         if changed is False:return 'Planner speech phrases are unchanged. No training was needed.'
         try:await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
@@ -272,6 +286,11 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             vocabulary=result.get('service_response',{})
             if vocabulary.get('available') is not True:raise ValueError('Flows did not respond. Check the paired Home Control app and updated Assist integration.')
             values=vocabulary.get('phrases',[])
+            if await asyncio.to_thread(groq_enabled):
+                from planner_phrases import validate_voice_vocabulary
+                validate_voice_vocabulary(values,vocabulary.get('variables',[]))
+                await asyncio.to_thread(write_owned,config_root/'.storage'/'pixora_voice_flows.json',json.dumps(values))
+                return web.json_response({'message':'Voice triggers saved. Groq is ready; no phrase files, training or restart needed.'})
             changed=await asyncio.to_thread(update_voice_phrases,phrase_file.with_name('pixora_voice_flows.yaml'),values,vocabulary.get('variables',[]))
             await asyncio.to_thread(write_owned,config_root/'.storage'/'pixora_voice_flows.json',json.dumps(values))
             if changed is False:return web.json_response({'message':'Voice phrases are unchanged. No training was needed.'})
@@ -291,6 +310,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         except ValueError as exc:return web.json_response({'error':str(exc)},status=409)
         return web.json_response({'message':'Assist integration installed. Restart Home Assistant once, add Pixora Voice under Settings → Devices & services, then select it in your local voice assistant.'})
     async def local_phrases(request):
+        if await asyncio.to_thread(groq_enabled):return web.json_response({'message':'Groq does not use phrase files. No training or restart needed.'})
         try:
             changed=await asyncio.to_thread(update_local_phrases,phrase_file.with_name('pixora_voice_language.yaml'))
             if changed is False:return web.json_response({'message':'Local speech phrases are unchanged. No training was needed.'})
@@ -338,6 +358,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
     app.router.add_get('/api/voice-log',voice_log)
     app.router.add_get('/api/speech',speech_settings);app.router.add_post('/api/speech',speech_settings)
     app.router.add_post('/api/speech/test',speech_test)
+    app.router.add_post('/api/speech/retire-phrases',retire_speech)
     app.router.add_post('/api/restart',restart_now)
     app.router.add_post('/api/phrases',local_phrases)
     app.router.add_post('/api/flows/refresh',refresh_flows)
