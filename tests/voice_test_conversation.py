@@ -28,6 +28,19 @@ class Registry:
 
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_computed_alias_sentinel_does_not_break_unrelated_questions(self):
+        from enum import Enum
+        class ComputedNameType(Enum):
+            COMPUTED_NAME = 0
+        state=NS(entity_id='climate.hall',name='Hall thermostat',state='heat',attributes={'current_temperature':68})
+        self.states.append(state)
+        registry=adapter.er.async_get(self.hass)
+        registry.values[state.entity_id]=NS(device_id=None,area_id='living',aliases=[ComputedNameType.COMPUTED_NAME,'Hall heat'],disabled_by=None,hidden_by=None)
+        reply=await self.ask('Is the heat running?')
+        self.assertTrue(reply.speech)
+        self.assertFalse(reply.continue_conversation)
+        self.hass.services.async_call.assert_not_awaited()
+
     def setUp(self):
         self.agent=adapter.LocalVoice(NS(entry_id='local'));self.agent.entity_id='conversation.pixora_voice'
         self.read_denied=set();self.control_denied=set()

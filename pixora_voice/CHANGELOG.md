@@ -1,3 +1,6 @@
+## 0.1.15
+- Handle Home Assistant computed-name alias markers without crashing question handling; preserve text aliases and the entity name.
+
 ## 0.1.14
 - Show Restarting, Training and Ready separately. Ready requires a fresh training completion from the running local speech service; bounded checks never repeat the restart.
 - Compare generated speech vocabulary before writing or requesting training. Repeated refreshes and unchanged app updates do not restart Speech-to-Phrase. Ignore phrase ordering, capitalization and punctuation changes that produce the same spoken vocabulary.

@@ -91,7 +91,9 @@ class LocalVoice(conversation.ConversationEntity):
             device=devices.async_get(entry.device_id) if entry and entry.device_id else None
             area_id=(entry.area_id if entry else None) or (device.area_id if device else None)
             area=areas.async_get_area(area_id) if area_id else None
-            aliases=list(entry.aliases) if entry else []
+            # HA may include COMPUTED_NAME, an enum sentinel rather than text.
+            # state.name already supplies that computed name; retain real aliases.
+            aliases=[alias for alias in entry.aliases if isinstance(alias,str)] if entry else []
             catalog.append(Entity(state.entity_id,str(state.name),state.state,dict(state.attributes),area.name if area else '',aliases,last_changed=getattr(state,'last_changed',None)))
         origin=self.origin_area(user_input,entities,devices,areas)
         text=user_input.text
