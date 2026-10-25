@@ -6,11 +6,11 @@ async def async_setup_entry(hass,entry):
     install_reply_service(hass)
     from .flows import install_services
     install_services(hass)
-    await hass.config_entries.async_forward_entry_setups(entry,[Platform.CONVERSATION])
+    await hass.config_entries.async_forward_entry_setups(entry,[Platform.CONVERSATION,Platform.STT])
     return True
 
 async def async_unload_entry(hass,entry):
-    unloaded=await hass.config_entries.async_unload_platforms(entry,[Platform.CONVERSATION])
+    unloaded=await hass.config_entries.async_unload_platforms(entry,[Platform.CONVERSATION,Platform.STT])
     if unloaded:
         for future in hass.data.get('pixora_voice',{}).get('planner_pending',{}).values():
             if not future.done():future.cancel()

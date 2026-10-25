@@ -1,3 +1,9 @@
+## Optional Groq speech (your own key)
+
+Open **Speech recognition** in the Voice app. Enter your Groq API key, enable the audio-sharing checkbox, save and use **Test connection**. Each HA hub stores its own key privately; no shared Pixora key or Render hosting. Select **Pixora Groq Whisper** as Speech-to-text in the HA voice assistant. Keep Pixora Voice (Beta), Piper and Amy Medium for local answers and speech output. Groq receives your recorded request audio and returns text, which follows exactly the same native handler as typed text. The free plan has limits; the app never upgrades billing or retries automatically. Remove saved key disables Groq; switch the assistant back to a local provider. Key changes need no restart or training. Installing this provider needs one confirmed HA restart.
+
+**Restart choice:** Voice updates its Assist files automatically. When Home Assistant must restart, open Voice and choose **Restart now** or **Later**. Later keeps the current session running and leaves a restart button. No HA restart is sent without Restart now; uncertain requests are not repeated.
+
 **Voice and Assist now update together automatically. Updating this app may restart Home Assistant once and Speech-to-Phrase once; no separate Assist update step is required. Repair tools are optional.**
 
 # Pixora Voice — local Home Assistant app

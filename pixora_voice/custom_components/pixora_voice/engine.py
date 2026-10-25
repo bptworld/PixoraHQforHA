@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime,timezone
 import re
+import math
 import unicodedata
 
 NOT_FOUND_REPLY = "Sorry, I can't find the information you're looking for."
@@ -49,7 +50,7 @@ NORMAL={'doors':'door','windows':'window','lamps':'lamp','lights':'light','batte
 def normalized(text):return [NORMAL.get(w,w) for w in words(text)]
 
 
-def target_words(text):return set(normalized(re.sub(r'\b\d{1,3}\s+(?:percent|brightness)\b','',str(text),flags=re.I)))-STOP-{'can','could','would','you','check','whether','this','room','air','conditioning','cooling','running','door','window','heat','heating','heater','hvac','thermostat','activity','much','remaining'}
+def target_words(text):return set(normalized(re.sub(r'\b\d{1,3}\s+(?:percent|brightness)\b','',str(text),flags=re.I)))-STOP-{'can','could','would','you','check','whether','this','room','air','conditioning','cooling','running','door','window','heat','heating','heater','hvac','thermostat','cool','setpoint','activity','much','remaining'}
 
 
 def canonical_request(text):
@@ -122,7 +123,7 @@ def capable(entity,prop,text):
         if 'window' in normalized(text):return cls=='window'
         return True
     if prop=='lock':return domain=='lock'
-    if prop in {'heating','cooling'}:return domain=='climate'
+    if prop in {'heating','cooling','heat_setpoint','cool_setpoint','thermostat_setpoint'}:return domain=='climate'
     if prop=='temperature':return (domain=='sensor' and cls=='temperature') or (domain=='climate' and 'current_temperature' in entity.attributes)
     if prop=='humidity':return domain=='sensor' and cls=='humidity'
     if prop=='battery':return domain=='sensor' and cls=='battery'
@@ -165,6 +166,13 @@ def describe(entity,prop):
         if value not in {'open','closed','opening','closing'}:return f"I can't tell whether {spoken_name(entity)} is open or closed right now."
         return f'{name} is {value}.'
     if prop=='lock':return f'{name} is {state}.'
+    if prop in {'heat_setpoint','cool_setpoint','thermostat_setpoint'}:
+        keys = [('heat','target_temp_low'),('cool','target_temp_high')] if state=='heat_cool' else [(state,'temperature')] if state in {'heat','cool'} else []
+        if prop=='heat_setpoint':keys=[pair for pair in keys if pair[0]=='heat']
+        if prop=='cool_setpoint':keys=[pair for pair in keys if pair[0]=='cool']
+        readings=[str(attrs[key])+' degrees'+(' '+{'°F':'Fahrenheit','°C':'Celsius','F':'Fahrenheit','C':'Celsius'}.get(attrs.get('temperature_unit'),str(attrs.get('temperature_unit'))) if attrs.get('temperature_unit') else '')+' for '+('heating' if label=='heat' else 'cooling') for label,key in keys if isinstance(attrs.get(key),(int,float)) and not isinstance(attrs.get(key),bool) and math.isfinite(attrs[key])]
+        if not readings:return f"I can't confirm the requested setpoint for {spoken_name(entity)} right now. Its mode is {state}."
+        return f'{name} is set to '+ ' and '.join(readings)+'.'
     if prop in {'heating','cooling'}:
         action=attrs.get('hvac_action')
         if prop=='cooling':
@@ -231,6 +239,8 @@ def interpret(text):
             return 'brightness',{'service':'turn_on','data':{'brightness_pct':int(match.group(1))}}
         return '',None
     if not re.match(r'^(is|are|what|which|how|does|do|tell|show|give|can you tell)\b',sentence):return '',None
+    if ('set to' in sentence or 'setpoint' in sentence) and re.match(r"^what\b",sentence):
+        return ('cool_setpoint' if re.search(r'\b(cool|cooling|air conditioning)\b',sentence) else 'heat_setpoint' if re.search(r'\b(heat|heating)\b',sentence) else 'thermostat_setpoint'),None
     if re.search(r'\b(locked|unlocked|lock)\b',sentence):return 'lock',None
     if 'cooling' in sentence.split() and 'temperature' not in sentence.split():return 'cooling',None
     if re.search(r'\b(heat|heating|heater|hvac|thermostat)\b',sentence) and 'temperature' not in sentence.split():return 'heating',None

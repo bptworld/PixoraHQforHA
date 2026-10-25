@@ -16,6 +16,52 @@ class Response:
 
 
 class AppTests(unittest.IsolatedAsyncioTestCase):
+    async def test_speech_settings_never_return_saved_key(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);app=make_app(root,root)
+            routes={(r.method,r.resource.canonical):r.handler for r in app.router.routes()}
+            key='gsk_'+'fake_for_test_'*3
+            post=NS(method='POST',headers={'X-Pixora-Request':'1'},json=AsyncMock(return_value={'enabled':True,'key':key}))
+            reply=await routes['POST','/api/speech'](post)
+            self.assertEqual(reply.status,200);self.assertNotIn(key,reply.text)
+            reply=await routes['GET','/api/speech'](NS(method='GET'))
+            self.assertTrue(json.loads(reply.text)['key_saved']);self.assertNotIn(key,reply.text)
+            post.headers={}
+            self.assertEqual((await routes['POST','/api/speech'](post)).status,400)
+
+    async def test_connection_test_sends_key_only_to_groq_without_audio(self):
+        from speech_settings import save_settings
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);app=make_app(root,root);calls=[]
+            save_settings(root,{'enabled':True,'key':'gsk_'+'fake_for_test_'*3})
+            def get(url,**kwargs):calls.append((url,kwargs));return Response(200,{})
+            app['session']=NS(get=get)
+            handler=next(r.handler for r in app.router.routes() if r.method=='POST' and r.resource.canonical=='/api/speech/test')
+            result=await handler(NS(headers={'X-Pixora-Request':'1'}))
+            self.assertEqual(result.status,200);self.assertEqual(len(calls),1)
+            self.assertEqual(calls[0][0],'https://api.groq.com/openai/v1/models')
+            self.assertFalse(calls[0][1]['allow_redirects']);self.assertNotIn('data',calls[0][1])
+
+    async def test_restart_requires_explicit_confirmation_and_cannot_be_queued_twice(self):
+        import asyncio
+        from app import VERSION
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);app=make_app(root,root)
+            app['maintenance']={'pending':False,'restartRequired':True}
+            journal=root/'integration-update.json'
+            journal.write_text(json.dumps({'version':VERSION,'phase':'awaiting-restart','needRestart':True}))
+            handler=next(r.handler for r in app.router.routes() if r.method=='POST' and r.resource.canonical=='/api/restart')
+            bad=NS(headers={},json=AsyncMock(return_value={'confirm':True}))
+            self.assertEqual((await handler(bad)).status,400)
+            self.assertEqual(json.loads(journal.read_text())['phase'],'awaiting-restart')
+            allowed=NS(headers={'X-Pixora-Request':'1'},json=AsyncMock(return_value={'confirm':True}))
+            with patch('app.finish_integration_update',AsyncMock()) as finish:
+                self.assertEqual((await handler(allowed)).status,200)
+                await app['update_task']
+                self.assertEqual(json.loads(journal.read_text())['phase'],'restart-approved')
+                self.assertEqual((await handler(allowed)).status,409)
+                finish.assert_awaited_once()
+
     async def test_voice_log_only_reads_traces_on_request(self):
         app=make_app();calls=[]
         def request(method,url,**kwargs):

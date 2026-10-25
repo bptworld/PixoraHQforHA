@@ -11,6 +11,7 @@ class InstallTests(unittest.TestCase):
             install_component(config,data)
             target=config/'custom_components/pixora_voice'
             self.assertTrue((target/'phrase_tools.py').exists());self.assertTrue((target/'engine.py').exists());(target/'version_marker').write_text('old')
+            self.assertTrue((target/'stt.py').exists());self.assertIn('from .phrase_tools import write_owned',(target/'speech_settings.py').read_text())
             install_component(config,data)
             self.assertFalse((target/'version_marker').exists());self.assertEqual(len(list((data/'integration-backups').glob('*/version_marker'))),1)
             self.assertEqual((unrelated/'__init__.py').read_text(),'untouched')
@@ -45,9 +46,16 @@ class AutomaticUpdateTests(unittest.IsolatedAsyncioTestCase):
     return [{'entity_id':'conversation.pixora_voice_beta','attributes':{'friendly_name':'Pixora Voice (Beta)','pixora_voice_version':VERSION if loaded else '0.1.6'}}]
    notice={}
    await finish_integration_update(record,config,data,ha,notice,sleep=AsyncMock())
+   self.assertFalse(calls)
+   self.assertTrue(notice['restartRequired'])
+   self.assertEqual(record['phase'],'awaiting-restart')
+   # Explicit Restart now authorizes this phase; Later never does.
+   record['phase']='restart-approved'
+   await finish_integration_update(record,config,data,ha,notice,sleep=AsyncMock())
    self.assertEqual([c[0] for c in calls],['services/homeassistant/restart','services/pixora_voice/speech_ready?return_response','services/hassio/addon_restart','services/pixora_voice/speech_ready?return_response'])
    self.assertIsNone(prepare_integration_update(config,data,root/'phrases.yaml'))
    self.assertFalse(notice['pending'])
+   self.assertFalse(notice['restartRequired'])
 
  async def test_uncertain_restart_is_never_reissued(self):
   from unittest.mock import AsyncMock

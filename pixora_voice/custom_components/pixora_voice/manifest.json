@@ -1,14 +1,15 @@
 {
   "domain": "pixora_voice",
   "name": "Pixora Voice",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "config_flow": true,
   "documentation": "https://github.com/bptworld/PixoraHQforHA/tree/main/pixora_voice",
   "codeowners": [
     "@bptworld"
   ],
   "dependencies": [
-    "conversation"
+    "conversation",
+    "stt"
   ],
   "integration_type": "service",
   "iot_class": "local_push",

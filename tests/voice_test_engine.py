@@ -23,6 +23,19 @@ def catalog():
 
 
 class MatchingTests(unittest.TestCase):
+    def test_heat_setpoint_is_not_heat_activity_or_room_temperature(self):
+        entities=[Entity('climate.hall','Hall thermostat','heat',{'temperature':68,'current_temperature':66,'hvac_action':'idle','temperature_unit':'°F'},'Hall')]
+        for query in ['what is the heat set to','what is the thermostat set to','what is the thermostat setpoint']:
+            result=answer(query,entities)
+            self.assertIn('68 degrees Fahrenheit',result.speech)
+            self.assertNotIn('66',result.speech)
+            self.assertIsNone(result.command)
+        self.assertIn('not heating',answer('is the heat on',entities).speech)
+        entities[0].state='heat_cool';entities[0].attributes.update(target_temp_low=67,target_temp_high=75)
+        self.assertIn('67 degrees Fahrenheit',answer('what is the heat set to',entities).speech)
+        self.assertIn('75 degrees Fahrenheit',answer('what is the cooling set to',entities).speech)
+        entities[0].state='off'
+        self.assertIn("can't confirm",answer('what is the heat set to',entities).speech)
     def test_added_phrasings_keep_capability_filtering(self):
         for text in ['Do you know if the front door is open?','Can you check if the front door is ajar?']:
             self.assertEqual(answer(text,catalog()).entities,['binary_sensor.front'])

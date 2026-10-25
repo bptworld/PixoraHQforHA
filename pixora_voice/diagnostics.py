@@ -2,7 +2,7 @@
 from datetime import datetime
 
 ERRORS = {
- 'stt-no-text-recognized': ('Speech recognition', 'No words were recognized.', 'HA returned no recognized text. This does not prove the microphone was silent. Check microphone mute, background TV/noise, distance, and whether Speech-to-Phrase includes this request.'),
+ 'stt-no-text-recognized': ('Speech recognition', 'The recognizer could not match the spoken request.', 'This request may not be in Speech-to-Phrase’s trained vocabulary, even with clear audio. HA returned no text, so it cannot tell us which words were spoken or prove the exact cause. Try the same question in Ask Pixora: if it works there, check phrase coverage and training. If a known trained phrase also fails, then check microphone mute, audio, distance and background noise.'),
  'stt-provider-missing': ('Speech recognition', 'The speech recognition provider is missing.', 'Check the assistant’s speech-to-text selection and that Speech-to-Phrase is installed and running.'),
  'stt-provider-unsupported-metadata': ('Speech recognition', 'The recognizer rejected the audio format.', 'Check satellite firmware and the selected local speech recognizer.'),
  'stt-stream-failed': ('Speech recognition', 'The speech recognition stream failed.', 'Check Speech-to-Phrase logs and the satellite connection. Do not assume the question reached Pixora.'),
@@ -18,11 +18,13 @@ def summarize(events):
     stamps={}
     error_code=None
     intent_error=False
+    speech_engine=''
     for event in events[:200]:
         try:stamps[event['type']]=datetime.fromisoformat(event['timestamp'])
         except (KeyError,ValueError,TypeError):continue
         data=event.get('data') or {}
         if not isinstance(data,dict):continue
+        if event.get('type')=='stt-start':speech_engine=str(data.get('engine',''))
         if event.get('type')=='error':
             code=data.get('code')
             error_code=code if isinstance(code,str) and code in ERRORS else 'unclassified'
@@ -35,6 +37,10 @@ def summarize(events):
         except (KeyError,TypeError):return None
     failed=error_code is not None or intent_error
     details=ERRORS.get(error_code, ('Question handling' if intent_error else 'Pipeline', 'The assistant returned an error.' if intent_error else 'HA reported a pipeline error.', 'Check this run under HA Voice assistants → Debug and the matching HA Core logs. A command may already have run; check its state before retrying.')) if failed else None
+    if failed and details[0]=='Speech recognition' and 'groq' in speech_engine.lower():
+        details=('Speech recognition','Groq speech recognition did not return usable text.','Check Pixora Voice → Speech recognition → Test connection, then HA Core logs at this time for the specific HTTP status: 401/403 key or permissions, 429 free-plan/rate limit, or connection/timeout. Clear audio can also return no text. No recognized text reached Pixora; this is not a Speech-to-Phrase vocabulary error.')
+    elif failed and details[0]=='Speech recognition' and 'whisper' in speech_engine.lower():
+        details=('Speech recognition','Whisper did not return usable text.','Check the selected Whisper service logs, audio and connection at this time. Unlike Speech-to-Phrase, Whisper does not require a known trained phrase. No recognized text reached Pixora.')
     stages=[]
     for prefix,label in [('wake-word','Wake word'),('stt','Speech recognition'),('intent','Question handling'),('tts','Speech generation')]:
         stages.append({'name':label,'status':'failed' if failed and details[0]==label else 'completed' if prefix+'-end' in stamps else 'started; completion not recorded' if prefix+'-start' in stamps else 'not recorded'})

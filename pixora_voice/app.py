@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.16'
+VERSION='0.1.17'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -22,6 +22,8 @@ def install_component(config_root,data_root):
     try:
         shutil.copytree(COMPONENT,stage,dirs_exist_ok=True,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
         shutil.copyfile(Path(__file__).with_name('planner_phrases.py'),stage/'phrase_tools.py')
+        settings_source=Path(__file__).with_name('speech_settings.py').read_text(encoding='utf-8')
+        (stage/'speech_settings.py').write_text(settings_source.replace('from planner_phrases import write_owned','from .phrase_tools import write_owned'),encoding='utf-8')
         if target.exists():
             backup=data_root/'integration-backups'/str(time.time_ns());backup.parent.mkdir(parents=True,exist_ok=True)
             shutil.copytree(target,backup)
@@ -75,6 +77,7 @@ async def finish_integration_update(record, config_root, data_root, ha, notice, 
 
 async def _finish_integration_update(record, config_root, data_root, ha, notice, sleep=asyncio.sleep):
     from planner_phrases import write_owned
+    notice['restartRequired']=False
     journal = data_root / 'integration-update.json'
     def save(phase):
         record['phase'] = phase
@@ -118,9 +121,13 @@ async def _finish_integration_update(record, config_root, data_root, ha, notice,
                 await asyncio.to_thread(save, 'complete')
                 notice.update(message='Assist files installed automatically. Add Pixora Voice in Devices & services for first-time setup.', pending=False)
                 return
-            if record['phase'] in {'prepared','installed'}:
+            if record['phase'] in {'prepared','installed','awaiting-restart'}:
+                await asyncio.to_thread(save, 'awaiting-restart')
+                notice.update(message='Voice and Assist files are updated. Restart Home Assistant when you are ready to load them.',pending=False,restartRequired=True)
+                return
+            if record['phase'] == 'restart-approved':
                 await asyncio.to_thread(save, 'restart-requested')
-                notice.update(message='Assist updated automatically. Home Assistant is restarting once to load it.', pending=True)
+                notice.update(message='Home Assistant is restarting once as requested. Waiting for Voice to return.', pending=True,restartRequired=False)
                 try:await ha('services/homeassistant/restart', {})
                 except (ValueError,ClientError,asyncio.TimeoutError):pass
         except (ValueError,ClientError,asyncio.TimeoutError):
@@ -177,10 +184,53 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         except (ValueError,KeyError,TypeError,asyncio.TimeoutError,ClientError):
             return web.json_response({'error':'Voice log is unavailable right now. Check HA Voice assistants → Debug. No commands or restarts were sent.'},status=503)
     async def icon(request):return web.FileResponse(Path(__file__).with_name('icon.svg'))
+    from speech_settings import read_settings,save_settings,public_settings
+    async def speech_settings(request):
+        try:
+            if request.method=='POST':
+                if request.headers.get('X-Pixora-Request')!='1':raise ValueError('Use Save speech settings in the Voice app.')
+                result=await asyncio.to_thread(save_settings,config_root,await request.json())
+                return web.json_response({**result,'message':'Speech settings saved. Select Pixora Groq Whisper under the assistant’s Speech-to-text setting. No restart or phrase training is needed for key changes.'})
+            return web.json_response(await asyncio.to_thread(lambda:public_settings(read_settings(config_root))))
+        except (ValueError,OSError):
+            return web.json_response({'error':'Speech settings could not be saved or read. Enter a valid Groq key before enabling, or check local storage.'},status=400)
+    async def speech_test(request):
+        try:
+            if request.headers.get('X-Pixora-Request')!='1':raise ValueError('Use Test connection in Voice.')
+            settings=await asyncio.to_thread(read_settings,config_root)
+            if not settings.get('key'):return web.json_response({'error':'Save your Groq API key first.'},status=400)
+            async with app['session'].get('https://api.groq.com/openai/v1/models',headers={'Authorization':'Bearer '+settings['key']},timeout=ClientTimeout(total=10),allow_redirects=False) as response:
+                if response.status!=200:
+                    message={401:'Groq rejected the API key.',403:'Groq denied access.',429:'Groq rate limit reached.'}.get(response.status,'Groq is unavailable right now.')
+                    return web.json_response({'error':message+' No audio or command was sent.'},status=503)
+                return web.json_response({'message':'Connected to Groq. Your saved key was accepted. No audio was sent; test a satellite next.'})
+        except (OSError,ValueError,ClientError,asyncio.TimeoutError):
+            return web.json_response({'error':'Could not reach Groq. Check your internet connection and saved key. No audio or command was sent.'},status=503)
     async def status(request):
         try:available=await agents();error=''
         except (ValueError,asyncio.TimeoutError,ClientError):available=[];error='Home Assistant is reconnecting. Try again shortly.'
         return web.json_response({'maintenance':app.get('maintenance',{}),'version':VERSION,'agents':available,'installed':(config_root/'custom_components/pixora_voice/manifest.json').exists(),'notice':error})
+    async def restart_now(request):
+        body=await request.json()
+        if request.headers.get('X-Pixora-Request') != '1' or not isinstance(body,dict) or body.get('confirm') is not True:
+            return web.json_response({'error':'Confirm Restart now in the Voice app.'},status=400)
+        async with app['restart_lock']:
+            task=app.get('update_task')
+            if task and not task.done():
+                return web.json_response({'error':'An update operation is already running. No additional restart was sent.'},status=409)
+            journal=data_root/'integration-update.json'
+            try:
+                record=json.loads(journal.read_text())
+                if not isinstance(record,dict) or record.get('version')!=VERSION or record.get('phase')!='awaiting-restart':
+                    raise ValueError('No pending restart is available. Refresh Voice status.')
+                from planner_phrases import write_owned
+                record['phase']='restart-approved'
+                await asyncio.to_thread(write_owned,journal,json.dumps(record))
+            except (ValueError,OSError,TypeError) as exc:
+                return web.json_response({'error':str(exc)},status=409)
+            app['maintenance'].update(message='Restart approved. Waiting for Home Assistant to restart and Voice to return.',pending=True,restartRequired=False)
+            app['update_task']=asyncio.create_task(finish_integration_update(record,config_root,data_root,ha,app['maintenance']))
+            return web.json_response({'message':'Restart approved. Voice will check readiness when Home Assistant returns.'})
     from planner_phrases import write_owned,update_phrases,update_local_phrases
     planner_file=config_root/'.storage'/'pixora_voice_planner.json'
     phrase_file=Path('/share/speech-to-phrase/custom_sentences/en/pixora_voice_planner.yaml')
@@ -230,7 +280,14 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         except (ValueError,OSError,asyncio.TimeoutError,ClientError):
             return web.json_response({'error':'Voice trigger refresh or speech training could not be confirmed. Check the updated Assist integration, paired Home Control app and Speech-to-Phrase. It was not retried.'},status=503)
     async def install(request):
-        try:await asyncio.to_thread(install_component,config_root,data_root)
+        try:
+            existed=(config_root/'custom_components/pixora_voice/manifest.json').exists()
+            await asyncio.to_thread(install_component,config_root,data_root)
+            if existed:
+                from planner_phrases import write_owned
+                record={'version':VERSION,'phase':'awaiting-restart','needRestart':True,'speechNeeded':False}
+                await asyncio.to_thread(write_owned,data_root/'integration-update.json',json.dumps(record))
+                app['maintenance'].update(message='Assist files repaired. Restart Home Assistant when you are ready.',pending=False,restartRequired=True)
         except ValueError as exc:return web.json_response({'error':str(exc)},status=409)
         return web.json_response({'message':'Assist integration installed. Restart Home Assistant once, add Pixora Voice under Settings → Devices & services, then select it in your local voice assistant.'})
     async def local_phrases(request):
@@ -273,11 +330,15 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             await asyncio.gather(task,return_exceptions=True)
         await app['session'].close()
     app.on_startup.append(startup);app.on_cleanup.append(cleanup)
+    app['restart_lock']=asyncio.Lock()
     app.router.add_get('/',index);app.router.add_get('/icon.svg',icon);app.router.add_get('/api/status',status)
     app.router.add_get('/api/planner',planner_settings);app.router.add_post('/api/planner',planner_settings);app.router.add_post('/api/planner/refresh',refresh_planner)
     app.router.add_post('/api/install',install);app.router.add_post('/api/ask',ask)
     app.router.add_get('/api/timings',timings)
     app.router.add_get('/api/voice-log',voice_log)
+    app.router.add_get('/api/speech',speech_settings);app.router.add_post('/api/speech',speech_settings)
+    app.router.add_post('/api/speech/test',speech_test)
+    app.router.add_post('/api/restart',restart_now)
     app.router.add_post('/api/phrases',local_phrases)
     app.router.add_post('/api/flows/refresh',refresh_flows)
     return app

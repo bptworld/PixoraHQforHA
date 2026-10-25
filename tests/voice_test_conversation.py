@@ -28,6 +28,19 @@ class Registry:
 
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_recognized_and_typed_setpoint_text_have_identical_answers(self):
+        self.states.append(NS(entity_id='climate.hall',name='Hall thermostat',state='heat',attributes={'temperature':68,'current_temperature':66,'hvac_action':'idle','temperature_unit':'°F'}))
+        registry=adapter.er.async_get(self.hass)
+        registry.values['climate.hall']=NS(device_id=None,area_id='living',aliases=[],disabled_by=None,hidden_by=None)
+        self.request.device_id=None
+        typed=await self.ask('what is the heat set to')
+        self.request.device_id='speaker';self.context.user_id=None
+        spoken=await self.ask('what is the heat set to')
+        self.assertEqual(typed.speech,spoken.speech)
+        self.assertIn('68 degrees Fahrenheit',spoken.speech)
+        self.assertFalse(typed.continue_conversation);self.assertFalse(spoken.continue_conversation)
+        self.hass.services.async_call.assert_not_awaited()
+
     async def test_computed_alias_sentinel_does_not_break_unrelated_questions(self):
         from enum import Enum
         class ComputedNameType(Enum):

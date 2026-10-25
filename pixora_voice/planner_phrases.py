@@ -31,6 +31,7 @@ def update_local_phrases(path,check_only=False):
  "is (it|that) [still] (open|closed|on|off|locked|unlocked)","(and|what about) (today|tomorrow)",
  "(can you check if|tell me if|do you know if) [the] {name} is (open|closed|on|off|locked|unlocked)",
  "tell me [the] (temperature|humidity) in (here|this room|{area})"]
+ sentences += ["(what is|what's) [the] (heat|heating|cooling|air conditioning|thermostat|{name}) set to", "(what is|what's) [the] (heat|heating|cooling|thermostat|{name}) setpoint"]
  sentences += ["why is [the] (heat|thermostat) off", "why is [the] {name} off", "how long is [the] thermostat override", "how long is [the] {name} override", "what is [the] thermostat status", "what is [the] {name} status", "resume [the] thermostat schedule", "resume [the] {name} schedule",
 
  "(what is|what's) [the] weather [like] [outside]", "(what is|what's) it like outside", "(what is|what's) the temperature outside", "will it rain (today|tomorrow)", "(what is|what's) the forecast [for] (today|tomorrow)",

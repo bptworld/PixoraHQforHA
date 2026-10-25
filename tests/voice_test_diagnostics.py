@@ -6,6 +6,11 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice'))
 from diagnostics import summarize,recent_runs
 
 class TimingTests(unittest.IsolatedAsyncioTestCase):
+    def test_groq_failure_does_not_blame_phrase_training(self):
+        result=summarize([{'type':'stt-start','timestamp':'2026-10-25T12:00:00+00:00','data':{'engine':'stt.pixora_groq_whisper'}},
+             {'type':'error','timestamp':'2026-10-25T12:00:01+00:00','data':{'code':'stt-stream-failed'}}])
+        self.assertIn('Groq',result['reason']);self.assertIn('429',result['next_check'])
+        self.assertNotIn('check phrase coverage',result['next_check'])
     def test_speech_failure_has_specific_reason_without_raw_payload(self):
         events=[{'type':'stt-start','timestamp':'2026-10-25T12:00:00+00:00'},
                 {'type':'error','timestamp':'2026-10-25T12:00:03+00:00','data':{'code':'stt-no-text-recognized','message':'secret audio url private text'}},
@@ -13,7 +18,7 @@ class TimingTests(unittest.IsolatedAsyncioTestCase):
         result=summarize(events)
         self.assertEqual(result['status'],'failed')
         self.assertEqual(result['failure_stage'],'Speech recognition')
-        self.assertIn('does not prove',result['next_check'])
+        self.assertIn('trained vocabulary, even with clear audio',result['next_check']);self.assertIn('cannot tell us which words',result['next_check'])
         self.assertNotIn('secret',json.dumps(result))
         self.assertEqual(result['stages'][1]['status'],'failed')
         self.assertEqual(result['stages'][2]['status'],'not recorded')

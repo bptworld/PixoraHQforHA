@@ -1,3 +1,8 @@
+## 0.1.17
+- Add optional Groq Whisper with each hub’s own masked API key, explicit audio-sharing opt-in and connection test. Transcription goes directly from HA to Groq; native Pixora handles the same returned text. Local recognition remains available. No new Render service.
+- Explain that recognition failures can be missing trained vocabulary even with clear audio. Add spoken/read-only heat, cooling and thermostat setpoint questions.
+- Ask Restart now or Later before a required HA restart. Assist files still update automatically; Later leaves a visible restart button. Restart requests remain journaled and never automatically repeat uncertain requests.
+
 ## 0.1.16
 - Add an on-demand Voice log with compact successes, failed stages, reported error codes and practical checks. Reads up to 20 existing Pixora Assist traces locally without retaining audio, transcripts or replies.
 
