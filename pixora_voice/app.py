@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.19'
+VERSION='0.1.20'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -183,7 +183,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         try:
             async with asyncio.timeout(20):
                 available=await agents()
-                runs=await recent_runs(app['session'],os.environ.get('SUPERVISOR_TOKEN',''),available,limit=20)
+                runs=await recent_runs(app['session'],os.environ.get('SUPERVISOR_TOKEN',''),available,limit=20,include_text=True)
             return web.json_response({'runs':runs})
         except (ValueError,KeyError,TypeError,asyncio.TimeoutError,ClientError):
             return web.json_response({'error':'Voice log is unavailable right now. Check HA Voice assistants → Debug. No commands or restarts were sent.'},status=503)

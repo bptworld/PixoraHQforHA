@@ -23,6 +23,18 @@ def catalog():
 
 
 class MatchingTests(unittest.TestCase):
+    def test_spoken_fish_tank_fragment_matches_named_light_switch_read_only(self):
+        fish=[Entity('switch.tank_light','Living Room Fishtank Light','on',{},'Living Room'),Entity('switch.bubbles','Living Room Fishtank Bubbles','off',{},'Living Room')]
+        for text in ['The fish tank lights on.','Fish tank lights on?','Are the fish tank lights on?','Is the fishtank light on?']:
+            result=answer(text,fish,'Living Room')
+            self.assertEqual(result.kind,'answer');self.assertEqual(result.entities,['switch.tank_light']);self.assertIsNone(result.command)
+            self.assertIn('on',result.speech)
+        self.assertIsNone(answer('fish tank lights off',fish,'Living Room').command)
+        self.assertEqual(answer('fish tank lights on',fish[1:],'Living Room').kind,'not_found')
+        fish[0].state='unavailable'
+        result=answer('fish tank lights on',fish,'Living Room')
+        self.assertIn('unavailable',result.speech);self.assertIsNone(result.command)
+
     def test_heat_setpoint_is_not_heat_activity_or_room_temperature(self):
         entities=[Entity('climate.hall','Hall thermostat','heat',{'temperature':68,'current_temperature':66,'hvac_action':'idle','temperature_unit':'°F'},'Hall')]
         for query in ['what is the heat set to','what is the thermostat set to','what is the thermostat setpoint']:

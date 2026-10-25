@@ -28,6 +28,16 @@ class Registry:
 
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_actual_fish_tank_transcript_is_local_read_only_not_planner_search(self):
+        from unittest.mock import patch
+        state=NS(entity_id='switch.living_room_living_room_fishtank_light',name='Living Room Fishtank Light',state='on',attributes={})
+        self.states.append(state)
+        adapter.er.async_get(self.hass).values[state.entity_id]=NS(device_id=None,area_id='living',aliases=[],disabled_by=None,hidden_by=None)
+        with patch('custom_components.pixora_voice.planner.enabled',AsyncMock(return_value=True)),patch('custom_components.pixora_voice.planner.ask',AsyncMock()) as planner:
+            reply=await self.ask('The fish tank lights on.')
+            self.assertIn('is on',reply.speech);self.assertFalse(reply.continue_conversation)
+            planner.assert_not_awaited();self.hass.services.async_call.assert_not_awaited()
+
     async def test_recognized_and_typed_setpoint_text_have_identical_answers(self):
         self.states.append(NS(entity_id='climate.hall',name='Hall thermostat',state='heat',attributes={'temperature':68,'current_temperature':66,'hvac_action':'idle','temperature_unit':'°F'}))
         registry=adapter.er.async_get(self.hass)

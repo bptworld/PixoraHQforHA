@@ -6,6 +6,18 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice'))
 from diagnostics import summarize,recent_runs
 
 class TimingTests(unittest.IsolatedAsyncioTestCase):
+    def test_not_found_reply_is_unanswered_even_when_pipeline_completed(self):
+        events=[{'type':'stt-end','timestamp':'2026-10-25T15:26:40+00:00','data':{'stt_output':{'text':'private question'}}},
+          {'type':'intent-end','timestamp':'2026-10-25T15:26:41+00:00','data':{'intent_output':{'response':{'response_type':'action_done','speech':{'plain':{'speech':"Sorry, I can't find the information you're looking for."}}}}}},
+          {'type':'run-end','timestamp':'2026-10-25T15:26:42+00:00'}]
+        result=summarize(events)
+        self.assertTrue(result['complete']);self.assertTrue(result['error']);self.assertEqual(result['status'],'unanswered')
+        self.assertEqual(result['failure_stage'],'Question handling');self.assertEqual(result['error_code'],'answer-not-found')
+        self.assertIn('Speech was recognized',result['reason']);self.assertNotIn('private question',json.dumps(result))
+        detailed=summarize(events,include_text=True)
+        self.assertEqual(detailed['heard'],'private question');self.assertIn("can't find",detailed['reply'])
+        successful=summarize([{'type':'stt-end','timestamp':'2026-10-25T15:26:40+00:00','data':{'stt_output':{'text':'private success'}}},{'type':'run-end','timestamp':'2026-10-25T15:26:41+00:00'}],include_text=True)
+        self.assertNotIn('heard',successful);self.assertNotIn('private success',json.dumps(successful))
     def test_groq_failure_does_not_blame_phrase_training(self):
         result=summarize([{'type':'stt-start','timestamp':'2026-10-25T12:00:00+00:00','data':{'engine':'stt.pixora_groq_whisper'}},
              {'type':'error','timestamp':'2026-10-25T12:00:01+00:00','data':{'code':'stt-stream-failed'}}])

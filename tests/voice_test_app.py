@@ -107,7 +107,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(calls)
             response=await handler(NS())
             self.assertEqual(json.loads(response.text),{'runs':[]})
-            self.assertEqual(read.await_args.kwargs,{'limit':20})
+            self.assertEqual(read.await_args.kwargs,{'limit':20,'include_text':True})
             self.assertTrue(all(method=='GET' for method,url in calls))
     async def test_direct_access_and_cross_origin_installs_denied(self):
         app=make_app();handler=AsyncMock(return_value=web.json_response({'ok':True}));gate=app.middlewares[0]

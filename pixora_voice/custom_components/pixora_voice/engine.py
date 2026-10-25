@@ -14,6 +14,7 @@ def words(text):
     text=re.sub(r"\bit's\b",'it is',text)
     text=re.sub(r"\b([a-z]+)'s\b",r'\1',text)
     text=text.replace('_',' ').replace('-',' ')
+    text=re.sub(r'\bfishtank\b','fish tank',text)
     return re.findall(r'[a-z0-9]+',text)
 
 
@@ -131,7 +132,9 @@ def capable(entity,prop,text):
     if prop=='brightness':return domain=='light' and 'brightness' in entity.attributes
     if prop=='power':
         requested=set(normalized(text))
-        if requested & {'light','lamp'}:return domain=='light'
+        if requested & {'light','lamp'}:
+            named_light=any(set(normalized(name)) & {'light','lamp'} for name in [entity.name,*entity.aliases])
+            return domain=='light' or domain=='switch' and named_light
         if 'fan' in requested:return domain=='fan'
         if 'switch' in requested:return domain in {'switch','input_boolean'}
         return domain in {'light','switch','fan','input_boolean'}
@@ -226,6 +229,10 @@ def reply_to_question(entity,prop,text):
 def interpret(text):
     """Return a property and optional explicit command; never guess an intent."""
     sentence=' '.join(normalized(canonical_request(text)))
+    # Missing copulas in recognized status questions are read-only. Never infer
+    # a device command from a noun phrase such as "the fish tank lights on".
+    fragment=bool(re.fullmatch(r'(?:the )?[a-z0-9 ]+ (?:on|off)',sentence) and set(sentence.split()) & {'light','lamp','switch','fan'} and not re.match(r'^(is|are|what|which|how|does|do|tell|show|give|can|turn|switch|set|dim|brighten|make|start|stop)\b',sentence) and not re.search(r'\b(not|never|unless|except|if|when|and|then)\b',sentence))
+    if fragment:return 'power',None
     if re.search(r'\b(not|never|unless|except|if|when|and|then)\b',sentence) and re.match(r'^(turn|switch|set|dim|brighten)\b',sentence):return '',None
     if re.search(r'\b(unlock|lock|open|close) (the |my )?',sentence) and not re.match(r'^(is|are|what|which|how|does|do|tell|show)\b',sentence):
         return '',None
