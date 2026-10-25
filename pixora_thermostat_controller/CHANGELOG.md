@@ -1,3 +1,6 @@
+## 0.1.5
+- Display schedule and activity times in 12-hour format with AM/PM.
+
 ## 0.1.4
 - Record notification recipients and full sent messages in Recent activity, including outdoor Yes/No prompts. Uncertain sends are recorded as warnings without retrying.
 

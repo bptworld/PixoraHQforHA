@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pixora_thermostat_controller"))
 from policy import validate, schedule_at, next_period, service_for, temperature, same
-from engine import Store, Engine
+from engine import Store, Engine, clock_time
 
 
 def zone():
@@ -51,6 +51,10 @@ class FakeHA:
 
 
 class PolicyTests(unittest.TestCase):
+    def test_clock_time_is_twelve_hour(self):
+        for raw, expected in [('00:00','12:00 AM'),('12:00','12:00 PM'),('22:05','10:05 PM'),('06:30','6:30 AM')]:
+            self.assertEqual(clock_time(raw), expected)
+
     def test_validation_defaults_and_duplicate_ownership(self):
         z = zone()
         validate({"zones": [z]})

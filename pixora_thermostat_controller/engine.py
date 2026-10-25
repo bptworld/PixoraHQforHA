@@ -13,6 +13,11 @@ from pathlib import Path
 from policy import schedule_at, next_period, target, temperature, observed, same, service_for
 
 
+def clock_time(value):
+    hour, minute = map(int, value.split(":"))
+    return f"{hour % 12 or 12}:{minute:02d} {'AM' if hour < 12 else 'PM'}"
+
+
 def utcnow():
     return datetime.now(timezone.utc)
 
@@ -287,7 +292,7 @@ class Engine:
         if not desired:
             raise ValueError("No schedule is configured.")
         reason = "Temporary override" if override else "Schedule"
-        detail = ("Until " + override["until"]) if override else row.get("name", "Period starting " + row["time"]) + " at " + row["time"]
+        detail = ("Until " + override["until"]) if override else row.get("name", "Period starting " + clock_time(row["time"])) + " at " + clock_time(row["time"])
 
         opened, unknown = [], []
         contacts = timers.setdefault("contacts", {})

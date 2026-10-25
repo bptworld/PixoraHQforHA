@@ -11,7 +11,7 @@ from engine import Store, Engine
 from ha import HomeAssistant
 from policy import validate, target, next_period, service_for, observed, number
 
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 ROOT = Path(__file__).parent
 
 
