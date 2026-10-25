@@ -1,3 +1,6 @@
+## 0.1.7
+- Show a compact outside temperature, selected sensor and outdoor heat-off rule status on each thermostat card. Readings use the controller units and remain visible while the rule is off or another protection blocks control; unavailable readings are never presented as current.
+
 ## 0.1.6
 - Name the schedule period and target in activity, distinguish requested adjustments from HA-confirmed targets, and record period changes that need no thermostat command.
 - Add per-sensor Okay/Ignore notification actions for unavailable contact/outdoor readings, persistent ignored-device tracking, and Fixed buttons to restore checks. Ignored sensors stay configured; the thermostat itself cannot be ignored.

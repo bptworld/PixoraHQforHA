@@ -21,11 +21,13 @@ async function api(path,body){const r=await fetch(path,{method:body?'POST':'GET'
 function announce(text){$('message').textContent=text;$('message').hidden=!text}
 function targetText(t,unit){if(!t)return '';if(t.mode==='off')return 'Off';if(t.mode==='heat_cool')return `Heat ${t.heat}\u00b0 / Cool ${t.cool}\u00b0 ${unit}`;return `${t.mode==='heat'?'Heat':'Cool'} ${t[t.mode]}\u00b0 ${unit}`}
 function stateEntity(id){return snapshot.entities.find(s=>s.id===id)}
+function outsideText(z,runtime){const reading=snapshot.outdoorReadings?.[z.id],source=stateEntity(z.outdoor.entity)?.name||z.outdoor.entity;if(!z.outdoor.entity)return 'Outside: choose a temperature sensor in Settings';const value=reading?.state==='current'&&Number.isFinite(reading.value)?Math.round(reading.value*10)/10+'°'+z.unit:'unavailable';const rule=runtime.ignored?.[z.outdoor.entity]?'sensor ignored':!z.outdoor.enabled?'heat-off rule off':z.outdoor.mode==='ask'?'ask above '+z.outdoor.limit+'°'+z.unit:'auto off above '+z.outdoor.limit+'°'+z.unit;return `Outside: ${value} · ${rule} · ${source}`}
 function render(){
  $('connection').textContent=snapshot.connected?'Connected locally':'Reconnecting';$('version').textContent='v'+snapshot.version+' \u00b7 '+snapshot.timezone;
  const cards=snapshot.zones.map(z=>{const s=snapshot.status[z.id]||{},entity=stateEntity(z.entity),runtime=snapshot.runtime[z.id]||{},a=entity?.attributes||{},value=a.current_temperature;
   const card=node('article',{class:'controller'},node('header',{},node('div',{},node('h3',{},z.name),node('div',{class:'device'},entity?.name||z.entity)),node('span',{class:'pill'},z.enabled?'Enabled':'Disabled')),
    node('div',{class:'temperature'},Number.isFinite(value)?value+'\u00b0':'\u2014',node('small',{},z.unit+' inside')),
+   node('p',{class:'outside'},outsideText(z,runtime)),
    node('p',{class:'reason'},s.reason||(z.enabled?'Starting':'Disabled')),node('p',{class:'detail'},s.detail||''),node('p',{class:'target'},targetText(s.target,z.unit)));
   if(s.schedule)card.append(node('p',{class:'fine'},(s.schedule.name||'Schedule')+' '+clockTime(s.schedule.time)+': '+targetText(s.schedule.target,z.unit)+' · Next period '+localTime(s.nextPeriod)));if(s.override)card.append(node('p',{class:'fine'},s.override.returnPerson?'Away hold: waiting for the selected person to return':'Override ends '+localTime(s.override.until)));
   if(s.open?.length&&s.openSince)card.append(node('p',{class:'fine'},'Opening detected '+localTime(s.openSince)));

@@ -37,6 +37,36 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
     async def save(self, z=None, revision=0):
         return await route(self.app, "POST", "/api/settings")(request({"revision": revision, "zones": [z or zone()]}))
 
+    async def test_outside_reading_is_independent_of_control_and_never_uses_offline_cache(self):
+        await self.save()
+        self.ha.states['sensor.outdoor']['state']='10'
+        self.ha.states['sensor.outdoor']['attributes']['unit_of_measurement']='°C'
+        async def reading():
+            response=await route(self.app,'GET','/api/status')(request(None))
+            return json.loads(response.text)['outdoorReadings']['living']
+        self.assertEqual(await reading(), {'value':50.0,'state':'current'})
+        self.assertFalse(self.app['store'].data['zones'][0]['outdoor']['enabled'])
+        self.assertFalse(self.ha.calls)
+        self.ha.connected=False
+        self.assertEqual(await reading(), {'value':None,'state':'unavailable'})
+        self.ha.connected=True
+        self.ha.states['sensor.outdoor']['state']='unavailable'
+        self.assertEqual(await reading(), {'value':None,'state':'unavailable'})
+        del self.ha.states['sensor.outdoor']
+        self.assertEqual(await reading(), {'value':None,'state':'unavailable'})
+
+    async def test_outside_display_uses_selected_weather_device(self):
+        z = zone()
+        z['outdoor']['entity'] = 'weather.openweathermap'
+        self.ha.states['weather.openweathermap'] = {
+            'entity_id': 'weather.openweathermap', 'state': 'sunny',
+            'attributes': {'temperature': 54.5, 'temperature_unit': '°F'}}
+        await self.save(z)
+        response = await route(self.app, 'GET', '/api/status')(request(None))
+        self.assertEqual(json.loads(response.text)['outdoorReadings']['living'],
+                         {'value': 54.5, 'state': 'current'})
+        self.assertFalse(self.ha.calls)
+
     async def test_notification_settings_invalidate_old_ignore_buttons(self):
         await self.save()
         store=self.app['store']

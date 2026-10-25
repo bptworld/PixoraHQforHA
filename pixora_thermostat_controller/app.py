@@ -9,9 +9,9 @@ from urllib.parse import urlsplit
 from aiohttp import ClientSession, web
 from engine import Store, Engine
 from ha import HomeAssistant
-from policy import validate, target, next_period, service_for, observed, number
+from policy import validate, target, next_period, service_for, observed, number, temperature
 
-VERSION = "0.1.6"
+VERSION = "0.1.7"
 ROOT = Path(__file__).parent
 
 
@@ -51,9 +51,21 @@ def make_app(root=Path("/data"), test_ha=None):
         entities = [{"id": s["entity_id"], "name": s.get("attributes", {}).get("friendly_name") or s["entity_id"],
                      "state": s.get("state"), "attributes": s.get("attributes", {})} for s in ha.states.values()]
         entities.sort(key=lambda s: s["name"].casefold())
+        outdoor_readings = {}
+        for zone in store.data["zones"]:
+            sensor = zone["outdoor"]["entity"]
+            reading = {"value": None, "state": "unconfigured"}
+            if sensor:
+                reading["state"] = "unavailable"
+                if ha.connected:
+                    try:
+                        reading.update(value=temperature(ha.states.get(sensor), zone["unit"]), state="current")
+                    except ValueError:
+                        pass
+            outdoor_readings[zone["id"]] = reading
         return web.json_response({"version": VERSION, "connected": ha.connected, "notice": ha.notice, "timezone": ha.timezone,
             "unit": ha.unit, "revision": store.data["revision"], "zones": store.data["zones"], "runtime": runtime,
-            "status": engine.status, "events": store.data["events"][-60:][::-1], "entities": entities,
+            "status": engine.status, "outdoorReadings": outdoor_readings, "events": store.data["events"][-60:][::-1], "entities": entities,
             "destinations": sorted(s for s in ha.services if s.startswith("notify.") and s != "notify.send_message")})
 
     async def settings(request):
