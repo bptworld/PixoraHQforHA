@@ -6,6 +6,7 @@ import express from 'express'
 import WebSocket, { WebSocketServer } from 'ws'
 import { getIdentifierValues, isLutronPicoTrigger, LUTRON_PICO_PLATFORM, matchesLutronPicoPress } from './pico-trigger.js'
 import { prepareFlowImport } from './flow-import.js'
+import { variableValue, variableEntity, normalizePhrase, validatePhrase, reachable, overlapping, importVariables, flowExecutionSignature } from './local-features.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const dataDir = process.env.HAFLOW_DATA_DIR || path.join(__dirname, '..', 'data')
@@ -17,6 +18,7 @@ const flowIndexPath = path.join(flowsDir, 'index.json')
 const logPath = path.join(dataDir, 'logs.json')
 const runtimePath = path.join(dataDir, 'node-runtime.json')
 const runHistoryPath = path.join(dataDir, 'run-history.json')
+const variablesPath = path.join(dataDir, 'variables.json')
 const examplesDir = path.join(__dirname, '..', 'examples')
 const app = express()
 const port = Number(process.env.PORT ?? 4177)
@@ -40,8 +42,13 @@ let activeRunEvents = new Map()
 let cachedFlow = { nodes: [], edges: [] }
 let cachedFlowMeta = { id: 'default', name: 'Default Flow', paused: false }
 let runnableFlowCache = null
+let runnableFlowGeneration = 0
 let waiters = []
 let notificationActionWaiters = []
+let variables = []
+let variableWrites = Promise.resolve()
+let recoveryBusy = false
+let durationRecoveryRequested = true
 let deviceRegistryById = new Map()
 let entityRegistryDeviceByEntityId = new Map()
 const ANY_CHANGE = '__changed__'
@@ -52,11 +59,15 @@ app.use(express.json({ limit: '10mb' }))
 
 await fs.mkdir(dataDir, { recursive: true })
 await fs.mkdir(flowsDir, { recursive: true })
-config = { ...config, ...(await readJson(configPath, config)), runnerEnabled: true }
+config = { ...config, ...(await readJson(configPath, config)) }
 await writeJson(configPath, config)
 logs = await readJson(logPath, [])
 nodeRuntime = new Map(Object.entries(await readJson(runtimePath, {})))
 runHistory = normalizeRunHistory(await readJson(runHistoryPath, []))
+try { variables = JSON.parse(await fs.readFile(variablesPath, 'utf8')) }
+catch (error) { if (error.code !== 'ENOENT') throw new Error('Variable storage could not be read. No saved data was replaced.'); variables = [] }
+if (!Array.isArray(variables)) throw new Error('Variable storage is invalid; restore its backup before starting HAFlow.')
+for (const variable of variables) variableValue(variable.type, variable.value)
 await initializeFlowLibrary()
 cachedFlow = await readFlow(config.activeFlowId ?? 'default')
 cachedFlowMeta = await readFlowMeta(config.activeFlowId ?? 'default')
@@ -65,6 +76,65 @@ app.get('/api/config', async (_, res) => {
   const status = await getStatus()
   res.json(status)
 })
+
+app.get('/api/variables', (_, res) => res.json({ variables }))
+app.post('/api/variables', async (req, res) => {
+  try {
+    const result = await changeVariable(req.body)
+    res.json({ variable: result, variables })
+  } catch (error) { res.status(400).json({ error: error.message }) }
+})
+
+const voiceRequests = new Map()
+app.post('/api/voice/trigger', async (req, res) => {
+  try {
+    const phrase = validatePhrase(req.body.phrase)
+    const requestId = String(req.body.requestId || '')
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(requestId)) throw new Error('Include a unique requestId; never retry an uncertain request with a new ID.')
+    if (!config.runnerEnabled) return res.status(409).json({ error: 'Automatic runner is paused.' })
+    const now = Date.now()
+    for (const [key, time] of voiceRequests) if (now - time > 86400000) voiceRequests.delete(key)
+    if (voiceRequests.has(requestId)) return res.json({ accepted: false, duplicate: true })
+    if (voiceRequests.size >= 1024) return res.status(429).json({ error: 'Too many voice requests. No flow was started.' })
+    voiceRequests.set(requestId, now)
+    const entries = await getRunnableFlowEntries()
+    const matches = entries.flatMap(entry => findMatchingTriggerNodes(entry.flow, { event_type: 'haflow_voice', data: {phrase} }).map(node => ({entry, node})))
+    for (const {entry, node} of matches) triggerNode(entry.flow, entry.meta, node, { reason: `voice: ${phrase}` }).catch(error => log('error', error.message))
+    res.json({ accepted: Boolean(matches.length), matched: matches.length })
+  } catch (error) { res.status(400).json({ error: error.message }) }
+})
+
+function variableTransaction(work) {
+  const operation = variableWrites.then(work)
+  variableWrites = operation.catch(() => {})
+  return operation
+}
+
+function changeVariable(input, signal) {
+  return variableTransaction(async () => {
+    throwIfCancelled(signal)
+    const id = String(input.id || '').replace(/^haflow_variable\./, '')
+    const existing = id ? variables.find(v => v.id === id) : null
+    if (id && !existing) throw new Error('Variable not found.')
+    if (!existing && variables.length >= 256) throw new Error('Up to 256 variables are supported.')
+    const name = String(input.name ?? existing?.name ?? '').trim()
+    if (!name || name.length > 80 || variables.some(v => v.id !== id && v.name.toLowerCase() === name.toLowerCase())) throw new Error('Use a unique variable name, up to 80 characters.')
+    const type = existing?.type || input.type
+    const value = variableValue(type, input.value)
+    const next = { id: existing?.id || crypto.randomUUID(), name, type, value, updatedAt: new Date().toISOString() }
+    const updated = existing ? variables.map(v => v.id === id ? next : v) : [...variables, next]
+    await writeJson(variablesPath, updated, { signal })
+    variables = updated
+    broadcast({ type: 'variables', variables })
+    if (!existing || existing.value !== next.value) {
+      // Defer dispatch: a variable-triggered run must not deadlock its own write.
+      setImmediate(() => handleHomeAssistantEvent({ event_type: 'state_changed', data: {
+        entity_id: `haflow_variable.${next.id}`, old_state: existing ? variableEntity(existing) : null, new_state: variableEntity(next),
+      }}).catch(error => log('error', error.message)))
+    }
+    return next
+  })
+}
 
 app.get('/api/entities', async (_, res) => {
   try {
@@ -117,6 +187,10 @@ app.get('/api/entity-catalog', async (_, res) => {
 app.get('/api/entity-values/:entityId', async (req, res) => {
   const entityId = req.params.entityId
   if (!entityId || !entityId.includes('.')) return res.status(400).json({ values: [], error: 'Invalid entity id.' })
+  if (entityId.startsWith('haflow_variable.')) {
+    const variable = variables.find(v => `haflow_variable.${v.id}` === entityId)
+    return res.json({ values: variable ? variableEntity(variable).valueOptions : [] })
+  }
 
   try {
     const state = await haRest(`/api/states/${entityId}`)
@@ -169,11 +243,8 @@ app.patch('/api/flows/:flowId/pause', async (req, res) => {
   const paused = Boolean(req.body.paused)
   await writeFlowIndex(flows.map((item) => item.id === flowId ? { ...item, paused } : item))
   if ((config.activeFlowId ?? 'default') === flowId) cachedFlowMeta = { ...flow, paused }
-  if (paused && (config.activeFlowId ?? 'default') === flowId) {
-    manualRun?.controller.abort()
-    for (const run of runningTriggers.values()) run.controller.abort()
-    clearPendingStateTriggerTimers(flowId)
-  }
+  if (paused) cancelFlowRuns(flowId)
+  else durationRecoveryRequested = true
   log(paused ? 'warn' : 'info', `${flow.name} ${paused ? 'paused' : 'resumed'}.`)
   broadcastRunner()
   res.json({ flows: await readFlowIndex(), activeFlowId: config.activeFlowId ?? 'default' })
@@ -229,6 +300,7 @@ app.get('/api/flows/:flowId', async (req, res) => {
 app.put('/api/flows/:flowId', async (req, res) => {
   const flowId = safeFlowId(req.params.flowId)
   if (!flowId) return res.status(400).json({ error: 'Invalid flow id.' })
+  if (!(await readFlowIndex()).some(meta => meta.id === flowId)) return res.status(404).json({ error: 'Flow not found. No saved flow was replaced.' })
   cachedFlow = { nodes: req.body.nodes ?? [], edges: req.body.edges ?? [], viewport: normalizeViewport(req.body.viewport) }
   config = { ...config, activeFlowId: flowId }
   await writeJson(configPath, config)
@@ -244,6 +316,7 @@ app.delete('/api/flows/:flowId', async (req, res) => {
   const flows = await readFlowIndex()
   const nextFlows = flows.filter((flow) => flow.id !== flowId)
   if (nextFlows.length === flows.length) return res.status(404).json({ error: 'Flow not found.' })
+  cancelFlowRuns(flowId)
   await fs.rm(getFlowPath(flowId), { force: true })
   await writeFlowIndex(nextFlows)
   if (config.activeFlowId === flowId) {
@@ -268,13 +341,21 @@ app.get('/api/backup', async (_, res) => {
     version: 1,
     exportedAt: new Date().toISOString(),
     activeFlowId: config.activeFlowId ?? 'default',
+    variables,
     flows: backupFlows,
   })
 })
 
 app.post('/api/backup', async (req, res) => {
+  await variableTransaction(async () => {
   let importedFlows
-  try { importedFlows = prepareFlowImport(req.body) }
+  let importedVariables
+  try {
+    importedFlows = prepareFlowImport(req.body)
+    const result = importVariables(req.body.variables, variables, importedFlows)
+    importedFlows = result.flows
+    importedVariables = result.variables
+  }
   catch (error) { return res.status(400).json({error: error.message}) }
 
   const existingFlows = await readFlowIndex()
@@ -298,10 +379,14 @@ app.post('/api/backup', async (req, res) => {
     importedIds.push(id)
   }
 
+  await writeJson(variablesPath, importedVariables)
+  variables = importedVariables
   await writeFlowIndex(nextFlows)
+  broadcast({ type: 'variables', variables })
   log('info', `Imported ${importedIds.length} flow${importedIds.length === 1 ? '' : 's'} from backup.`)
   broadcastRunner()
   res.json({ flows: await readFlowIndex(), activeFlowId: config.activeFlowId ?? 'default', importedIds })
+  })
 })
 
 app.post('/api/starter-pack', async (_, res) => {
@@ -382,10 +467,13 @@ app.put('/api/runner', async (req, res) => {
   await writeJson(configPath, config)
 
   if (config.runnerEnabled) {
+    durationRecoveryRequested = true
     reconnectHomeAssistant()
     log('info', 'Automatic runner enabled for all unpaused flows.')
   } else {
     clearPendingStateTriggerTimers()
+    for (const run of runningTriggers.values()) run.controller.abort()
+    manualRun?.controller.abort()
     log('warn', 'Automatic runner disabled.')
   }
 
@@ -405,7 +493,7 @@ app.post('/api/run', async (req, res) => {
     log('info', 'Manual run restarted; previous run was cancelled.')
   }
 
-  const run = { id: crypto.randomUUID(), controller: new AbortController() }
+  const run = { id: crypto.randomUUID(), controller: new AbortController(), flowId: config.activeFlowId ?? 'default' }
   manualRun = run
   beginRunHistory(run.id)
   broadcastRunner()
@@ -490,12 +578,14 @@ wss.on('connection', (socket) => {
   socket.send(JSON.stringify({ type: 'runner', runner: getRunnerStatus() }))
   socket.send(JSON.stringify({ type: 'node-runtime', runtime: getNodeRuntimeSnapshot() }))
   socket.send(JSON.stringify({ type: 'run-history', history: runHistory }))
+  socket.send(JSON.stringify({ type: 'variables', variables }))
   socket.on('close', () => clients.delete(socket))
 })
 
 setInterval(() => {
   if (!config.runnerEnabled) return
   fireTimeTriggers().catch((error) => log('error', error.message))
+  recoverDurationTriggers().catch((error) => log('error', error.message))
 }, 15_000)
 
 async function runFlow(flow, startNodeId, options = {}) {
@@ -565,6 +655,15 @@ async function walk(node, nodesById, edges, visited, options = {}) {
 async function executeNode(node, options = {}) {
   throwIfCancelled(options.signal)
   const data = node.data ?? {}
+  if (data.kind === 'variable') {
+    const variable = variables.find(v => `haflow_variable.${v.id}` === data.variableId)
+    if (!variable) throw new Error('Choose an existing global variable.')
+    throwIfCancelled(options.signal)
+    await changeVariable({ id: variable.id, value: data.variableValue }, options.signal)
+    log('info', `${data.label || 'Set variable'}: ${variable.name} set to ${data.variableValue}.`)
+    return true
+  }
+  if (data.kind === 'voice') { validatePhrase(data.phrase); return true }
   if (data.kind === 'time') {
     const now = new Date()
     const currentMinute = now.getHours() * 60 + now.getMinutes()
@@ -580,13 +679,7 @@ async function executeNode(node, options = {}) {
 
   if (data.kind === 'condition') {
     const rules = getConditionRules(data)
-    const results = await Promise.all(rules.map(async (rule) => {
-      const entity = rule.entityId ? await getEntity(rule.entityId) : null
-      const actual = getEntityComparableValue(entity, rule.attribute)
-      const expected = String(rule.value ?? '')
-      const passed = comparisonMatches(actual, rule.operator, expected)
-      return { actual, entityId: rule.entityId, expected, passed }
-    }))
+    const results = await Promise.all(rules.map(rule => evaluateConditionRule(rule, data.expectedVariableId)))
     const passed = Boolean(results.length) && (data.conditionMode === 'all' ? results.every((result) => result.passed) : results.some((result) => result.passed))
     const detail = results.map((result) => `${result.entityId || 'entity'} ${result.actual}${result.passed ? '=' : '!='}${result.expected}`).join(', ')
     log(passed ? 'info' : 'warn', `${data.label || 'Condition'} ${passed ? 'passed' : 'stopped'} (${detail}).`)
@@ -641,6 +734,7 @@ async function executeNode(node, options = {}) {
     const entityIds = data.entityIds ?? []
     const serviceCalls = buildServiceCalls(data, payload, entityIds)
     for (const serviceCall of serviceCalls) {
+      throwIfCancelled(options.signal)
       await callService(serviceCall.domain, serviceCall.service, serviceCall.payload)
       log('info', `Called ${serviceCall.domain}.${serviceCall.service}.`)
     }
@@ -715,6 +809,16 @@ async function executeNode(node, options = {}) {
 async function previewNode(node, { nodes = [], edges = [] } = {}) {
   const data = node.data ?? {}
   if (data.disabled) return { status: 'warn', title: 'Node is disabled', details: ['This node will stop its branch while it is disabled.'] }
+  if (data.kind === 'voice') {
+    validatePhrase(data.phrase)
+    return { status: 'info', title: 'Local voice trigger', details: [`Waits for haflow_voice with phrase “${data.phrase}”. This preview starts no flow.`] }
+  }
+  if (data.kind === 'variable') {
+    const variable = variables.find(v => `haflow_variable.${v.id}` === data.variableId)
+    if (!variable) throw new Error('Choose a global variable.')
+    const value = variableValue(variable.type, data.variableValue)
+    return { status: 'info', title: 'Variable preview', details: [`Would change ${variable.name} from ${variable.value} to ${value}. Nothing was changed.`] }
+  }
 
   if (data.kind === 'state') {
     const rules = getStateTriggerRules(data)
@@ -753,13 +857,7 @@ async function previewNode(node, { nodes = [], edges = [] } = {}) {
   if (data.kind === 'condition') {
     const rules = getConditionRules(data)
     if (!rules.length) return { status: 'error', title: 'Condition needs an entity', details: ['Select at least one entity before testing this condition.'] }
-    const results = await Promise.all(rules.map(async (rule) => {
-      const entity = rule.entityId ? await getEntity(rule.entityId).catch(() => null) : null
-      const actual = getEntityComparableValue(entity, rule.attribute)
-      const expected = String(rule.value ?? '')
-      const passed = comparisonMatches(actual, rule.operator, expected)
-      return { actual, expected, passed, rule }
-    }))
+    const results = await Promise.all(rules.map(rule => evaluateConditionRule(rule, data.expectedVariableId)))
     const passed = data.conditionMode === 'all' ? results.every((result) => result.passed) : results.some((result) => result.passed)
     return {
       status: passed ? 'pass' : 'stop',
@@ -1073,7 +1171,7 @@ async function evaluateAndSourceNode(sourceNode, activeStates) {
   if (data.kind === 'condition') {
     const rules = getConditionRules(data).filter((rule) => rule.entityId)
     if (!rules.length) return { label, passed: false, reason: 'no condition' }
-    const ruleResults = await Promise.all(rules.map(evaluateAndConditionRule))
+    const ruleResults = await Promise.all(rules.map(rule => evaluateAndConditionRule(rule, data.expectedVariableId)))
     const passed = data.conditionMode === 'all'
       ? ruleResults.every((result) => result.passed)
       : ruleResults.some((result) => result.passed)
@@ -1097,11 +1195,21 @@ async function evaluateAndStateRule(rule, activeStates) {
   return { passed: activeStates.has(actual.toLowerCase()), reason: `${rule.entityId} is ${actual || 'unknown'}` }
 }
 
-async function evaluateAndConditionRule(rule) {
-  const entity = await getEntity(rule.entityId).catch(() => null)
+function entityReadingAvailable(entity) {
+  return Boolean(entity && entity.state !== null && entity.state !== undefined && !['unknown', 'unavailable'].includes(entity.state))
+}
+
+async function evaluateConditionRule(rule, expectedVariableId) {
+  const entity = rule.entityId ? await getEntity(rule.entityId) : null
   const actual = getEntityComparableValue(entity, rule.attribute)
-  const expected = String(rule.value ?? '')
-  const passed = comparisonMatches(actual, rule.operator, expected)
+  const reference = expectedVariableId ? await getEntity(expectedVariableId) : null
+  const expected = reference ? reference.state : String(rule.value ?? '')
+  const passed = entityReadingAvailable(entity) && (!expectedVariableId || entityReadingAvailable(reference)) && comparisonMatches(actual, rule.operator, expected)
+  return { actual, expected, passed, rule, entityId: rule.entityId }
+}
+
+async function evaluateAndConditionRule(rule, expectedVariableId) {
+  const { actual, expected, passed } = await evaluateConditionRule(rule, expectedVariableId)
   return { passed, reason: `${rule.entityId} ${actual}${passed ? '=' : '!='}${expected}` }
 }
 
@@ -1217,6 +1325,10 @@ function findMatchingTriggerNodes(flow, event) {
   return (flow.nodes ?? []).filter((node) => {
     const data = node.data ?? {}
     if (data.disabled) return false
+    if (data.kind === 'voice') {
+      if (event.event_type !== 'haflow_voice') return false
+      try { return normalizePhrase(event.data?.phrase) === validatePhrase(data.phrase) } catch { return false }
+    }
     if (data.kind === 'event') {
       if (data.eventType && data.eventType !== event.event_type) return false
       if (event.event_type !== 'state_changed') return true
@@ -1241,7 +1353,7 @@ function findMatchingTriggerNodes(flow, event) {
   })
 }
 
-function updatePendingStateTriggerTimers(entry, event) {
+function updatePendingStateTriggerTimers(entry, event, { recovering = false } = {}) {
   if (event.event_type !== 'state_changed' || !event.data?.entity_id) return
   for (const node of entry.flow.nodes ?? []) {
     if (node.data?.kind !== 'state' || node.data.disabled) continue
@@ -1249,7 +1361,10 @@ function updatePendingStateTriggerTimers(entry, event) {
       const durationMs = getTriggerDurationMs(rule)
       if (!durationMs || rule.entityId !== event.data.entity_id) return
       const timerKey = `${entry.meta.id}:${node.id}:${rule.id || index}`
-      if (!stateTriggerMatches(rule, event.data)) {
+      const matches = recovering || pendingStateTriggerTimers.has(timerKey)
+        ? durationRuleMatches(rule, event.data.new_state)
+        : stateTriggerMatches(rule, event.data)
+      if (!matches) {
         const pending = pendingStateTriggerTimers.get(timerKey)
         if (pending) clearTimeout(pending)
         pendingStateTriggerTimers.delete(timerKey)
@@ -1257,12 +1372,15 @@ function updatePendingStateTriggerTimers(entry, event) {
       }
       if (pendingStateTriggerTimers.has(timerKey)) return
       const timer = setTimeout(async () => {
+        if (pendingStateTriggerTimers.get(timerKey) !== timer) return
         if (!config.runnerEnabled) {
           pendingStateTriggerTimers.delete(timerKey)
           return
         }
         const entity = await getEntity(rule.entityId).catch(() => null)
-        if (!entity || !numericComparisonMatches(entity.state, rule.operator, rule.value)) {
+        // Pause/edit/re-arm can happen while the fresh reading is in flight.
+        if (pendingStateTriggerTimers.get(timerKey) !== timer) return
+        if (!config.runnerEnabled || !durationRuleMatches(rule, entity)) {
           pendingStateTriggerTimers.delete(timerKey)
           return
         }
@@ -1283,6 +1401,53 @@ function clearPendingStateTriggerTimers(flowId = '') {
   }
 }
 
+function cancelFlowRuns(flowId) {
+  if (manualRun?.flowId === flowId) manualRun.controller.abort()
+  for (const run of runningTriggers.values()) if (run.flowId === flowId) run.controller.abort()
+  clearPendingStateTriggerTimers(flowId)
+}
+
+function durationRuleMatches(rule, entity) {
+  if (!entityReadingAvailable(entity)) return false
+  const value = getEntityComparableValue(entity, rule.attribute)
+  return (!hasStateFilter(rule.to) || value === rule.to) && numericComparisonMatches(value, rule.operator, rule.value)
+}
+
+async function recoverDurationTriggers() {
+  if (recoveryBusy || !config.runnerEnabled || !durationRecoveryRequested) return
+  recoveryBusy = true
+  durationRecoveryRequested = false
+  try {
+    const entries = await getRunnableFlowEntries()
+    const rules = entries.flatMap(entry => (entry.flow.nodes || []).filter(n => n.data?.kind === 'state' && !n.data.disabled)
+      .flatMap(node => getStateTriggerRules(node.data).map((rule, index) => ({ entry, node, rule, index }))))
+      .filter(({rule}) => getTriggerDurationMs(rule) && rule.entityId)
+    if (!rules.length) return
+    const needsHA = rules.some(({rule}) => !rule.entityId.startsWith('haflow_variable.'))
+    const connected = haSocket?.readyState === WebSocket.OPEN
+    // Refresh on startup/reconnect/rule changes, not by polling every entity
+    // every 15 seconds. Pure variable holds also recover while HA is offline.
+    const states = new Map(needsHA && connected ? (await haRest('/api/states')).map(entity => [entity.entity_id, entity]) : [])
+    if (needsHA && !connected) durationRecoveryRequested = true
+    for (const variable of variables) states.set(`haflow_variable.${variable.id}`, variableEntity(variable))
+    const current = new Map((await getRunnableFlowEntries()).map(entry => [entry.meta.id, entry]))
+    for (const {entry, node, rule, index} of rules) {
+      const latest = current.get(entry.meta.id)
+      if (!latest || flowExecutionSignature(latest.flow) !== flowExecutionSignature(entry.flow)) continue
+      const key = `${entry.meta.id}:${node.id}:${rule.id || index}`
+      const entity = states.get(rule.entityId)
+      if (!durationRuleMatches(rule, entity)) {
+        clearTimeout(pendingStateTriggerTimers.get(key)); pendingStateTriggerTimers.delete(key); continue
+      }
+      if (pendingStateTriggerTimers.has(key)) continue
+      // An attribute's last_updated is not proof of how long that value held.
+      // Recover conservatively with a fresh full interval rather than firing early.
+      updatePendingStateTriggerTimers(entry, { event_type: 'state_changed', data: { entity_id: rule.entityId, new_state: entity } }, { recovering: true })
+    }
+  } catch (error) { durationRecoveryRequested = true; throw error }
+  finally { recoveryBusy = false }
+}
+
 function getTriggerDurationMs(rule) {
   const duration = Number(rule.duration)
   if (!Number.isFinite(duration) || duration <= 0 || !COMPARISON_OPERATORS.has(rule.operator)) return 0
@@ -1296,18 +1461,25 @@ function formatTriggerDuration(rule) {
 
 async function triggerNode(flow, flowMeta, node, { reason }) {
   const runKey = `${flowMeta.id}:${node.id}`
-  const existingRun = runningTriggers.get(runKey)
-  if (existingRun) {
-    existingRun.controller.abort()
+  const pathNodes = reachable(flow, node.id)
+  const existingRuns = [...runningTriggers.values()].filter(run => run.flowId === flowMeta.id && overlapping(run.pathNodes, pathNodes))
+  if (existingRuns.length) {
+    for (const run of existingRuns) run.controller.abort()
     log('info', `${flowMeta.name}: ${node.data?.label || node.id} restarted; previous run was cancelled.`)
   }
 
-  const run = { id: crypto.randomUUID(), controller: new AbortController() }
+  const run = { id: crypto.randomUUID(), controller: new AbortController(), flowId: flowMeta.id, pathNodes }
+  run.done = new Promise(resolve => { run.complete = resolve })
+  // Register before awaiting older work: another retrigger cancels this queued run.
   runningTriggers.set(runKey, run)
   beginRunHistory(run.id)
   broadcastRunner()
   const startedAt = new Date().toISOString()
   try {
+    await Promise.all(existingRuns.map(previous => previous.done))
+    throwIfCancelled(run.controller.signal)
+    const currentMeta = (await readFlowIndex()).find(meta => meta.id === flowMeta.id)
+    if (!currentMeta || currentMeta.paused || !config.runnerEnabled) throw createCancelledError()
     log('activated', `Flow Activated: ${flowMeta.name}: ${node.data?.label || node.id}`)
     const result = await runFlow(flow, node.id, { runId: run.id, skipStartExecution: node.id, signal: run.controller.signal })
     await finishRunHistory({
@@ -1338,6 +1510,7 @@ async function triggerNode(flow, flowMeta, node, { reason }) {
       throw error
     }
   } finally {
+    run.complete?.()
     if (runningTriggers.get(runKey)?.id === run.id) runningTriggers.delete(runKey)
     broadcastRunner()
   }
@@ -1361,6 +1534,8 @@ function reconnectHomeAssistant() {
     }
 
     if (message.type === 'auth_ok') {
+      durationRecoveryRequested = true
+      recoverDurationTriggers().catch(error => log('warn', `Could not recover held triggers: ${error.message}`))
       haSocket.send(JSON.stringify({ id: haMessageId++, type: 'subscribe_events' }))
       log('info', 'Subscribed to Home Assistant events.')
       logRunnerWatchSummary().catch((error) => log('warn', `Could not inspect watched triggers: ${error.message}`))
@@ -1383,6 +1558,8 @@ function reconnectHomeAssistant() {
 }
 
 function scheduleReconnect() {
+  clearPendingStateTriggerTimers()
+  durationRecoveryRequested = true
   broadcastRunner()
   if (!hasHomeAssistantCredentials() || reconnectTimer) return
   reconnectTimer = setTimeout(() => {
@@ -1414,6 +1591,11 @@ function closeHomeAssistantSocket() {
 }
 
 async function getEntity(entityId) {
+  if (String(entityId).startsWith('haflow_variable.')) {
+    const variable = variables.find(v => `haflow_variable.${v.id}` === entityId)
+    if (!variable) throw new Error('Variable not found.')
+    return variableEntity(variable)
+  }
   return haRest(`/api/states/${entityId}`)
 }
 
@@ -1651,7 +1833,8 @@ function getRunnerStatus() {
     flowPaused,
     running: runningTriggers.size + (manualRun ? 1 : 0),
     nodeRuntime: getNodeRuntimeSnapshot(),
-    triggerCount: flowPaused ? 0 : cachedFlow.nodes.filter((node) => !node.data?.disabled && ['state', 'event', 'time'].includes(node.data?.kind)).length,
+    triggerCount: flowPaused ? 0 : cachedFlow.nodes.filter((node) => !node.data?.disabled && ['state', 'event', 'voice', 'time'].includes(node.data?.kind)).length,
+    waiting: [...pendingStateTriggerTimers.keys()].map(key => ({ key, flowId: key.split(':')[0], state: pendingStateTriggerTimers.get(key) === null ? 'fired' : 'waiting' })).filter(item => item.state === 'waiting'),
     activeFlowId,
   }
 }
@@ -1780,6 +1963,7 @@ function getRemainingMs(runtime) {
 async function waitForEntityState(entityId, attribute, targetState, timeoutSeconds, signal) {
   throwIfCancelled(signal)
   const current = await getEntity(entityId)
+  throwIfCancelled(signal)
   if (!targetState || getEntityComparableValue(current, attribute) === String(targetState)) return
 
   return new Promise((resolve, reject) => {
@@ -1894,6 +2078,7 @@ function getStateTriggerRules(data) {
       to: data.to ?? '',
       operator: COMPARISON_OPERATORS.has(data.operator) ? data.operator : '',
       value: data.value ?? '',
+      attribute: data.attribute || 'state',
       duration: data.duration ?? '',
       durationUnit: ['seconds', 'minutes', 'hours'].includes(data.durationUnit) ? data.durationUnit : 'minutes',
     }]
@@ -1913,16 +2098,21 @@ function stateTriggerMatches(rule, stateData, requireComparisonEntry = false) {
     if (hasButtonFilter) return false
     if (getEntityDeviceId(stateData.entity_id) !== rule.deviceId) return false
   }
-  if (hasStateFilter(rule.from) && stateData.old_state?.state !== rule.from) return false
-  if (hasStateFilter(rule.to) && stateData.new_state?.state !== rule.to) return false
+  const oldValue = getEntityComparableValue(stateData.old_state, rule.attribute)
+  const newValue = getEntityComparableValue(stateData.new_state, rule.attribute)
+  if (!stateData.new_state || ['unknown', 'unavailable'].includes(stateData.new_state.state)) return false
+  if (hasStateFilter(rule.from) && oldValue !== rule.from) return false
+  if (hasStateFilter(rule.to) && newValue !== rule.to) return false
   if (COMPARISON_OPERATORS.has(rule.operator)) {
-    if (!numericComparisonMatches(stateData.new_state?.state, rule.operator, rule.value)) return false
-    if (requireComparisonEntry && numericComparisonMatches(stateData.old_state?.state, rule.operator, rule.value)) return false
+    if (!numericComparisonMatches(newValue, rule.operator, rule.value)) return false
+    if (requireComparisonEntry && entityReadingAvailable(stateData.old_state) && numericComparisonMatches(oldValue, rule.operator, rule.value)) return false
   }
+  else if (oldValue === newValue) return false
   return true
 }
 
 function numericComparisonMatches(actualValue, operator, expectedValue) {
+  if (![actualValue, expectedValue].every(value => ['number', 'string'].includes(typeof value) && String(value).trim() !== '')) return false
   const actual = Number(actualValue)
   const expected = Number(expectedValue)
   if (!Number.isFinite(actual) || !Number.isFinite(expected)) return false
@@ -2902,14 +3092,17 @@ async function readFlowMeta(flowId) {
 
 async function getRunnableFlowEntries() {
   if (runnableFlowCache) return runnableFlowCache
+  const generation = runnableFlowGeneration
   const flows = await readFlowIndex()
-  runnableFlowCache = await Promise.all(flows
+  const entries = await Promise.all(flows
     .filter((meta) => !meta.paused)
     .map(async (meta) => ({
       meta,
       flow: meta.id === (config.activeFlowId ?? 'default') ? cachedFlow : await readFlow(meta.id),
     })))
-  return runnableFlowCache
+  if (generation !== runnableFlowGeneration) return getRunnableFlowEntries()
+  runnableFlowCache = entries
+  return entries
 }
 
 async function isActiveFlowPaused() {
@@ -2918,12 +3111,20 @@ async function isActiveFlowPaused() {
 }
 
 async function writeFlow(flowId, flow) {
-  await writeJson(getFlowPath(flowId), normalizeFlow(flow))
+  const previous = await readJson(getFlowPath(flowId), {})
+  const normalized = normalizeFlow(flow)
+  await writeJson(getFlowPath(flowId), normalized)
+  // Layout edits do not reset a running hold. Rule edits discard old timers.
+  if (flowExecutionSignature(normalizeFlow(previous)) !== flowExecutionSignature(normalized)) {
+    clearPendingStateTriggerTimers(flowId)
+    durationRecoveryRequested = true
+  }
   invalidateRunnableFlowCache()
 }
 
 function invalidateRunnableFlowCache() {
   runnableFlowCache = null
+  runnableFlowGeneration += 1
 }
 
 async function getStarterPackFlows() {
@@ -3182,6 +3383,7 @@ function normalizeStateTriggerRules(data, nodeId) {
         to: data.to ?? '',
         operator: data.operator ?? '',
         value: data.value ?? '',
+        attribute: data.attribute || 'state',
         duration: data.duration ?? '',
         durationUnit: data.durationUnit ?? 'minutes',
       }]
@@ -3200,6 +3402,7 @@ function normalizeStateTriggerRules(data, nodeId) {
       to: rule.to ?? '',
       operator: COMPARISON_OPERATORS.has(rule.operator) ? rule.operator : '',
       value: rule.value ?? '',
+      attribute: rule.attribute || 'state',
       duration: rule.duration ?? '',
       durationUnit: ['seconds', 'minutes', 'hours'].includes(rule.durationUnit) ? rule.durationUnit : 'minutes',
     }))
@@ -3221,6 +3424,19 @@ async function readJson(filePath, fallback) {
   }
 }
 
-async function writeJson(filePath, value) {
-  await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`)
+// Serialize per file and atomically replace it, so overlapping saves cannot
+// truncate stored flows/variables/history or leave half-written JSON on restart.
+var fileWrites
+function writeJson(filePath, value, { signal } = {}) {
+  fileWrites ??= new Map()
+  const content = `${JSON.stringify(value, null, 2)}\n`
+  const operation = (fileWrites.get(filePath) || Promise.resolve()).catch(() => {}).then(async () => {
+    throwIfCancelled(signal)
+    const temporary = `${filePath}.${crypto.randomUUID()}.tmp`
+    try { await fs.writeFile(temporary, content); throwIfCancelled(signal); await fs.rename(temporary, filePath) }
+    finally { await fs.rm(temporary, { force: true }).catch(() => {}) }
+  })
+  fileWrites.set(filePath, operation)
+  operation.finally(() => { if (fileWrites.get(filePath) === operation) fileWrites.delete(filePath) }).catch(() => {})
+  return operation
 }

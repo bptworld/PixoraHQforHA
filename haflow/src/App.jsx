@@ -70,7 +70,7 @@ const ALL_ENTITY_AREAS = '__all_entity_areas__'
 const APP_VERSION = packageInfo.version
 const TARGETLESS_SERVICE_DOMAINS = new Set(['notify', 'persistent_notification'])
 const ON_OFF_SERVICES = new Set(['turn_on', 'turn_off'])
-const NODE_KINDS_REQUIRING_OUTGOING = new Set(['state', 'event', 'time', 'condition', 'or', 'and', 'direction', 'delay', 'wait'])
+const NODE_KINDS_REQUIRING_OUTGOING = new Set(['state', 'event', 'voice', 'time', 'condition', 'or', 'and', 'direction', 'delay', 'wait'])
 const DIRECTION_ACTIVE_STATES = 'on, active, detected, open, occupied, home'
 const PUSHOVER_PRIORITIES = [
   { value: '', label: 'Normal' },
@@ -231,6 +231,8 @@ const LUTRON_5_BUTTON_PICO_ROWS = [
 const LUTRON_PICO_PLATFORM = 'lutron_caseta_pico'
 
 const nodeCatalog = [
+  { type: 'voice', label: 'Voice trigger', description: 'Starts locally when HA fires haflow_voice with an exact phrase. No cloud or training.', icon: Mic, color: '#0891b2', data: { phrase: '', label: 'Voice trigger' } },
+  { type: 'variable', label: 'Set variable', description: 'Stores a local global variable shared by all flows.', icon: Activity, color: '#059669', data: { variableId: '', variableValue: '', label: 'Set variable' } },
   {
     type: 'state',
     label: 'Trigger',
@@ -386,8 +388,13 @@ function appUrl(path) {
   return new URL(String(path).replace(/^\/+/, ''), document.baseURI).toString()
 }
 
-function apiFetch(path, options) {
-  return fetch(appUrl(path), options)
+async function apiFetch(path, options) {
+  const response = await fetch(appUrl(path), options)
+  if (!response.ok) {
+    const detail = await response.clone().json().catch(() => ({}))
+    throw new Error(detail.error || detail.message || `Request failed (${response.status})`)
+  }
+  return response
 }
 
 function getWebSocketUrl() {
@@ -407,7 +414,7 @@ function getInitialInspectorCollapsed() {
 }
 
 function getInitialLibraryCollapsed() {
-  return window.localStorage.getItem('haflow-library-collapsed') === 'true'
+  return true
 }
 
 function getInitialRunHistoryCollapsed() {
@@ -552,7 +559,7 @@ function NodeBody({ data, selected }) {
   const runtimeStatus = data.runtimeStatus
   const disabled = data.disabled
   const summaryLines = summarizeNode(data)
-  const showTargetHandle = !['state', 'event', 'comment'].includes(data.kind)
+  const showTargetHandle = !['state', 'event', 'voice', 'comment'].includes(data.kind)
 
   if (data.kind === 'group') {
     return (
@@ -635,6 +642,8 @@ function NodeBody({ data, selected }) {
 const nodeTypes = { haflow: NodeBody }
 
 function summarizeNode(data) {
+  if (data.kind === 'voice') return data.phrase ? `Say “${data.phrase}”` : 'Enter a voice phrase'
+  if (data.kind === 'variable') return `${data.variableName || data.variableId || 'Choose a variable'} = ${data.variableValue ?? ''}`
   const selectedCount = data.entityIds?.length ?? 0
   const entityName = formatEntityRef(data)
   const entity = data.entityContext
@@ -896,6 +905,7 @@ function getStateTriggerRules(data) {
         deviceIdentifiers: data.deviceIdentifiers ?? [],
         buttonNumber: data.buttonNumber,
         triggerPlatform: data.triggerPlatform,
+        attribute: data.attribute || 'state',
         from: data.from ?? '',
         to: data.to ?? '',
         operator: data.operator ?? '',
@@ -914,6 +924,7 @@ function getStateTriggerRules(data) {
       deviceIdentifiers: Array.isArray(rule.deviceIdentifiers) ? rule.deviceIdentifiers : [],
       buttonNumber: rule.buttonNumber,
       triggerPlatform: rule.triggerPlatform ?? '',
+      attribute: rule.attribute || 'state',
       from: rule.from ?? '',
       to: rule.to ?? '',
       operator: COMPARISON_OPERATORS.includes(rule.operator) ? rule.operator : '',
@@ -949,6 +960,8 @@ function collectFlowEntityIds(nodes) {
 
   nodes.forEach((node) => {
     const data = node.data ?? {}
+    addEntityValue(data.variableId)
+    addEntityValue(data.expectedVariableId)
     addEntityValue(data.entityId)
     addEntityValue(data.entityIds)
     addDeviceId(data.deviceId)
@@ -993,6 +1006,8 @@ function formatDuration(milliseconds) {
 function validateNodeData(data, entityById = new Map(), services = {}) {
   if (data.suppressValidation) return ''
   if (data.disabled) return ''
+  if (data.kind === 'voice' && (!String(data.phrase || '').trim() || String(data.phrase).length > 100 || /[{}[\]*]/.test(data.phrase))) return 'Enter an exact voice phrase (up to 100 characters)'
+  if (data.kind === 'variable' && !data.variableId) return 'Choose a global variable'
   const hasEntityCatalog = entityById.size > 0
   const entityExists = (entityId) => !entityId || !hasEntityCatalog || entityById.has(entityId)
   if (data.kind === 'state') {
@@ -1015,7 +1030,7 @@ function validateNodeData(data, entityById = new Map(), services = {}) {
     const rules = getConditionRules(data)
     if (!rules.length || rules.some((rule) => !rule.entityId)) return 'Missing entity'
     if (rules.some((rule) => rule.entityId && !entityExists(rule.entityId))) return 'Entity not found'
-    if (rules.some((rule) => !rule.value && rule.operator !== 'exists')) return 'Missing value'
+    if (!data.expectedVariableId && rules.some((rule) => rule.value === '' && rule.operator !== 'exists')) return 'Missing value'
   }
   if (data.kind === 'direction') {
     if (!data.entityA || !data.entityB) return 'Missing entities'
@@ -1085,7 +1100,7 @@ function validateFlow(nodes, edges, entityById = new Map(), services = {}, isPau
   edges.forEach((edge) => incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1))
 
   if (isPaused) issues.push('Flow is paused')
-  if (!nodes.some((node) => !node.data?.disabled && ['state', 'event', 'time'].includes(node.data?.kind))) {
+  if (!nodes.some((node) => !node.data?.disabled && ['state', 'event', 'voice', 'time'].includes(node.data?.kind))) {
     issues.push('No active trigger node')
   }
 
@@ -2679,6 +2694,19 @@ function FlowWorkspace() {
   const viewportRef = useRef(defaultViewport)
   const viewportSaveTimeoutRef = useRef(null)
   const lastSavedSnapshotRef = useRef('')
+  const lastSavedViewportRef = useRef(defaultViewport)
+  const saveQueueRef = useRef(Promise.resolve())
+  const pendingSavesRef = useRef(0)
+  const [saveRevision, setSaveRevision] = useState(0)
+  const currentGraphRef = useRef('')
+  const currentFlowIdRef = useRef('default')
+  const recentRunsRef = useRef(null)
+  const [variables, setVariables] = useState([])
+  const [canvasQuery, setCanvasQuery] = useState('')
+  const [followLive, setFollowLive] = useState(false)
+  const [showMinimap, setShowMinimap] = useState(true)
+  const [snapGrid, setSnapGrid] = useState(false)
+  const followedNodeRef = useRef('')
   const historyRef = useRef([])
   const historyIndexRef = useRef(-1)
   const isApplyingHistoryRef = useRef(false)
@@ -2727,7 +2755,27 @@ function FlowWorkspace() {
   const [nodeTestResult, setNodeTestResult] = useState(null)
   const [isFlowMenuOpen, setIsFlowMenuOpen] = useState(false)
   const isDarkTheme = theme === 'dark'
-  const { screenToFlowPosition, setViewport: setReactFlowViewport, getViewport } = useReactFlow()
+  const { screenToFlowPosition, setViewport: setReactFlowViewport, getViewport, setCenter } = useReactFlow()
+  currentGraphRef.current = JSON.stringify({ nodes, edges })
+  currentFlowIdRef.current = activeFlowId
+  const applyVariables = useCallback((items) => {
+    setVariables(items)
+    setEntities(current => mergeEntityCatalog(current, [...current.filter(e => e.domain !== 'haflow_variable'), ...items.map(v => ({ entity_id: `haflow_variable.${v.id}`, state: String(v.value), last_changed: v.updatedAt, last_updated: v.updatedAt,
+      domain: 'haflow_variable', catalogType: 'entity', areaName: 'Global variables', deviceType: 'Variable', friendlyName: v.name,
+      valueOptions: v.type === 'boolean' ? ['true', 'false'] : [], attributes: { friendly_name: v.name, variable_type: v.type } }))]))
+  }, [])
+  useEffect(() => { apiFetch('/api/variables').then(r => r.json()).then(r => applyVariables(r.variables || [])).catch(() => {}) }, [applyVariables])
+  const jumpToRuns = () => { setIsInspectorCollapsed(false); setIsRunHistoryCollapsed(false); window.setTimeout(() => recentRunsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }
+  const centerNode = (node) => {
+    const parent = nodes.find(n => n.id === node.parentId)
+    setCenter(node.position.x + (parent?.position.x || 0) + (node.measured?.width || 240) / 2, node.position.y + (parent?.position.y || 0) + (node.measured?.height || 140) / 2, { duration: 250, zoom: Math.max(.8, getViewport().zoom) })
+    setSelectedId(node.id); setSelectedNodeIds([node.id])
+  }
+  const findCanvasNode = () => {
+    if (!canvasQuery.trim()) return
+    const node = nodes.find(n => `${n.data?.label || ''} ${n.data?.entityId || ''} ${n.data?.phrase || ''} ${n.data?.variableName || ''}`.toLowerCase().includes(canvasQuery.trim().toLowerCase()))
+    if (node) centerNode(node)
+  }
 
   const selectedNode = nodes.find((node) => node.id === selectedId)
   const selectedNodeIdSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds])
@@ -2801,8 +2849,19 @@ function FlowWorkspace() {
       animated: edge.animated && !isRuntimeEdge,
     }
   }), [edges, isInLastRunSnapshot, nodeRuntime, runtimeClock])
-  const validationIssues = useMemo(() => validateFlow(nodes, edges, entityById, services, activeFlow?.paused), [activeFlow?.paused, edges, entityById, nodes, services])
+  const validationIssues = useMemo(() => validateFlow(nodes, edges, ['error', 'loading'].includes(entityReloadStatus) ? new Map() : entityById, services, activeFlow?.paused), [activeFlow?.paused, edges, entityById, nodes, services, entityReloadStatus])
   const flowSnapshot = useMemo(() => JSON.stringify({ nodes, edges }), [edges, nodes])
+  useEffect(() => {
+    if (!followLive || saveStatus === 'saving') return
+    const latest = Object.entries(nodeRuntime).filter(([, state]) => state.lastExecutedAt).sort((a,b) => b[1].lastExecutedAt.localeCompare(a[1].lastExecutedAt))[0]
+    if (!latest || followedNodeRef.current === `${latest[0]}:${latest[1].lastExecutedAt}`) return
+    followedNodeRef.current = `${latest[0]}:${latest[1].lastExecutedAt}`
+    const node = nodes.find(n => n.id === latest[0])
+    if (node) {
+      const parent = nodes.find(n => n.id === node.parentId)
+      setCenter(node.position.x + (parent?.position.x || 0) + (node.measured?.width || 240)/2, node.position.y + (parent?.position.y || 0) + (node.measured?.height || 140)/2, { duration: 250, zoom: getViewport().zoom })
+    }
+  }, [followLive, getViewport, nodeRuntime, nodes, saveStatus, setCenter])
   const flowEntityIdSet = useMemo(() => new Set(collectFlowEntityIds(nodes)), [nodes])
   const entityTypeOptions = useMemo(() => {
     return Array.from(new Set(entities.map((entity) => entity.deviceType || entity.entity_id?.split('.')[0]).filter(Boolean))).sort((first, second) => first.localeCompare(second))
@@ -2927,6 +2986,7 @@ function FlowWorkspace() {
       setNodeRuntime(normalizeRuntimeSnapshot(runnerStatus.nodeRuntime ?? {}))
       const loadedSnapshot = JSON.stringify({ nodes: nextNodes, edges: nextEdges })
       lastSavedSnapshotRef.current = loadedSnapshot
+      lastSavedViewportRef.current = nextViewport
       resetHistory(loadedSnapshot)
       setSaveStatus('saved')
       setHasLoadedFlow(true)
@@ -2948,8 +3008,10 @@ function FlowWorkspace() {
         entityResponse.json(),
         serviceResponse.json(),
       ])
-      setEntities((current) => mergeEntityCatalog(current, entityData.entities ?? []))
-      setServices(serviceData.services ?? {})
+      if (!entityData.entities?.length || !Object.keys(serviceData.services || {}).length) throw new Error('Home Assistant is still loading.')
+      setEntities((current) => mergeEntityCatalog(current, [...entityData.entities, ...current.filter(e => e.domain === 'haflow_variable')]))
+      setServices(serviceData.services)
+      if (entityData.error || serviceData.error) throw new Error('Home Assistant is still loading.')
       setEntityReloadStatus('done')
       window.setTimeout(() => setEntityReloadStatus('idle'), 1600)
     } catch {
@@ -2960,6 +3022,11 @@ function FlowWorkspace() {
   useEffect(() => {
     reloadHomeAssistantData()
   }, [connection.connected, reloadHomeAssistantData])
+  useEffect(() => {
+    if (entityReloadStatus !== 'error') return undefined
+    const retry = window.setTimeout(reloadHomeAssistantData, 5000)
+    return () => window.clearTimeout(retry)
+  }, [entityReloadStatus, reloadHomeAssistantData])
 
   useEffect(() => {
     const timer = window.setInterval(() => setRuntimeClock(Date.now()), 1000)
@@ -3010,9 +3077,14 @@ function FlowWorkspace() {
   }, [selectedId])
 
   useEffect(() => {
-    const socket = new WebSocket(getWebSocketUrl())
+    let socket, retry, stopped = false
+    const connect = () => {
+    socket = new WebSocket(getWebSocketUrl())
+    socket.addEventListener('open', () => { reloadHomeAssistantData() })
+    socket.addEventListener('close', () => { if (!stopped) retry = window.setTimeout(connect, 3000) })
     socket.addEventListener('message', (event) => {
       const payload = JSON.parse(event.data)
+      if (payload.type === 'variables') applyVariables(payload.variables || [])
       if (payload.type === 'log') setLogs((current) => [payload.entry, ...current].slice(0, 160))
       if (payload.type === 'logs-cleared') setLogs([])
       if (payload.type === 'status') setConnection((current) => ({ ...current, ...payload.status }))
@@ -3039,8 +3111,10 @@ function FlowWorkspace() {
         }))
       }
     })
-    return () => socket.close()
-  }, [])
+    }
+    connect()
+    return () => { stopped = true; window.clearTimeout(retry); socket?.close() }
+  }, [applyVariables, reloadHomeAssistantData])
 
   const onConnect = useCallback((params) => {
     const sourceNode = nodes.find((node) => node.id === params.source)
@@ -3375,20 +3449,32 @@ function FlowWorkspace() {
   }, [nodes, selectedNodeIdSet, setNodes])
 
   const saveFlow = useCallback(async ({ silent = false, nextViewport } = {}) => {
+    // Delayed callbacks must never save a graph captured by an older render.
+    if (!hasLoadedFlow || currentFlowIdRef.current !== activeFlowId) return
+    const graph = JSON.parse(currentGraphRef.current)
     const viewportToSave = normalizeViewport(nextViewport ?? viewportRef.current ?? getViewport())
+    const snapshot = JSON.stringify(graph)
+    pendingSavesRef.current += 1
     setSaveStatus('saving')
-    const response = await apiFetch(`/api/flows/${activeFlowId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nodes, edges, viewport: viewportToSave }),
+    const operation = saveQueueRef.current.catch(() => {}).then(async () => {
+      const response = await apiFetch(`/api/flows/${activeFlowId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...graph, viewport: viewportToSave }),
+      })
+      const result = await response.json()
+      if (currentFlowIdRef.current !== activeFlowId) return
+      lastSavedSnapshotRef.current = snapshot
+      lastSavedViewportRef.current = viewportToSave
+      const viewStillCurrent = JSON.stringify(viewportRef.current) === JSON.stringify(viewportToSave)
+      setSaveStatus(currentGraphRef.current === snapshot && viewStillCurrent ? 'saved' : 'dirty')
+      if (!silent) setLogs((current) => [{ time: new Date().toISOString(), level: 'info', message: result.message }, ...current])
     })
-    const result = await response.json()
-    lastSavedSnapshotRef.current = JSON.stringify({ nodes, edges })
-    viewportRef.current = viewportToSave
-    setViewport(viewportToSave)
-    setSaveStatus('saved')
-    if (!silent) setLogs((current) => [{ time: new Date().toISOString(), level: 'info', message: result.message }, ...current])
-  }, [activeFlowId, edges, getViewport, nodes])
+    saveQueueRef.current = operation
+    try { await operation } catch (error) { setSaveStatus('error'); throw error }
+    finally { pendingSavesRef.current -= 1 }
+    setSaveRevision(current => current + 1)
+  }, [activeFlowId, getViewport, hasLoadedFlow])
 
   const handleMoveEnd = useCallback((_, nextViewport) => {
     if (!hasLoadedFlow) return
@@ -3397,15 +3483,18 @@ function FlowWorkspace() {
     setViewport(normalized)
     setSaveStatus('dirty')
     if (viewportSaveTimeoutRef.current) window.clearTimeout(viewportSaveTimeoutRef.current)
+    const flowId = activeFlowId
     viewportSaveTimeoutRef.current = window.setTimeout(() => {
-      saveFlow({ silent: true, nextViewport: normalized }).catch(() => setSaveStatus('error'))
+      if (currentFlowIdRef.current === flowId) saveFlowRef.current?.({ silent: true }).catch(() => setSaveStatus('error'))
     }, 600)
-  }, [hasLoadedFlow, saveFlow])
+  }, [activeFlowId, hasLoadedFlow])
 
-  const loadFlow = async (flowId) => {
+  const loadFlow = async (flowId, { flush = true } = {}) => {
+    if (viewportSaveTimeoutRef.current) window.clearTimeout(viewportSaveTimeoutRef.current)
+    if (flush && hasLoadedFlow && (currentGraphRef.current !== lastSavedSnapshotRef.current || JSON.stringify(viewportRef.current) !== JSON.stringify(lastSavedViewportRef.current))) await saveFlow({ silent: true })
+    await saveQueueRef.current.catch(() => {})
     setHasLoadedFlow(false)
     setSaveStatus('loading')
-    if (viewportSaveTimeoutRef.current) window.clearTimeout(viewportSaveTimeoutRef.current)
     const response = await apiFetch(`/api/flows/${flowId}`)
     const flow = await response.json()
     const nextNodes = flow.nodes ?? []
@@ -3424,12 +3513,14 @@ function FlowWorkspace() {
     setNodeRuntime(normalizeRuntimeSnapshot(runnerStatus.nodeRuntime ?? {}))
     const loadedSnapshot = JSON.stringify({ nodes: nextNodes, edges: nextEdges })
     lastSavedSnapshotRef.current = loadedSnapshot
+    lastSavedViewportRef.current = nextViewport
     resetHistory(loadedSnapshot)
     setSaveStatus('saved')
     setHasLoadedFlow(true)
   }
 
   const createFlow = async (duplicate = false) => {
+    if (duplicate) await saveFlow({ silent: true })
     const baseName = newFlowName.trim() || (duplicate ? `${activeFlow?.name || 'Flow'} Copy` : 'New Flow')
     const name = getUniqueFlowName(baseName, flows)
     const response = await apiFetch('/api/flows', {
@@ -3445,10 +3536,12 @@ function FlowWorkspace() {
 
   const deleteFlow = async () => {
     if (activeFlowId === 'default') return
+    if (viewportSaveTimeoutRef.current) window.clearTimeout(viewportSaveTimeoutRef.current)
+    await saveQueueRef.current.catch(() => {})
     const response = await apiFetch(`/api/flows/${activeFlowId}`, { method: 'DELETE' })
     const result = await response.json()
     setFlows(result.flows ?? [])
-    await loadFlow(result.activeFlowId ?? 'default')
+    await loadFlow(result.activeFlowId ?? 'default', { flush: false })
   }
 
   const renameFlow = async () => {
@@ -3683,6 +3776,7 @@ function FlowWorkspace() {
   }
 
   const runFlow = async ({ fromSelected = false } = {}) => {
+    if (!hasLoadedFlow) return
     if (activeFlow?.paused) {
       setLogs((current) => [{ time: new Date().toISOString(), level: 'warn', message: `${activeFlow.name} is paused. Resume it before running.` }, ...current])
       return
@@ -3754,8 +3848,8 @@ function FlowWorkspace() {
 
   useEffect(() => {
     if (!hasLoadedFlow) return undefined
-    if (flowSnapshot === lastSavedSnapshotRef.current) {
-      setSaveStatus('saved')
+    if (flowSnapshot === lastSavedSnapshotRef.current && JSON.stringify(viewport) === JSON.stringify(lastSavedViewportRef.current)) {
+      setSaveStatus(pendingSavesRef.current ? 'saving' : 'saved')
       return undefined
     }
 
@@ -3765,7 +3859,7 @@ function FlowWorkspace() {
     }, 1200)
 
     return () => window.clearTimeout(timeoutId)
-  }, [flowSnapshot, hasLoadedFlow, saveFlow])
+  }, [flowSnapshot, hasLoadedFlow, saveFlow, saveRevision, viewport])
 
   useEffect(() => () => {
     if (viewportSaveTimeoutRef.current) window.clearTimeout(viewportSaveTimeoutRef.current)
@@ -3842,7 +3936,7 @@ function FlowWorkspace() {
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
-        saveFlowRef.current?.()
+        saveFlowRef.current?.().catch(() => {})
       }
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !event.shiftKey) {
@@ -3925,7 +4019,7 @@ function FlowWorkspace() {
                     role="option"
                     type="button"
                   >
-                    {flow.paused ? <span className="paused-token">[Paused]</span> : null}
+                    <span className={`flow-enabled-dot ${flow.paused ? 'paused' : ''}`} title={flow.paused ? 'Paused' : 'Enabled'} />
                     <span>{flow.name}</span>
                   </button>
                 ))}
@@ -3951,6 +4045,7 @@ function FlowWorkspace() {
         </button>
         {!isLibraryCollapsed ? (
           <div className="library-actions">
+            <div className="local-flow-list">{sortedFlows.map(flow => <details key={flow.id}><summary><span>{flow.name}</span><span className={`flow-enabled-badge ${flow.paused ? 'paused' : ''}`}>{flow.paused ? 'Paused' : 'Enabled'}</span></summary><button type="button" onClick={() => loadFlow(flow.id).catch(() => {})}>Edit flow</button><button type="button" onClick={jumpToRuns}>Recent runs</button></details>)}</div>
             <button onClick={exportFlow} title="Export current flow" type="button"><Download size={16} /> Export Flow</button>
             <button onClick={() => importRef.current?.click()} title="Import flow into current canvas" type="button"><Upload size={16} /> Import Flow</button>
             <button onClick={exportBackup} title="Export all flows" type="button"><Download size={16} /> Export Backup</button>
@@ -3960,6 +4055,7 @@ function FlowWorkspace() {
           </div>
         ) : null}
         <div className="section-title">Nodes</div>
+        <VariablesPanel variables={variables} onUpdate={applyVariables} />
         <div className="node-palette">
           {nodeCatalog.map((item) => {
             const Icon = item.icon
@@ -4025,20 +4121,19 @@ function FlowWorkspace() {
           <div className="toolbar-main">
             <div className="toolbar-title-row">
               <strong>{activeFlow?.name || 'Automation canvas'}</strong>
+              <span className={`flow-enabled-badge ${activeFlow?.paused ? 'paused' : ''}`}>{activeFlow?.paused ? 'Paused' : !runner.enabled ? 'Enabled · Runner paused' : runner.connected ? 'Enabled · Monitoring triggers' : 'Enabled · Reconnecting'}</span>
               <span>{nodes.length} nodes, {edges.length} links, {validationIssues.length} errors · Last Triggered: {lastTriggeredAt ? formatNodeRunTime(lastTriggeredAt) : 'Never'}</span>
             </div>
             <span className="shortcut-hint">Ctrl+Z undo · Ctrl+S save · Ctrl+Enter run · Ctrl+D duplicate · Ctrl+G group</span>
           </div>
           <div className="toolbar-control-row">
-            <div className={`save-status ${saveStatus}`}>
-              {saveStatus === 'saving' ? 'Saving' : saveStatus === 'dirty' ? 'Unsaved' : saveStatus === 'error' ? 'Save failed' : saveStatus === 'loading' ? 'Loading' : 'Saved'}
-            </div>
             <div className="toolbar-actions">
               <button onClick={undoFlow} disabled={!historyState.canUndo} title="Undo" type="button"><Undo2 size={18} /></button>
               <button onClick={redoFlow} disabled={!historyState.canRedo} title="Redo" type="button"><Redo2 size={18} /></button>
-              <button onClick={saveFlow} title="Save flow" type="button"><Save size={18} /></button>
-              <button onClick={() => runFlow()} title="Run full flow" type="button"><Play size={18} /></button>
-              <button onClick={() => runFlow({ fromSelected: true })} disabled={!selectedId} title="Run from selected node" type="button"><SquarePlay size={18} /></button>
+              <button aria-live="polite" className={`flow-save ${saveStatus}`} disabled={['saving', 'loading'].includes(saveStatus)} onClick={() => saveFlow().catch(() => {})} title="Save flow" type="button"><Save size={18} />{saveStatus === 'saved' ? 'Flow Saved' : saveStatus === 'saving' ? 'Saving…' : saveStatus === 'error' ? 'Save failed — retry' : 'Save Flow'}</button>
+              <button className="text-action" onClick={jumpToRuns} title="Jump to Recent runs" type="button"><History size={18} /> Recent runs</button>
+              <button disabled={!hasLoadedFlow} onClick={() => runFlow()} title="Run full flow" type="button"><Play size={18} /></button>
+              <button onClick={() => runFlow({ fromSelected: true })} disabled={!hasLoadedFlow || !selectedId} title="Run from selected node" type="button"><SquarePlay size={18} /></button>
               <button className={showLastRunSnapshot ? 'is-active' : ''} onClick={() => setShowLastRunSnapshot((current) => !current)} disabled={!hasLastRunSnapshot} title="Show last run snapshot" type="button"><History size={18} /></button>
               <button onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))} title={`Switch to ${isDarkTheme ? 'light' : 'dark'} mode`} type="button">
                 {isDarkTheme ? <Sun size={18} /> : <Moon size={18} />}
@@ -4047,7 +4142,22 @@ function FlowWorkspace() {
               <button onClick={groupSelected} disabled={!hasNodeSelection} title="Group selected" type="button"><ListTree size={18} /></button>
               <button onClick={duplicateSelected} disabled={!hasNodeSelection} title="Duplicate selected" type="button"><Copy size={18} /></button>
               <button onClick={deleteSelected} disabled={!hasNodeSelection && !selectedEdgeId} title="Delete selected" type="button"><Trash2 size={18} /></button>
+              {selectedNode && <button className="text-action" type="button" disabled={selectedNodeIds.length !== 1 || edges.filter(e => e.source === selectedId).length !== 1 || ['state', 'voice', 'event', 'time', 'condition', 'notify', 'group'].includes(selectedNode?.data?.kind)} onClick={() => {
+                const outgoing = edges.find(e => e.source === selectedId)
+                if (!outgoing) return
+                const incoming = edges.filter(e => e.target === selectedId)
+                setEdges(current => current.filter(e => e.source !== selectedId && e.target !== selectedId).concat(incoming.filter(e => e.source !== outgoing.target).map(e => ({ ...e, id: createId(), target: outgoing.target, targetHandle: outgoing.targetHandle }))))
+                setNodes(current => current.filter(n => n.id !== selectedId)); setSelectedId(null); setSelectedNodeIds([])
+              }}>Remove step, keep path</button>}
             </div>
+          </div>
+          <div className="canvas-options">
+            <input aria-label="Find node" placeholder="Find nodes, devices or notes…" value={canvasQuery} onChange={e => setCanvasQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') findCanvasNode() }} />
+            <button type="button" onClick={findCanvasNode}><Search size={16} /> Find</button>
+            <label><input type="checkbox" checked={snapGrid} onChange={e => setSnapGrid(e.target.checked)} /> Snap to grid</label>
+            <label><input type="checkbox" checked={showMinimap} onChange={e => setShowMinimap(e.target.checked)} /> Minimap</label>
+            <label><input type="checkbox" checked={followLive} onChange={e => setFollowLive(e.target.checked)} /> Follow live run</label>
+            <span>Shift-drag to pan · Drag empty canvas to select</span>
           </div>
           {selectedNodeIds.length > 1 ? (
             <div className="toolbar-align-row" aria-label="Align selected nodes">
@@ -4067,6 +4177,11 @@ function FlowWorkspace() {
             nodes={displayNodes}
             edges={displayEdges}
             nodeTypes={nodeTypes}
+            snapToGrid={snapGrid}
+            snapGrid={[20, 20]}
+            selectionOnDrag
+            panOnDrag={[1, 2]}
+            panActivationKeyCode="Shift"
             connectionRadius={18}
             onConnect={onConnect}
             onEdgesChange={onEdgesChange}
@@ -4099,7 +4214,7 @@ function FlowWorkspace() {
             defaultViewport={viewport}
           >
             <Background color={isDarkTheme ? '#334155' : '#cbd5e1'} gap={24} size={1.2} />
-            <MiniMap
+            {showMinimap && <MiniMap
               bgColor={isDarkTheme ? '#111827' : '#ffffff'}
               maskColor={isDarkTheme ? 'rgba(15, 23, 42, 0.72)' : 'rgba(238, 242, 246, 0.72)'}
               nodeColor={getMiniMapNodeColor}
@@ -4107,13 +4222,14 @@ function FlowWorkspace() {
               nodeStrokeWidth={(node) => (node.selected || node.data?.runtimeStatus ? 6 : 4)}
               pannable
               zoomable
-            />
+              onNodeClick={(_, node) => centerNode(node)}
+            />}
             <Controls />
           </ReactFlow>
           {flowDeviceStatuses.length ? (
             <aside className="flow-device-status" aria-label="Flow device statuses">
               <div className="flow-device-status-header">
-                <strong>Devices</strong>
+                <strong>Devices &amp; variables</strong>
                 <span>{flowDeviceStatuses.length}</span>
               </div>
               <div className="flow-device-status-list">
@@ -4160,7 +4276,7 @@ function FlowWorkspace() {
             )) : <div className="validation-ok"><Check size={14} /> Flow looks ready</div>}
           </div>
           <button className="section-title collapsible-section-title" onClick={() => setIsRunHistoryCollapsed((current) => !current)} type="button">
-            <span>Run History</span>
+            <span ref={recentRunsRef}>Recent runs</span>
             {isRunHistoryCollapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
           </button>
           {!isRunHistoryCollapsed ? (
@@ -4586,6 +4702,31 @@ function SchedulePointEditor({ data, field, label, updateNodeData }) {
   )
 }
 
+function VariablesPanel({ variables, onUpdate }) {
+  const [id, setId] = useState('')
+  const [name, setName] = useState('')
+  const [type, setType] = useState('boolean')
+  const [value, setValue] = useState('false')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const select = (next) => { const v = variables.find(item => item.id === next); setId(next); setName(v?.name || ''); setType(v?.type || 'boolean'); setValue(String(v?.value ?? false)); setError('') }
+  const save = async () => {
+    setBusy(true); setError('')
+    try {
+      const result = await apiFetch('/api/variables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name, type, value }) }).then(r => r.json())
+      onUpdate(result.variables); select('')
+    } catch (e) { setError(e.message) } finally { setBusy(false) }
+  }
+  return <details className="local-variables"><summary>Global variables ({variables.length})</summary>
+    <p>Saved on this hub and shared by every flow. Choose Global variables in a Trigger, Condition or Wait.</p>
+    <label>Variable<select value={id} onChange={e => select(e.target.value)}><option value="">Create a variable</option>{[...variables].sort((a,b) => a.name.localeCompare(b.name)).map(v => <option key={v.id} value={v.id}>{v.name} = {String(v.value)}</option>)}</select></label>
+    <label>Name<input value={name} onChange={e => setName(e.target.value)} maxLength={80} /></label>
+    <label>Type<select disabled={Boolean(id)} value={type} onChange={e => { setType(e.target.value); setValue(e.target.value === 'boolean' ? 'false' : e.target.value === 'number' ? '0' : '') }}><option value="boolean">Boolean</option><option value="number">Number</option><option value="text">Text</option></select></label>
+    <label>Value{type === 'boolean' ? <select value={value} onChange={e => setValue(e.target.value)}><option>false</option><option>true</option></select> : <input value={value} type={type === 'number' ? 'number' : 'text'} onChange={e => setValue(e.target.value)} />}</label>
+    {error && <p role="alert">{error}</p>}<button type="button" disabled={busy || !name.trim()} onClick={save}>{busy ? 'Saving…' : id ? 'Update variable' : 'Add variable'}</button>
+  </details>
+}
+
 function Inspector({ entities, node, nodeTestResult, onTestNode, services, updateNodeData }) {
   const data = node.data
   const selectedEntity = entities.find((entity) => entity.entity_id === data.entityId)
@@ -4716,6 +4857,9 @@ function Inspector({ entities, node, nodeTestResult, onTestNode, services, updat
         Label
         <input value={data.label ?? ''} onChange={(event) => updateNodeData({ label: event.target.value })} />
       </label>
+      {data.kind === 'voice' && <><label>Exact voice phrase<input value={data.phrase || ''} maxLength={100} onChange={e => updateNodeData({ phrase: e.target.value })} placeholder="Good night" /></label><p>Use a local Assist sentence automation to fire <code>haflow_voice</code> with <code>phrase: {data.phrase || 'Good night'}</code>. HAFlow matches saved, enabled flows only. No training or internet is required by HAFlow.</p><pre>{`triggers:\n  - trigger: conversation\n    command:\n      - "${String(data.phrase || 'Good night').replace(/["\\\n\r]/g, '')}"\nactions:\n  - event: haflow_voice\n    event_data:\n      phrase: "${String(data.phrase || 'Good night').replace(/["\\\n\r]/g, '')}"`}</pre></>}
+      {data.kind === 'variable' && <><label>Global variable<select value={data.variableId || ''} onChange={e => { const v = entities.find(item => item.entity_id === e.target.value); updateNodeData({ variableId: e.target.value, variableName: v?.friendlyName, variableValue: v?.state || '' }) }}><option value="">Choose a variable</option>{entities.filter(e => e.domain === 'haflow_variable').map(v => <option key={v.entity_id} value={v.entity_id}>{v.friendlyName}</option>)}</select></label><label>New value{entities.find(e => e.entity_id === data.variableId)?.attributes?.variable_type === 'boolean' ? <select value={String(data.variableValue ?? 'false')} onChange={e => updateNodeData({ variableValue: e.target.value })}><option>false</option><option>true</option></select> : <input value={data.variableValue ?? ''} onChange={e => updateNodeData({ variableValue: e.target.value })} />}</label></>}
+      {data.kind === 'condition' && <label>Compare against<select value={data.expectedVariableId || ''} onChange={e => updateNodeData({ expectedVariableId: e.target.value })}><option value="">Fixed value below</option>{entities.filter(e => e.domain === 'haflow_variable').map(v => <option key={v.entity_id} value={v.entity_id}>{v.friendlyName}</option>)}</select></label>}
       <button className="secondary-action inspector-test-button" disabled={nodeTestResult?.status === 'loading'} onClick={onTestNode} type="button">
         <SquarePlay size={16} />
         {nodeTestResult?.status === 'loading' ? 'Testing Selected Node' : 'Test Selected Node'}
@@ -5078,6 +5222,7 @@ function StateTriggerRulesEditor({ data, entities, updateNodeData }) {
       triggers: nextRules,
       entityId: selectedRules[0]?.entityId ?? '',
       deviceId: selectedRules[0]?.deviceId ?? '',
+      attribute: selectedRules[0]?.attribute || 'state',
       from: selectedRules[0]?.from ?? '',
       to: selectedRules[0]?.to ?? '',
       operator: selectedRules[0]?.operator ?? '',
@@ -5129,14 +5274,15 @@ function StateTriggerRulesEditor({ data, entities, updateNodeData }) {
       {editableRules.map((rule, index) => {
         const entity = entities.find((item) => item.entity_id === rule.entityId)
         const stateOptions = Array.from(new Set([...(ruleStateOptions[rule.entityId] ?? entity?.valueOptions ?? []), rule.from, rule.to].filter(Boolean)))
-        const numeric = isNumericEntity(entity)
+        const numeric = rule.attribute && rule.attribute !== 'state' ? isNumericValue(entity?.attributes?.[rule.attribute]) : isNumericEntity(entity)
 
         return (
           <div className="condition-rule" key={rule.id ?? `${rule.entityId}-${index}`}>
             <label className="condition-rule-entity">
-              Entity (choose from list or search and select from Entities below)
+              Device or global variable
               <EntityInput entities={entities} onChange={(entityId) => updateRule(index, { entityId, deviceId: '', from: '', to: '', operator: '', value: '', duration: '', durationUnit: 'minutes' })} placeholder="Select entity" value={isSelectableEntity(entity) ? rule.entityId : ''} />
             </label>
+            <label>Attribute<select value={rule.attribute || 'state'} onChange={e => updateRule(index, { attribute: e.target.value, from: '', to: '', operator: '', value: '' })}><option value="state">State</option>{Object.keys(entity?.attributes || {}).filter(key => !['friendly_name', 'icon'].includes(key)).sort().map(key => <option key={key} value={key}>{formatAttributeName(key)}</option>)}</select></label>
             <SelectedEntityChip
               entity={entity}
               entityId={rule.entityId}

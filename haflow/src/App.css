@@ -2701,3 +2701,34 @@ textarea:focus {
 .transfer-notice li { margin-bottom: 10px; }
 .transfer-notice code { overflow-wrap: anywhere; }
 .transfer-notice button { width: 100%; margin-top: 8px; min-height: 36px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; border: 1px solid #94a3b8; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+/* Local Flow parity: visible saves, touch targets and compact canvas tools. */
+.flow-save.dirty, .flow-save.error { background: #c62828 !important; color: white !important; border-color: #ef5350 !important; }
+.flow-save.saved { background: #146536 !important; color: white !important; }
+.flow-save { white-space: nowrap; }
+.toolbar-actions button.flow-save, .toolbar-actions button.text-action { width: auto; min-height: 38px; height: auto; display: inline-flex; gap: 6px; padding: 8px 10px; white-space: nowrap; }
+.toolbar-control-row { gap: 12px; flex-wrap: wrap; }
+.toolbar-title-row { flex-wrap: wrap; }
+.toolbar-title-row .flow-enabled-badge { flex: 0 0 auto; }
+.canvas-options button, .local-variables > button { display: inline-flex; align-items: center; gap: 5px; padding: 8px 10px; border: 1px solid #64748b; border-radius: 7px; color: inherit; background: transparent; cursor: pointer; }
+.canvas-options label { white-space: nowrap; }
+.toolbar { position: sticky; top: 0; z-index: 8; }
+.toolbar-actions { flex-wrap: wrap; }
+.flow-enabled-badge { color: #67efa0 !important; background: #13422c; border-radius: 20px; padding: 4px 9px; font-size: 12px; }
+.flow-enabled-badge.paused { color: #ffd38a !important; background: #503a1b; }
+.flow-enabled-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #36d47a; flex-shrink: 0; }
+.flow-enabled-dot.paused { background: #d99a38; }
+.local-flow-list { width: 100%; }
+.local-flow-list details { padding: 7px; border: 1px solid #64748b; border-radius: 8px; margin-bottom: 6px; }
+.local-flow-list summary { cursor: pointer; }
+.local-flow-list summary > span { margin-right: 6px; }
+.canvas-options { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; }
+.canvas-options > input { max-width: 260px; }
+.canvas-options label { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.canvas-options input[type=checkbox] { width: auto; }
+.canvas-options span { font-size: 11px; opacity: .8; }
+.local-variables { margin: 8px 0; padding: 10px; border: 1px solid #64748b; border-radius: 10px; }
+.local-variables label { display: grid; gap: 4px; margin: 8px 0; }
+.local-variables p { font-size: 12px; }
+.inspector pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
+.react-flow__handle { width: 20px !important; height: 20px !important; min-width: 20px; min-height: 20px; }
+@media (max-width: 800px) { .toolbar-control-row { flex-wrap: wrap; } .toolbar-actions button { min-height: 40px; } }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.69
+
+- Audit fixes: stale saves cannot overwrite newer edits during a flow switch; queued variable writes and in-flight waits honor cancellation; unavailable sensor attributes cannot fire holds; condition previews and AND checks use the same comparison logic as execution. Label/layout edits keep their hold timers, while functional edits discard stale callbacks. Set variable can finish a flow directly. Recovery snapshots run on demand rather than scanning all HA entities every 15 seconds.
+- Add local global Boolean, Number and Text variables, Set variable nodes, variable readings in the canvas and variable selection in Trigger, Condition and Wait nodes. Conditions can compare against another variable. Full backups include variable values and remap conflicting references on import without overwriting existing variables.
+- Add exact Voice trigger nodes through HA's local `haflow_voice` event and an optional local API. No Planner account, cloud service, LLM or speech training is required by HAFlow. An existing HA Assist conversation automation supplies the spoken phrase; recognition must itself use a local provider for completely offline operation.
+- Retriggers cancel overlapping automatic paths and wait for previous execution to stop; independent paths remain independent. Pausing or deleting a flow cancels its runs and pending holds even when another flow is open. Preserve the saved automatic runner setting across restarts.
+- Recover sustained numeric triggers after HA reconnects/app restarts with a fresh full hold interval, compare the selected attribute, retain holds across matching readings, and reject unavailable/empty numeric readings.
+- Add automatic device-list retries and browser reconnection, preserving the last catalog during loading. Add red pending/failed saves and green confirmed saves, ordered atomic file writes, and protection against showing newer unsaved changes as saved.
+- Keep Library/flow details initially collapsed, show Enabled/Paused beside names, add Recent runs jump, node search, larger connection targets, snap-to-grid, optional minimap, minimap node centering, optional follow-live mode, and Remove step, keep path for unbranched steps.
+- Existing flow IDs, entity references, app slug, paused states and data files are retained. No migration or reinstall is needed. Existing delays are not replayed after restart. No live-hub configuration is changed by this release.
+
 ## 0.1.68
 
 **Moving from the old HAFlow? Import your saved flows in this app.**

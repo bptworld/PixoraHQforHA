@@ -102,3 +102,20 @@ intent_script:
 Example spoken command:
 
 `make a flow when bathroom door closes, turn on vanity lights`
+# Local Voice trigger nodes (0.1.69)
+
+To start an existing flow, add a **Voice trigger**, enter an exact phrase such as
+**Good night**, save the flow and resume it. Copy the conversation automation from
+the node inspector into HA. It fires the local `haflow_voice` event with
+`phrase: Good night`. Say your satellite's wake word followed by the phrase.
+
+HAFlow requires no speech-training refresh or internet for these triggers. Use a
+local recognizer in HA Assist for completely offline speech. This does not change
+your satellite, wake word, TTS voice or existing Assist provider. Existing voice
+recipe creation endpoints below continue to work.
+
+For local integrations, `POST /api/voice/trigger` accepts `phrase` and a unique
+`requestId` (letters, numbers, underscore or hyphen, max 100 characters). A repeat
+request ID is ignored for the running app's bounded 24-hour deduplication window.
+It returns acceptance/match count, not proof that actions completed. Inspect
+Recent runs after uncertain results; never automatically retry a command.

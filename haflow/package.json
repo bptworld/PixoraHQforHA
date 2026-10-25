@@ -1,7 +1,7 @@
 {
   "name": "haflow",
   "private": true,
-  "version": "0.1.68",
+  "version": "0.1.69",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n server,client \"npm run server\" \"npm run client\"",
@@ -10,6 +10,7 @@
     "start": "node server/index.js",
     "build": "vite build",
     "lint": "oxlint",
+    "test": "node --test server/*.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

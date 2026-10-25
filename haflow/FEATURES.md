@@ -2,6 +2,17 @@
 
 HAFlow is a Home Assistant app for building and running flow-based automations.
 
+## Local Flow enhancements (0.1.69)
+
+- Global Boolean, Number and Text variables live on this HA hub. Open **Global variables** to add or edit them. Pick **Global variables** in the entity picker for Trigger, Condition or Wait nodes. Use **Set variable** to change one; a Condition can read another variable as its expected value.
+- **Voice trigger** stores an exact phrase. Its inspector provides a local Assist conversation automation that fires `haflow_voice` with `phrase`. Saved, unpaused flows match that event without an account, internet request or training. Completely offline speech also requires a local HA speech recognizer. Wake-word and speech settings stay in HA.
+- Saved holds survive ordinary matching readings and are re-established after app/HA reconnects using a full new interval. Unknown/unavailable/empty readings never become zero. HAFlow does not replay old device commands or resume interrupted delays after a restart.
+- Retriggers replace overlapping automatic paths; independent paths keep running. An action already sent cannot be recalled. Pausing/deleting a flow or disabling the runner stops future automatic steps and clears pending holds.
+- The editor retries catalog loading and reconnects after a browser disconnect. Save stays visible and turns red for pending/failed edits and green only after confirmation. Autosave remains available and preserves enabled/paused state.
+- Flow lists/details open collapsed, Enabled/Paused is visible beside names, Recent runs has a jump button, and the canvas adds Find, snap-to-grid, optional minimap/follow-live, clickable minimap nodes, larger connection dots and removal of unbranched steps while keeping their path.
+- **Export Backup** includes global variables. Import validates types, keeps existing variables/flows, remaps conflicting variable IDs and imports paused copies. Use full backups when moving flows that reference variables to another hub; old single-flow exports remain supported.
+- Planner, Locator, shared accounts, cloud AI and cloud-only integrations are not added to HAFlow.
+
 ## Core App
 
 - Runs as a Home Assistant app through the Home Assistant Apps interface.
