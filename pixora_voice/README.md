@@ -1,3 +1,5 @@
+**Voice and Assist now update together automatically. Updating this app may restart Home Assistant once and Speech-to-Phrase once; no separate Assist update step is required. Repair tools are optional.**
+
 # Pixora Voice — local Home Assistant app
 
 An initial implementation of a standalone hub app and native Assist conversation
@@ -173,3 +175,6 @@ Voice: “Why is the heat off?”, “What is the thermostat status?”, “How 
 ### Refresh Voice triggers from Flows
 Save and enable Voice triggers in Flows. A Voice phrases changed prompt appears in the library/editor when saved enabled phrases or global variable names differ from the last confirmed Flows refresh. Select Refresh Voice triggers there; this uses the existing paired Home Control app and restarts Speech-to-Phrase once. Wait for training to finish. Removing/pausing phrases also prompts a refresh. Uncertain refreshes are never automatically retried. The manual refresh in this Voice app remains available for maintenance.
 Update this app, install/update Assist in Setup & maintenance, and restart HA once to make the refresh service available. No new pairing or login is needed.
+
+### Automatic Voice and Assist updates
+Updating Voice also updates its recognized Assist integration automatically. Existing settings are preserved and previous integration files are backed up. When necessary, the app requests one Home Assistant restart to load the code, then refreshes the owned local speech phrases and requests one Speech-to-Phrase restart. Expect a brief interruption to HA automations during the HA restart. Ordinary app starts do not restart HA again. Restart requests are journaled before sending and uncertain results are never blindly repeated. Unknown integration folders and user-owned phrase files are preserved with a maintenance notice. First-time users still add Pixora Voice under Devices & services and choose their voice pipeline; this does not change an existing pipeline or voice.

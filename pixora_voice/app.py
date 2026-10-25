@@ -1,9 +1,9 @@
 """HA ingress app. All home interpretation runs in the native local Assist agent."""
-import asyncio,json,os,shutil,tempfile,time
+import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.12'
+VERSION='0.1.13'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -33,6 +33,82 @@ def install_component(config_root,data_root):
         else:stage.rename(target)
     finally:
         if stage.exists():shutil.rmtree(stage)
+
+
+def prepare_integration_update(config_root, data_root, phrase_file=None):
+    """Update only our recognized component; journal a restart before issuing it."""
+    from planner_phrases import write_owned
+    journal = data_root / 'integration-update.json'
+    record = json.loads(journal.read_text()) if journal.exists() else {}
+    if not isinstance(record, dict):raise ValueError('Integration update record needs attention.')
+    manifest = config_root / 'custom_components/pixora_voice/manifest.json'
+    exists = manifest.exists()
+    installed = json.loads(manifest.read_text()) if exists else {}
+    if not isinstance(installed,dict) or exists and (installed.get('domain')!='pixora_voice' or installed.get('codeowners')!=['@bptworld']):raise ValueError('An unrecognized Assist folder was preserved; automatic update stopped.')
+    if installed.get('version') == VERSION:
+        if record.get('version') == VERSION and record.get('phase') == 'prepared':
+            if record.get('speechNeeded'):
+                if not phrase_file:raise ValueError('Speech phrase recovery needs its saved destination.')
+                from planner_phrases import update_local_phrases
+                update_local_phrases(phrase_file)
+            record['phase'] = 'installed'
+            write_owned(journal, json.dumps(record))
+        return record if record.get('version') == VERSION and record.get('phase') != 'complete' else None
+    record = {'version': VERSION, 'phase': 'prepared', 'needRestart': exists, 'speechNeeded': bool(phrase_file)}
+    write_owned(journal, json.dumps(record))
+    install_component(config_root, data_root)
+    if phrase_file:
+        from planner_phrases import update_local_phrases
+        update_local_phrases(phrase_file)
+    record['phase'] = 'installed'
+    write_owned(journal, json.dumps(record))
+    return record
+
+async def finish_integration_update(record, config_root, data_root, ha, notice, sleep=asyncio.sleep):
+    try:
+        await _finish_integration_update(record, config_root, data_root, ha, notice, sleep)
+    except (OSError, ValueError, TypeError, KeyError):
+        logging.getLogger(__name__).warning('Automatic Voice update paused: local files could not be saved or verified. No restart replay.')
+        notice.update(message='Automatic update paused because its local files could not be saved or verified. No restart was repeated. Check storage and the Voice app logs.', pending=False)
+
+async def _finish_integration_update(record, config_root, data_root, ha, notice, sleep=asyncio.sleep):
+    from planner_phrases import write_owned
+    journal = data_root / 'integration-update.json'
+    def save(phase):
+        record['phase'] = phase
+        write_owned(journal, json.dumps(record))
+    # Reads may recover from startup. The restart command is issued at most once.
+    for _ in range(45):
+        try:
+            states = await ha('states')
+            agents = [s for s in states if s.get('entity_id','').startswith('conversation.') and s.get('attributes',{}).get('friendly_name') in {'Pixora Voice','Pixora Voice (Beta)'}]
+            if any(s.get('attributes',{}).get('pixora_voice_version') == VERSION for s in agents):
+                if record.get('speechNeeded'):
+                    if record['phase'] in {'speech-restart-requested','speech-uncertain'}:
+                        notice.update(message='Voice and Assist are updated. Speech restart was not confirmed and was not repeated; check Speech-to-Phrase.',pending=False)
+                        return
+                    await asyncio.to_thread(save,'speech-restart-requested')
+                    try:await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
+                    except (ValueError,ClientError,asyncio.TimeoutError):
+                        await asyncio.to_thread(save,'speech-uncertain')
+                        notice.update(message='Voice and Assist are updated. Speech restart was not confirmed and was not repeated; check Speech-to-Phrase.',pending=False)
+                        return
+                await asyncio.to_thread(save, 'complete')
+                notice.update(message='Voice and Assist are up to date.', pending=False)
+                return
+            if not record.get('needRestart') and not agents:
+                await asyncio.to_thread(save, 'complete')
+                notice.update(message='Assist files installed automatically. Add Pixora Voice in Devices & services for first-time setup.', pending=False)
+                return
+            if record['phase'] in {'prepared','installed'}:
+                await asyncio.to_thread(save, 'restart-requested')
+                notice.update(message='Assist updated automatically. Home Assistant is restarting once to load it.', pending=True)
+                try:await ha('services/homeassistant/restart', {})
+                except (ValueError,ClientError,asyncio.TimeoutError):pass
+        except (ValueError,ClientError,asyncio.TimeoutError):
+            pass
+        await sleep(2)
+    notice.update(message='Assist files are updated, but loading could not be confirmed. The HA restart was not repeated; check Home Assistant logs.', pending=False)
 
 
 def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
@@ -77,7 +153,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
     async def status(request):
         try:available=await agents();error=''
         except (ValueError,asyncio.TimeoutError,ClientError):available=[];error='Home Assistant is reconnecting. Try again shortly.'
-        return web.json_response({'version':VERSION,'agents':available,'installed':(config_root/'custom_components/pixora_voice/manifest.json').exists(),'notice':error})
+        return web.json_response({'maintenance':app.get('maintenance',{}),'version':VERSION,'agents':available,'installed':(config_root/'custom_components/pixora_voice/manifest.json').exists(),'notice':error})
     from planner_phrases import write_owned,update_phrases,update_local_phrases
     planner_file=config_root/'.storage'/'pixora_voice_planner.json'
     phrase_file=Path('/share/speech-to-phrase/custom_sentences/en/pixora_voice_planner.yaml')
@@ -150,8 +226,22 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             return web.json_response({'speech':speech,'conversation_id':result.get('service_response',{}).get('conversation_id')})
         except (ValueError,asyncio.TimeoutError,ClientError) as exc:
             return web.json_response({'error':str(exc) if isinstance(exc,ValueError) else 'The request timed out. It was not retried; check any device you asked to control.'},status=503)
-    async def startup(app):app['session']=ClientSession(timeout=ClientTimeout(total=20))
-    async def cleanup(app):await app['session'].close()
+    async def startup(app):
+        app['session']=ClientSession(timeout=ClientTimeout(total=20))
+        app['maintenance']={'message':'Voice and Assist update together automatically.', 'pending':False}
+        try:
+            record=await asyncio.to_thread(prepare_integration_update,config_root,data_root,phrase_file.with_name('pixora_voice_language.yaml'))
+            if record:
+                app['maintenance'].update(message='Updating Assist automatically…',pending=True)
+                app['update_task']=asyncio.create_task(finish_integration_update(record,config_root,data_root,ha,app['maintenance']))
+        except (ValueError,OSError,TypeError) as exc:
+            app['maintenance'].update(message='Automatic Assist update needs attention: '+str(exc)[:180],pending=False)
+    async def cleanup(app):
+        task=app.get('update_task')
+        if task:
+            task.cancel()
+            await asyncio.gather(task,return_exceptions=True)
+        await app['session'].close()
     app.on_startup.append(startup);app.on_cleanup.append(cleanup)
     app.router.add_get('/',index);app.router.add_get('/icon.svg',icon);app.router.add_get('/api/status',status)
     app.router.add_get('/api/planner',planner_settings);app.router.add_post('/api/planner',planner_settings);app.router.add_post('/api/planner/refresh',refresh_planner)

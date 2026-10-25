@@ -1,5 +1,7 @@
 """Assist adapter: fresh HA state, exposure, user permissions and satellite areas."""
-import asyncio,re
+import asyncio,re,json
+from pathlib import Path
+INTEGRATION_VERSION=json.loads(Path(__file__).with_name("manifest.json").read_text())["version"]
 from homeassistant.components import conversation
 from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.auth.permissions.const import POLICY_READ,POLICY_CONTROL
@@ -16,6 +18,7 @@ async def async_setup_entry(hass,entry,async_add_entities):
 class LocalVoice(conversation.ConversationEntity):
     _attr_name='Pixora Voice (Beta)'
     _attr_has_entity_name=True
+    _attr_extra_state_attributes={'pixora_voice_version':INTEGRATION_VERSION}
     _attr_supported_features=conversation.ConversationEntityFeature.CONTROL
 
     def __init__(self,entry):

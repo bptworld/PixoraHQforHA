@@ -31,10 +31,15 @@ class FlowRefreshServiceTests(unittest.IsolatedAsyncioTestCase):
   core=types.ModuleType('homeassistant.core');core.SupportsResponse=types.SimpleNamespace(ONLY='only')
   handlers={}
   services=types.SimpleNamespace(has_service=lambda *args:False,async_register=lambda domain,name,fn,**kw:handlers.update({name:fn}),async_call=AsyncMock())
-  hass=types.SimpleNamespace(data={},services=services,config=types.SimpleNamespace(path=lambda *parts:str(Path('D:/planner/.build-tmp')/Path(*parts))))
+  tasks=[];progress=[]
+  hass=types.SimpleNamespace(data={},services=services,states=types.SimpleNamespace(async_set=lambda *args:progress.append(args)),async_create_task=lambda coro:tasks.append(coro),config=types.SimpleNamespace(path=lambda *parts:str(Path('D:/planner/.build-tmp')/Path(*parts))))
   with patch.dict(sys.modules,{'homeassistant.core':core,'custom_components.pixora_voice.phrase_tools':tools}),patch.object(flows,'ask',AsyncMock(return_value=json.dumps({'phrases':['Good night'],'variables':['isDark']}))):
    flows.install_services(hass)
    await handlers['refresh_flow_phrases'](types.SimpleNamespace(data={'phrases':['Good night'],'variables':['isDark']}))
+   self.assertTrue(hass.data['pixora_voice']['flow_refresh_busy'])
+   services.async_call.assert_not_awaited()
+   await tasks[0]
+   self.assertEqual([item[1] for item in progress],['restarting','complete'])
    flows.ask.assert_not_awaited()
    self.assertEqual(len(writes),2)
    services.async_call.assert_awaited_once_with('hassio','addon_restart',{'addon':'core_speech-to-phrase'},blocking=True)

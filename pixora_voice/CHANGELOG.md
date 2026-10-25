@@ -1,3 +1,8 @@
+## 0.1.13
+- Voice app updates now install/update the owned Assist integration automatically, keep a backup, restart HA once when needed and prepare local speech phrases. No separate integration update action is required. Unknown folders are preserved and uncertain restarts are never repeated.
+- Return immediately after saving Flow vocabulary and accepting one speech restart. Report restart progress separately so the paired connector timeout cannot report a successful refresh as a failure.
+- Update Assist and restart HA once to load this change. No automatic restart retry.
+
 ## 0.1.12
 - Add a local refresh service so the Flows editor can request Voice trigger training through the existing paired Home Control connector. Update Assist and restart HA once to enable this service.
 - No extra login, polling service or automatic speech restarts.
