@@ -33,3 +33,7 @@ refresh_flow_phrases:
       required: true
       selector:
         object:
+
+speech_ready:
+  name: Read local speech readiness
+  description: Read only. Check the running speech app and its latest training completion, without returning logs or restarting anything.

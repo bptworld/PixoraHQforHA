@@ -39,12 +39,13 @@ class AutomaticUpdateTests(unittest.IsolatedAsyncioTestCase):
     nonlocal loaded
     if body is not None:
      calls.append((path,body))
+     if path=='services/pixora_voice/speech_ready?return_response':return {'service_response':{'ready':True,'generation':'new' if any(c[0]=='services/hassio/addon_restart' for c in calls) else 'old'}}
      if path=='services/homeassistant/restart':loaded=True
      return []
     return [{'entity_id':'conversation.pixora_voice_beta','attributes':{'friendly_name':'Pixora Voice (Beta)','pixora_voice_version':VERSION if loaded else '0.1.6'}}]
    notice={}
    await finish_integration_update(record,config,data,ha,notice,sleep=AsyncMock())
-   self.assertEqual([c[0] for c in calls],['services/homeassistant/restart','services/hassio/addon_restart'])
+   self.assertEqual([c[0] for c in calls],['services/homeassistant/restart','services/pixora_voice/speech_ready?return_response','services/hassio/addon_restart','services/pixora_voice/speech_ready?return_response'])
    self.assertIsNone(prepare_integration_update(config,data,root/'phrases.yaml'))
    self.assertFalse(notice['pending'])
 
@@ -96,3 +97,14 @@ class AutomaticRecoveryTests(unittest.IsolatedAsyncioTestCase):
    self.assertFalse(notice['pending'])
    self.assertIn('paused',notice['message'])
    self.assertTrue(all(call.args==('states',) for call in ha.await_args_list))
+
+class UnchangedUpdateTests(unittest.TestCase):
+ def test_new_code_with_same_language_does_not_retrain_speech(self):
+  from planner_phrases import update_local_phrases
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);config=root/'config';data=root/'data';install_component(config,data)
+   manifest=config/'custom_components/pixora_voice/manifest.json';value=json.loads(manifest.read_text());value['version']='0.1.6';manifest.write_text(json.dumps(value))
+   phrases=root/'language.yaml';update_local_phrases(phrases)
+   record=prepare_integration_update(config,data,phrases)
+   self.assertTrue(record['needRestart'])
+   self.assertFalse(record['speechNeeded'])

@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.13'
+VERSION='0.1.14'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -54,7 +54,9 @@ def prepare_integration_update(config_root, data_root, phrase_file=None):
             record['phase'] = 'installed'
             write_owned(journal, json.dumps(record))
         return record if record.get('version') == VERSION and record.get('phase') != 'complete' else None
-    record = {'version': VERSION, 'phase': 'prepared', 'needRestart': exists, 'speechNeeded': bool(phrase_file)}
+    from planner_phrases import update_local_phrases
+    speech_changed = update_local_phrases(phrase_file,check_only=True) if phrase_file else False
+    record = {'version': VERSION, 'phase': 'prepared', 'needRestart': exists, 'speechNeeded': speech_changed}
     write_owned(journal, json.dumps(record))
     install_component(config_root, data_root)
     if phrase_file:
@@ -87,14 +89,30 @@ async def _finish_integration_update(record, config_root, data_root, ha, notice,
                     if record['phase'] in {'speech-restart-requested','speech-uncertain'}:
                         notice.update(message='Voice and Assist are updated. Speech restart was not confirmed and was not repeated; check Speech-to-Phrase.',pending=False)
                         return
+                    baseline=await ha('services/pixora_voice/speech_ready?return_response',{})
+                    record['speechPrevious']=baseline.get('service_response',{}).get('generation')
+                    if not record['speechPrevious']:
+                        notice.update(message='Assist updated, but speech readiness could not be verified. No speech restart was sent; check Speech-to-Phrase.',pending=False)
+                        return
                     await asyncio.to_thread(save,'speech-restart-requested')
                     try:await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
                     except (ValueError,ClientError,asyncio.TimeoutError):
                         await asyncio.to_thread(save,'speech-uncertain')
                         notice.update(message='Voice and Assist are updated. Speech restart was not confirmed and was not repeated; check Speech-to-Phrase.',pending=False)
                         return
+                if record.get('speechNeeded'):
+                    notice.update(message='Speech phrases are training. Waiting until your local voice service is ready.',pending=True)
+                    for _ in range(60):
+                        try:
+                            result=await ha('services/pixora_voice/speech_ready?return_response',{})
+                            if result.get('service_response',{}).get('ready') is True and result.get('service_response',{}).get('generation') != record.get('speechPrevious'):break
+                        except (ValueError,ClientError,asyncio.TimeoutError):pass
+                        await sleep(2)
+                    else:
+                        notice.update(message='Voice and Assist are updated, but speech readiness is not confirmed. No restart was repeated; check Speech-to-Phrase.',pending=False)
+                        return
                 await asyncio.to_thread(save, 'complete')
-                notice.update(message='Voice and Assist are up to date.', pending=False)
+                notice.update(message='Ready. Voice and Assist are up to date.', pending=False)
                 return
             if not record.get('needRestart') and not agents:
                 await asyncio.to_thread(save, 'complete')
@@ -165,7 +183,8 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         result=await ha('services/pixora_voice/planner_vocabulary?return_response',{})
         vocabulary=result.get('service_response',{})
         if vocabulary.get('available') is not True:raise ValueError('Planner did not respond. Check that the paired Pixora Home Control app and the updated Assist integration are running.')
-        await asyncio.to_thread(update_phrases,phrase_file,vocabulary)
+        changed=await asyncio.to_thread(update_phrases,phrase_file,vocabulary)
+        if changed is False:return 'Planner speech phrases are unchanged. No training was needed.'
         try:await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
         except (ValueError,asyncio.TimeoutError,ClientError):return 'Planner is connected and its spoken phrases are saved. Speech-to-Phrase restart could not be confirmed; check its status before trying a spoken Planner question. The restart was not retried.'
         return 'Planner is connected. Speech-to-Phrase is restarting to learn your household names and teams; spoken requests will be available after training finishes.'
@@ -194,8 +213,9 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             vocabulary=result.get('service_response',{})
             if vocabulary.get('available') is not True:raise ValueError('Flows did not respond. Check the paired Home Control app and updated Assist integration.')
             values=vocabulary.get('phrases',[])
-            await asyncio.to_thread(update_voice_phrases,phrase_file.with_name('pixora_voice_flows.yaml'),values,vocabulary.get('variables',[]))
+            changed=await asyncio.to_thread(update_voice_phrases,phrase_file.with_name('pixora_voice_flows.yaml'),values,vocabulary.get('variables',[]))
             await asyncio.to_thread(write_owned,config_root/'.storage'/'pixora_voice_flows.json',json.dumps(values))
+            if changed is False:return web.json_response({'message':'Voice phrases are unchanged. No training was needed.'})
             await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
             return web.json_response({'message':str(len(values))+' voice trigger phrases saved. Speech-to-Phrase is restarting to learn them. Wait for training before speaking.'})
         except (ValueError,OSError,asyncio.TimeoutError,ClientError):
@@ -206,7 +226,8 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         return web.json_response({'message':'Assist integration installed. Restart Home Assistant once, add Pixora Voice under Settings → Devices & services, then select it in your local voice assistant.'})
     async def local_phrases(request):
         try:
-            await asyncio.to_thread(update_local_phrases,phrase_file.with_name('pixora_voice_language.yaml'))
+            changed=await asyncio.to_thread(update_local_phrases,phrase_file.with_name('pixora_voice_language.yaml'))
+            if changed is False:return web.json_response({'message':'Local speech phrases are unchanged. No training was needed.'})
             await ha('services/hassio/addon_restart',{'addon':'core_speech-to-phrase'})
             return web.json_response({'message':'Conversation phrases saved. Speech-to-Phrase is restarting; wait for its training to finish before testing spoken follow-ups.'})
         except (ValueError,OSError,asyncio.TimeoutError,ClientError):

@@ -1,6 +1,7 @@
 """Explicit, exact voice phrases; Flow execution stays on the existing server."""
 import asyncio,json,re,secrets,time,hashlib,logging
 from pathlib import Path
+from aiohttp import ClientError
 from homeassistant.exceptions import HomeAssistantError
 DOMAIN='pixora_voice'
 
@@ -45,22 +46,31 @@ def install_services(hass):
   try:
    value=getattr(call,'data',None)
    if not isinstance(value,dict) or not isinstance(value.get('phrases'),list) or not isinstance(value.get('variables'),list):raise HomeAssistantError('Choose saved Flow phrases before refreshing speech training.')
-   from .phrase_tools import update_voice_phrases,write_owned
+   from .phrase_tools import update_voice_phrases,write_owned,vocabulary_signature
    path=Path('/share/speech-to-phrase/custom_sentences/en/pixora_voice_flows.yaml')
-   await asyncio.to_thread(update_voice_phrases,path,value.get('phrases',[]),value.get('variables',[]))
+   changed=await asyncio.to_thread(update_voice_phrases,path,value.get('phrases',[]),value.get('variables',[]))
    await asyncio.to_thread(write_owned,Path(hass.config.path('.storage','pixora_voice_flows.json')),json.dumps(value.get('phrases',[])))
-   signature=hashlib.sha256(json.dumps({'phrases':sorted(value['phrases']),'variables':sorted(value['variables'])},sort_keys=True).encode()).hexdigest()
+   signature=vocabulary_signature(value['phrases'],value['variables'])
    def progress(status):
     hass.states.async_set('sensor.pixora_voice_training',status,{'friendly_name':'Pixora Voice training','signature':signature,'updated_at':time.time()})
+   if changed is False:
+    progress('unchanged')
+    state['flow_refresh_busy']=False
+    return
    progress('restarting')
    async def restart():
     try:
+     from .speech_training import read_status,wait_ready
+     try:
+      baseline=(await read_status(hass)).get('generation');can_verify=True
+     except (RuntimeError,ValueError,OSError,KeyError,ClientError,asyncio.TimeoutError):baseline=None;can_verify=False
      await hass.services.async_call('hassio','addon_restart',{'addon':'core_speech-to-phrase'},blocking=True)
-     progress('complete')
+     progress('training')
+     progress('complete' if can_verify and await wait_ready(hass,previous=baseline) else 'failed')
     except asyncio.CancelledError:
      progress('failed')
      raise
-    except (HomeAssistantError,ValueError,OSError,asyncio.TimeoutError):
+    except (HomeAssistantError,ValueError,OSError,ClientError,asyncio.TimeoutError):
      progress('failed')
      logging.getLogger(__name__).warning('Speech restart was not confirmed. No automatic retry.')
     finally:state['flow_refresh_busy']=False
@@ -68,7 +78,12 @@ def install_services(hass):
   except (ValueError,OSError,asyncio.TimeoutError,HomeAssistantError):
    state['flow_refresh_busy']=False
    raise HomeAssistantError('Voice refresh could not be confirmed. Check Pixora Voice and Speech-to-Phrase before trying again.')
+ async def speech_ready(call):
+  from .speech_training import read_status
+  try:return await read_status(hass)
+  except (RuntimeError,ValueError,OSError,KeyError,ClientError,asyncio.TimeoutError):return {'ready':False}
  from homeassistant.core import SupportsResponse
+ if not hass.services.has_service(DOMAIN,'speech_ready'):hass.services.async_register(DOMAIN,'speech_ready',speech_ready,supports_response=SupportsResponse.ONLY)
  if not hass.services.has_service(DOMAIN,'refresh_flow_phrases'):hass.services.async_register(DOMAIN,'refresh_flow_phrases',refresh)
  if not hass.services.has_service(DOMAIN,'flow_reply'):hass.services.async_register(DOMAIN,'flow_reply',receive)
  if not hass.services.has_service(DOMAIN,'flow_vocabulary'):hass.services.async_register(DOMAIN,'flow_vocabulary',vocabulary,supports_response=SupportsResponse.ONLY)

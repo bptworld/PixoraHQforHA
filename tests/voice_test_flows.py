@@ -26,6 +26,8 @@ class FlowRefreshServiceTests(unittest.IsolatedAsyncioTestCase):
   from unittest.mock import AsyncMock,patch
   flows=importlib.import_module('custom_components.pixora_voice.flows')
   tools=types.ModuleType('custom_components.pixora_voice.phrase_tools')
+  from planner_phrases import vocabulary_signature
+  tools.vocabulary_signature=vocabulary_signature
   writes=[];tools.update_voice_phrases=lambda *args:writes.append(('phrases',args))
   tools.write_owned=lambda *args:writes.append(('names',args))
   core=types.ModuleType('homeassistant.core');core.SupportsResponse=types.SimpleNamespace(ONLY='only')
@@ -33,13 +35,13 @@ class FlowRefreshServiceTests(unittest.IsolatedAsyncioTestCase):
   services=types.SimpleNamespace(has_service=lambda *args:False,async_register=lambda domain,name,fn,**kw:handlers.update({name:fn}),async_call=AsyncMock())
   tasks=[];progress=[]
   hass=types.SimpleNamespace(data={},services=services,states=types.SimpleNamespace(async_set=lambda *args:progress.append(args)),async_create_task=lambda coro:tasks.append(coro),config=types.SimpleNamespace(path=lambda *parts:str(Path('D:/planner/.build-tmp')/Path(*parts))))
-  with patch.dict(sys.modules,{'homeassistant.core':core,'custom_components.pixora_voice.phrase_tools':tools}),patch.object(flows,'ask',AsyncMock(return_value=json.dumps({'phrases':['Good night'],'variables':['isDark']}))):
+  with patch.dict(sys.modules,{'homeassistant.core':core,'custom_components.pixora_voice.phrase_tools':tools}),patch.object(flows,'ask',AsyncMock(return_value=json.dumps({'phrases':['Good night'],'variables':['isDark']}))),patch('custom_components.pixora_voice.speech_training.wait_ready',AsyncMock(return_value=True)),patch('custom_components.pixora_voice.speech_training.read_status',AsyncMock(return_value={'ready':True,'generation':'old'})):
    flows.install_services(hass)
    await handlers['refresh_flow_phrases'](types.SimpleNamespace(data={'phrases':['Good night'],'variables':['isDark']}))
    self.assertTrue(hass.data['pixora_voice']['flow_refresh_busy'])
    services.async_call.assert_not_awaited()
    await tasks[0]
-   self.assertEqual([item[1] for item in progress],['restarting','complete'])
+   self.assertEqual([item[1] for item in progress],['restarting','training','complete'])
    flows.ask.assert_not_awaited()
    self.assertEqual(len(writes),2)
    services.async_call.assert_awaited_once_with('hassio','addon_restart',{'addon':'core_speech-to-phrase'},blocking=True)
@@ -49,3 +51,20 @@ class FlowRefreshServiceTests(unittest.IsolatedAsyncioTestCase):
     await handlers['refresh_flow_phrases'](types.SimpleNamespace(context=types.SimpleNamespace(user_id='reader'),data={'phrases':['Good night'],'variables':[]}))
    self.assertEqual(len(writes),2)
    self.assertEqual(services.async_call.await_count,1)
+   tools.update_voice_phrases=lambda *args:False
+   await handlers['refresh_flow_phrases'](types.SimpleNamespace(data={'phrases':['Good night'],'variables':['isDark']}))
+   self.assertEqual(progress[-1][1],'unchanged')
+   self.assertEqual(len(tasks),1)
+   self.assertEqual(services.async_call.await_count,1)
+
+class UnchangedGrammarTests(unittest.TestCase):
+ def test_equivalent_flow_phrases_skip_write_and_training(self):
+  from planner_phrases import update_voice_phrases,vocabulary_signature
+  with tempfile.TemporaryDirectory() as d:
+   path=Path(d)/'flows.yaml'
+   self.assertTrue(update_voice_phrases(path,['Good night','Movie time'],['isDark','isHome']))
+   before=path.stat().st_mtime_ns
+   self.assertFalse(update_voice_phrases(path,['MOVIE TIME!','good night.'],['isHome','isDark']))
+   self.assertEqual(path.stat().st_mtime_ns,before)
+   self.assertEqual(vocabulary_signature(['Good night!'],['isDark']),vocabulary_signature(['GOOD NIGHT'],['isDark']))
+   self.assertTrue(update_voice_phrases(path,['Good morning'],['isDark']))

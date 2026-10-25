@@ -38,3 +38,15 @@ class BridgeTests(unittest.IsolatedAsyncioTestCase):
         hass.bus.async_fire = lambda *args: None
         with patch.object(bridge.asyncio, "wait_for", timeout):
             self.assertIn("haven't sent a direct", await bridge.route(hass, command))
+
+class SpeechReadinessTests(unittest.IsolatedAsyncioTestCase):
+ async def test_startup_ready_is_not_finished_training(self):
+  import importlib.util
+  spec=importlib.util.spec_from_file_location('speech_readiness',Path(__file__).resolve().parents[1]/'pixora_voice/custom_components/pixora_voice/speech_training.py')
+  module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  self.assertFalse(module.logs_ready('old Finished training: en\nINFO:root: Ready\nStarted training: en'))
+  self.assertTrue(module.logs_ready('INFO:root: Ready\nStarted training: en\nFinished training: en'))
+  values=iter([{'ready':True,'generation':'old'},{'ready':False,'generation':'old'},{'ready':True,'generation':'new'}])
+  async def read(hass):return next(values)
+  from unittest.mock import AsyncMock
+  self.assertTrue(await module.wait_ready(None,read=read,sleep=AsyncMock(),previous='old'))

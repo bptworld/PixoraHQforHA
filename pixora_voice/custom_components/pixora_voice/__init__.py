@@ -16,5 +16,5 @@ async def async_unload_entry(hass,entry):
             if not future.done():future.cancel()
         for future in hass.data.get('pixora_voice',{}).get('flow_pending',{}).values():
             if not future.done():future.cancel()
-        for service in ('planner_reply','planner_vocabulary','flow_reply','flow_vocabulary','refresh_flow_phrases'):hass.services.async_remove('pixora_voice',service)
+        for service in ('planner_reply','planner_vocabulary','flow_reply','flow_vocabulary','refresh_flow_phrases','speech_ready'):hass.services.async_remove('pixora_voice',service)
     return unloaded

@@ -1,3 +1,7 @@
+## 0.1.14
+- Show Restarting, Training and Ready separately. Ready requires a fresh training completion from the running local speech service; bounded checks never repeat the restart.
+- Compare generated speech vocabulary before writing or requesting training. Repeated refreshes and unchanged app updates do not restart Speech-to-Phrase. Ignore phrase ordering, capitalization and punctuation changes that produce the same spoken vocabulary.
+
 ## 0.1.13
 - Voice app updates now install/update the owned Assist integration automatically, keep a backup, restart HA once when needed and prepare local speech phrases. No separate integration update action is required. Unknown folders are preserved and uncertain restarts are never repeated.
 - Return immediately after saving Flow vocabulary and accepting one speech restart. Report restart progress separately so the paired connector timeout cannot report a successful refresh as a failure.
