@@ -14,10 +14,33 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]/'pixora_voice'
 sys.path.insert(0,str(ROOT))
-from speech_settings import read_settings,save_settings,public_settings
+from speech_settings import read_settings,save_settings,public_settings,read_stats,record_usage
 
 
 class SettingsTests(unittest.TestCase):
+    def test_usage_counts_and_provider_headers_are_private_and_scoped_to_key(self):
+        with tempfile.TemporaryDirectory() as folder:
+            key='gsk_'+'fake_for_test_'*3
+            record_usage(folder,key,3.25,200,True,{'x-ratelimit-remaining-requests':'1999','x-ratelimit-limit-requests':'2000','x-ratelimit-reset-requests':'2h4m','authorization':key,'transcript':'private'},'UTC')
+            record_usage(folder,key,2.0,429,False,{'retry-after':'17','x-ratelimit-remaining-requests':'0'},'UTC')
+            stats=read_stats(folder,key)
+            self.assertEqual((stats['requests'],stats['successful'],stats['failed'],stats['audio_seconds']),(2,1,1,5.25))
+            self.assertEqual(stats['last_status'],429);self.assertEqual(stats['quota']['retry_after'],'17')
+            self.assertEqual(stats['quota']['remaining_requests'],'0')
+            self.assertNotIn(key,json.dumps(stats));self.assertNotIn('private',json.dumps(stats));self.assertNotIn('key_id',stats)
+            self.assertEqual(read_stats(folder,'another_key')['requests'],0)
+
+    def test_usage_rolls_over_local_day_and_never_returns_unknown_fields(self):
+        with tempfile.TemporaryDirectory() as folder:
+            key='gsk_'+'fake_for_test_'*3
+            record_usage(folder,key,1,None,False,{},'America/New_York')
+            path=Path(folder)/'.storage/pixora_voice_speech_stats.json'
+            value=json.loads(path.read_text());value['day']='2000-01-01';value['secret']='private';path.write_text(json.dumps(value))
+            self.assertEqual(read_stats(folder,key)['requests'],0)
+            self.assertEqual(read_stats(folder,key)['quota'],{})
+            record_usage(folder,key,2,200,True,{},'America/New_York')
+            self.assertEqual(read_stats(folder,key)['requests'],1)
+            self.assertEqual(read_stats(folder,key)['timezone'],'America/New_York')
     def test_retire_only_owned_phrases_and_keep_verified_recovery(self):
         from planner_phrases import MARKER,retire_phrase_files
         with tempfile.TemporaryDirectory() as folder:
@@ -90,6 +113,8 @@ class SpeechTests(unittest.IsolatedAsyncioTestCase):
         url=self.calls[0][0][0];kw=self.calls[0][1]
         self.assertEqual(url,'https://api.groq.com/openai/v1/audio/transcriptions')
         self.assertFalse(kw['allow_redirects'])
+        stats=read_stats(self.tmp.name,'gsk_'+'fake_for_test_'*3)
+        self.assertEqual(stats['requests'],1);self.assertEqual(stats['successful'],1)
         with wave.open(io.BytesIO(self.stt.wav_audio(b'\0\0'*100)),'rb') as wav:
             self.assertEqual((wav.getnchannels(),wav.getsampwidth(),wav.getframerate()),(1,2,16000))
 

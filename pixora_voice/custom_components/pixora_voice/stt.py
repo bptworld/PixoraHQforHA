@@ -8,7 +8,7 @@ from aiohttp import ClientError, ClientTimeout, FormData
 from homeassistant.components import stt
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .speech_settings import read_settings
+from .speech_settings import read_settings,record_usage
 
 ENDPOINT = 'https://api.groq.com/openai/v1/audio/transcriptions'
 MAX_AUDIO = 30 * 16000 * 2
@@ -58,6 +58,7 @@ class GroqWhisper(stt.SpeechToTextEntity):
     async def async_process_audio_stream(self, metadata, stream):
         audio = bytearray()
         failed = stt.SpeechResult(None, stt.SpeechResultState.ERROR)
+        attempted=False;successful=False;status=None;headers={};seconds=0
         try:
             settings = await asyncio.to_thread(read_settings, self.hass.config.path())
             if settings.get('enabled') is not True or not settings.get('key'):
@@ -73,6 +74,7 @@ class GroqWhisper(stt.SpeechToTextEntity):
                 _LOGGER.warning('Groq speech received empty or invalid PCM audio. No audio sent.')
                 return failed
             form = FormData()
+            seconds=len(audio)/32000
             form.add_field('file', wav_audio(audio), filename='speech.wav', content_type='audio/wav')
             audio.clear()
             form.add_field('model', 'whisper-large-v3-turbo')
@@ -80,9 +82,11 @@ class GroqWhisper(stt.SpeechToTextEntity):
             form.add_field('response_format', 'json')
             form.add_field('temperature', '0')
             session = async_get_clientsession(self.hass)
+            attempted=True
             async with session.post(ENDPOINT, data=form,
                     headers={'Authorization': 'Bearer ' + settings['key']},
                     timeout=ClientTimeout(total=25), allow_redirects=False) as response:
+                status=response.status;headers=getattr(response,'headers',{})
                 if response.status != 200:
                     _LOGGER.warning('Groq speech failed (HTTP %s): %s No command sent.',
                                     response.status, ERRORS.get(response.status, 'Speech service unavailable. No automatic retry.'))
@@ -98,9 +102,13 @@ class GroqWhisper(stt.SpeechToTextEntity):
                 if not isinstance(text, str) or not text.strip() or len(text) > 2000:
                     _LOGGER.warning('Groq speech returned no usable text. No command sent.')
                     return failed
+                successful=True
                 return stt.SpeechResult(text.strip(), stt.SpeechResultState.SUCCESS)
         except (OSError, ValueError, TypeError, ClientError, asyncio.TimeoutError):
             _LOGGER.warning('Groq speech connection, timeout or configuration failure. Check internet and the saved key. No automatic retry or command sent.')
             return failed
         finally:
             audio.clear()
+            if attempted:
+                try:await asyncio.to_thread(record_usage,self.hass.config.path(),settings['key'],seconds,status,successful,headers,getattr(self.hass.config,'time_zone','UTC'))
+                except (OSError,ValueError,TypeError):_LOGGER.warning('Groq usage statistics could not be saved. Speech result is unchanged.')

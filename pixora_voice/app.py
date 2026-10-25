@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.18'
+VERSION='0.1.19'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -210,6 +210,12 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
                 return web.json_response({'message':'Connected to Groq. Your saved key was accepted. No audio was sent; test a satellite next.'})
         except (OSError,ValueError,ClientError,asyncio.TimeoutError):
             return web.json_response({'error':'Could not reach Groq. Check your internet connection and saved key. No audio or command was sent.'},status=503)
+    async def speech_stats(request):
+        from speech_settings import read_stats
+        try:
+            settings=await asyncio.to_thread(read_settings,config_root)
+            return web.json_response(await asyncio.to_thread(read_stats,config_root,settings.get('key','')))
+        except (OSError,ValueError):return web.json_response({'error':'Speech usage is unavailable. No requests were sent.'},status=503)
     async def retire_speech(request):
         try:
             if request.headers.get('X-Pixora-Request')!='1' or not (await asyncio.to_thread(read_settings,config_root)).get('enabled'):
@@ -358,6 +364,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
     app.router.add_get('/api/voice-log',voice_log)
     app.router.add_get('/api/speech',speech_settings);app.router.add_post('/api/speech',speech_settings)
     app.router.add_post('/api/speech/test',speech_test)
+    app.router.add_get('/api/speech/stats',speech_stats)
     app.router.add_post('/api/speech/retire-phrases',retire_speech)
     app.router.add_post('/api/restart',restart_now)
     app.router.add_post('/api/phrases',local_phrases)

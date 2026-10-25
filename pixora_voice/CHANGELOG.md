@@ -1,3 +1,6 @@
+## 0.1.19
+- Add on-demand Groq usage and limit statistics: this hub’s daily attempts, outcomes and audio duration of attempted requests, plus sanitized remaining/reset/retry-after headers from the last transcription. No audio or transcripts are stored. Other organization usage is not guessed; missing quotas show Not reported.
+
 ## 0.1.18
 - Groq mode no longer creates local training files or restarts Speech-to-Phrase during startup, updates, Planner refreshes or Flow refreshes. Flow trigger definitions are still saved; successful refreshes report Ready without training.
 - Add removal of recognized Pixora phrase files with a verified private recovery copy. Preserve user sentences and saved Flow trigger definitions.

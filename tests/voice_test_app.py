@@ -16,6 +16,16 @@ class Response:
 
 
 class AppTests(unittest.IsolatedAsyncioTestCase):
+    async def test_speech_stats_reads_no_provider_and_never_returns_key(self):
+        from speech_settings import save_settings,record_usage
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);app=make_app(root,root);key='gsk_'+'fake_for_test_'*3
+            save_settings(root,{'enabled':True,'key':key});record_usage(root,key,4,200,True,{'x-ratelimit-remaining-requests':'1999'})
+            handler=next(r.handler for r in app.router.routes() if r.method=='GET' and r.resource.canonical=='/api/speech/stats')
+            reply=await handler(NS())
+            self.assertEqual(reply.status,200);self.assertEqual(json.loads(reply.text)['requests'],1)
+            self.assertNotIn(key,reply.text);self.assertNotIn('key_id',reply.text)
+
     async def test_groq_training_refresh_is_a_noop(self):
         from speech_settings import save_settings
         with tempfile.TemporaryDirectory() as folder:

@@ -1,3 +1,5 @@
+**Usage & limits:** Speech recognition → Refresh usage shows this hub’s daily attempts/outcomes and audio duration of attempted requests since this update, with sanitized quota/reset headers from Groq’s last transcription response. Provider figures may include other organization clients and are not live polling. Missing headers show Not reported. Counts use HA’s local day, exclude connection tests, and are not billing estimates. No audio, text or API key is stored in the statistics.
+
 **Groq needs no phrase files or Speech-to-Phrase app.** In Groq mode, startup and refreshes never create training files or request that app to restart. Use **Remove local phrase files** in Speech recognition to retire Pixora-owned files with a private recovery copy. Flow trigger definitions remain necessary and are preserved.
 
 ## Optional Groq speech (your own key)
