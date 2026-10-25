@@ -1,3 +1,6 @@
+## 0.1.16
+- Add an on-demand Voice log with compact successes, failed stages, reported error codes and practical checks. Reads up to 20 existing Pixora Assist traces locally without retaining audio, transcripts or replies.
+
 ## 0.1.15
 - Handle Home Assistant computed-name alias markers without crashing question handling; preserve text aliases and the entity name.
 

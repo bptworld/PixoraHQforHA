@@ -6,6 +6,39 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice'))
 from diagnostics import summarize,recent_runs
 
 class TimingTests(unittest.IsolatedAsyncioTestCase):
+    def test_speech_failure_has_specific_reason_without_raw_payload(self):
+        events=[{'type':'stt-start','timestamp':'2026-10-25T12:00:00+00:00'},
+                {'type':'error','timestamp':'2026-10-25T12:00:03+00:00','data':{'code':'stt-no-text-recognized','message':'secret audio url private text'}},
+                {'type':'run-end','timestamp':'2026-10-25T12:00:04+00:00'}]
+        result=summarize(events)
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['failure_stage'],'Speech recognition')
+        self.assertIn('does not prove',result['next_check'])
+        self.assertNotIn('secret',json.dumps(result))
+        self.assertEqual(result['stages'][1]['status'],'failed')
+        self.assertEqual(result['stages'][2]['status'],'not recorded')
+
+    def test_unknown_error_does_not_expose_exception_or_guess_cause(self):
+        result=summarize([{'type':'error','timestamp':'2026-10-25T12:00:00+00:00','data':{'code':'private-secret','message':'credentials'}}])
+        self.assertEqual(result['error_code'],'unclassified')
+        self.assertEqual(result['failure_stage'],'Pipeline')
+        self.assertNotIn('private-secret',json.dumps(result))
+        self.assertNotIn('credentials',json.dumps(result))
+
+    def test_error_answer_is_not_reported_as_success(self):
+        result=summarize([{'type':'intent-end','timestamp':'2026-10-25T12:00:01+00:00','data':{'intent_output':{'response':{'response_type':'error','speech':{'plain':{'speech':'private'}}}}}}, {'type':'run-end','timestamp':'2026-10-25T12:00:02+00:00'}])
+        self.assertEqual(result['status'],'failed')
+        self.assertEqual(result['failure_stage'],'Question handling')
+        self.assertNotIn('private',json.dumps(result))
+
+    def test_speech_generation_failure_warns_against_duplicate_commands(self):
+        result=summarize([{'type':'error','timestamp':'2026-10-25T12:00:00+00:00','data':{'code':'tts-failed'}}])
+        self.assertIn('already have happened',result['next_check'])
+        self.assertEqual(result['failure_stage'],'Speech generation')
+
+    def test_incomplete_run_is_not_a_success(self):
+        self.assertEqual(summarize([])['status'],'incomplete')
+
     def test_recognition_excludes_speaking_and_missing_is_unknown(self):
         def event(kind,second):return {'type':kind,'timestamp':f'2026-10-23T18:00:{second:02d}+00:00','data':{'text':'private','url':'secret'}}
         result=summarize([event('stt-start',0),event('stt-vad-end',4),event('stt-end',6),event('intent-start',6),event('intent-end',7),event('run-end',8)])
@@ -35,5 +68,7 @@ class TimingTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(m.get('pipeline_id','ours')=='ours' for m in socket.sent))
         self.assertNotIn('private',json.dumps(result));self.assertNotIn('secret',json.dumps(result))
         self.assertTrue(all(m['type'] in {'auth','assist_pipeline/pipeline/list','assist_pipeline/pipeline_debug/list','assist_pipeline/pipeline_debug/get'} for m in socket.sent))
+        expanded=await recent_runs(NS(ws_connect=lambda *args,**kw:Socket()),'fixture-token',['conversation.pixora'],limit=100)
+        self.assertEqual(len(expanded),20)
 
 if __name__=='__main__':unittest.main()

@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.15'
+VERSION='0.1.16'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -167,6 +167,15 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             return web.json_response({'runs':runs})
         except (ValueError,KeyError,TypeError,asyncio.TimeoutError,ClientError):
             return web.json_response({'error':'Timing details are unavailable right now. You can also inspect this assistant under Home Assistant Voice assistants → Debug.'},status=503)
+    async def voice_log(request):
+        from diagnostics import recent_runs
+        try:
+            async with asyncio.timeout(20):
+                available=await agents()
+                runs=await recent_runs(app['session'],os.environ.get('SUPERVISOR_TOKEN',''),available,limit=20)
+            return web.json_response({'runs':runs})
+        except (ValueError,KeyError,TypeError,asyncio.TimeoutError,ClientError):
+            return web.json_response({'error':'Voice log is unavailable right now. Check HA Voice assistants → Debug. No commands or restarts were sent.'},status=503)
     async def icon(request):return web.FileResponse(Path(__file__).with_name('icon.svg'))
     async def status(request):
         try:available=await agents();error=''
@@ -268,6 +277,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
     app.router.add_get('/api/planner',planner_settings);app.router.add_post('/api/planner',planner_settings);app.router.add_post('/api/planner/refresh',refresh_planner)
     app.router.add_post('/api/install',install);app.router.add_post('/api/ask',ask)
     app.router.add_get('/api/timings',timings)
+    app.router.add_get('/api/voice-log',voice_log)
     app.router.add_post('/api/phrases',local_phrases)
     app.router.add_post('/api/flows/refresh',refresh_flows)
     return app

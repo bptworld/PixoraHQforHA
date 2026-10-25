@@ -1,21 +1,54 @@
 """On-demand, bounded reads of HA's existing Assist traces; no recorder or poller."""
 from datetime import datetime
 
+ERRORS = {
+ 'stt-no-text-recognized': ('Speech recognition', 'No words were recognized.', 'HA returned no recognized text. This does not prove the microphone was silent. Check microphone mute, background TV/noise, distance, and whether Speech-to-Phrase includes this request.'),
+ 'stt-provider-missing': ('Speech recognition', 'The speech recognition provider is missing.', 'Check the assistant’s speech-to-text selection and that Speech-to-Phrase is installed and running.'),
+ 'stt-provider-unsupported-metadata': ('Speech recognition', 'The recognizer rejected the audio format.', 'Check satellite firmware and the selected local speech recognizer.'),
+ 'stt-stream-failed': ('Speech recognition', 'The speech recognition stream failed.', 'Check Speech-to-Phrase logs and the satellite connection. Do not assume the question reached Pixora.'),
+ 'intent-failed': ('Question handling', 'The conversation agent failed.', 'Check HA Core logs for the matching time and verify Voice and Assist versions. Do not repeat a device command until its outcome is known.'),
+ 'intent-not-supported': ('Question handling', 'The selected assistant could not handle this request.', 'Check the assistant selection and supported phrases.'),
+ 'tts-failed': ('Speech generation', 'The spoken reply could not be generated.', 'Check Piper logs and the selected voice. A device action may already have happened; check its state before repeating it.'),
+ 'tts-provider-missing': ('Speech generation', 'The speech provider is missing.', 'Check Piper and the assistant’s text-to-speech selection.'),
+ 'wake-word-timeout': ('Wake word', 'No wake word was detected before the timeout.', 'Check the wake word selection and satellite microphone.'),
+ 'wake-word-detection-aborted': ('Wake word', 'Wake-word detection was stopped.', 'Check whether the satellite was muted, disconnected, or the request was cancelled.'),
+}
+
 def summarize(events):
     stamps={}
+    error_code=None
+    intent_error=False
     for event in events[:200]:
         try:stamps[event['type']]=datetime.fromisoformat(event['timestamp'])
         except (KeyError,ValueError,TypeError):continue
+        data=event.get('data') or {}
+        if not isinstance(data,dict):continue
+        if event.get('type')=='error':
+            code=data.get('code')
+            error_code=code if isinstance(code,str) and code in ERRORS else 'unclassified'
+        if event.get('type')=='intent-end':
+            output=data.get('intent_output') or {}
+            response=output.get('response') if isinstance(output,dict) else None
+            intent_error=isinstance(response,dict) and response.get('response_type')=='error'
     def elapsed(start,end):
         try:return round(max(0,(stamps[end]-stamps[start]).total_seconds()),3)
         except (KeyError,TypeError):return None
+    failed=error_code is not None or intent_error
+    details=ERRORS.get(error_code, ('Question handling' if intent_error else 'Pipeline', 'The assistant returned an error.' if intent_error else 'HA reported a pipeline error.', 'Check this run under HA Voice assistants → Debug and the matching HA Core logs. A command may already have run; check its state before retrying.')) if failed else None
+    stages=[]
+    for prefix,label in [('wake-word','Wake word'),('stt','Speech recognition'),('intent','Question handling'),('tts','Speech generation')]:
+        stages.append({'name':label,'status':'failed' if failed and details[0]==label else 'completed' if prefix+'-end' in stamps else 'started; completion not recorded' if prefix+'-start' in stamps else 'not recorded'})
     return {'recognition_seconds':elapsed('stt-vad-end','stt-end'),
             'lookup_seconds':elapsed('intent-start','intent-end'),
             'speech_preparation_seconds':elapsed('tts-start','tts-end'),
-            'complete':'run-end' in stamps,'error':'error' in stamps}
+            'complete':'run-end' in stamps,'error':failed,
+            'status':'failed' if failed else 'completed' if 'run-end' in stamps else 'incomplete',
+            'stages':stages,'failure_stage':details[0] if details else None,
+            'reason':details[1] if details else None,'next_check':details[2] if details else None,
+            'error_code':error_code or ('assistant-response-error' if intent_error else None)}
 
 
-async def recent_runs(session,token,agents):
+async def recent_runs(session,token,agents,limit=5):
     # Close immediately after a user-requested read. Never return speech, audio
     # URLs, tokens or other assistants' traces to the ingress browser.
     async with session.ws_connect('ws://supervisor/core/websocket',max_msg_size=1024*1024) as ws:
@@ -31,13 +64,14 @@ async def recent_runs(session,token,agents):
             if reply.get('id')!=ident or not reply.get('success'):raise ValueError('Assist timing is unavailable on this Home Assistant version.')
             return reply['result']
         pipelines=(await call('assist_pipeline/pipeline/list')).get('pipelines',[])
+        limit=max(1,min(20,int(limit)))
         candidates=[]
         for pipeline in [p for p in pipelines if p.get('conversation_engine') in agents][:4]:
             runs=(await call('assist_pipeline/pipeline_debug/list',pipeline_id=pipeline['id'])).get('pipeline_runs',[])
-            candidates.extend((r,pipeline) for r in runs[-5:])
+            candidates.extend((r,pipeline) for r in runs[-limit:])
         candidates.sort(key=lambda pair:pair[0].get('timestamp',''),reverse=True)
         output=[]
-        for run,pipeline in candidates[:5]:
+        for run,pipeline in candidates[:limit]:
             data=await call('assist_pipeline/pipeline_debug/get',pipeline_id=pipeline['id'],pipeline_run_id=run['pipeline_run_id'])
             output.append({'timestamp':run.get('timestamp'),'pipeline':pipeline.get('name','Pixora Voice'),**summarize(data.get('events',[]))})
         return output

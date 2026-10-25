@@ -16,6 +16,19 @@ class Response:
 
 
 class AppTests(unittest.IsolatedAsyncioTestCase):
+    async def test_voice_log_only_reads_traces_on_request(self):
+        app=make_app();calls=[]
+        def request(method,url,**kwargs):
+            calls.append((method,url))
+            return Response(200,[{'entity_id':'conversation.local','attributes':{'friendly_name':'Pixora Voice'}}])
+        app['session']=NS(request=request)
+        handler=next(r.handler for r in app.router.routes() if r.method=='GET' and r.resource.canonical=='/api/voice-log')
+        with patch.dict(os.environ,{'SUPERVISOR_TOKEN':'fixture-token'}), patch('diagnostics.recent_runs',AsyncMock(return_value=[])) as read:
+            self.assertFalse(calls)
+            response=await handler(NS())
+            self.assertEqual(json.loads(response.text),{'runs':[]})
+            self.assertEqual(read.await_args.kwargs,{'limit':20})
+            self.assertTrue(all(method=='GET' for method,url in calls))
     async def test_direct_access_and_cross_origin_installs_denied(self):
         app=make_app();handler=AsyncMock(return_value=web.json_response({'ok':True}));gate=app.middlewares[0]
         with self.assertRaises(web.HTTPForbidden):await gate(NS(remote='127.0.0.1',method='POST'),handler)
