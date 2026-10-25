@@ -109,6 +109,19 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(json.loads(response.text),{'runs':[]})
             self.assertEqual(read.await_args.kwargs,{'limit':20,'include_text':True})
             self.assertTrue(all(method=='GET' for method,url in calls))
+    async def test_repair_button_defers_file_changes_until_restart_approval(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);target=root/'custom_components/pixora_voice';target.mkdir(parents=True)
+            manifest={'domain':'pixora_voice','codeowners':['@bptworld'],'version':'0.1.21'}
+            (target/'manifest.json').write_text(json.dumps(manifest));(target/'planner.py').write_text('legacy helper')
+            app=make_app(root,root);app['maintenance']={}
+            handler=next(r.handler for r in app.router.routes() if r.method=='POST' and r.resource.canonical=='/api/install')
+            result=await handler(NS())
+            self.assertEqual(result.status,200);self.assertEqual((target/'planner.py').read_text(),'legacy helper')
+            self.assertEqual(json.loads((target/'manifest.json').read_text()),manifest)
+            self.assertTrue(app['maintenance']['restartRequired'])
+            self.assertTrue(json.loads((root/'integration-update.json').read_text())['activationPending'])
+
     async def test_direct_access_and_cross_origin_installs_denied(self):
         app=make_app();handler=AsyncMock(return_value=web.json_response({'ok':True}));gate=app.middlewares[0]
         with self.assertRaises(web.HTTPForbidden):await gate(NS(remote='127.0.0.1',method='POST',path='/api/install',content_length=0),handler)

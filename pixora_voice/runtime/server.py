@@ -32,7 +32,9 @@ class Gateway:
             self.catalog.append(Entity(item['entity_id'],item['name'],item['state'],item['attributes'],item.get('area',''),item.get('aliases',[]),last_changed=datetime.fromisoformat(at) if at else None))
         self.config=NS(time_zone=payload.get('timezone','UTC'),path=lambda *parts:str(runtime.config_root.joinpath(*parts)))
         def read(name,default):
-            try:return json.loads(runtime.config_root.joinpath('.storage',name).read_text(encoding='utf-8'))
+            try:
+                value=json.loads(runtime.config_root.joinpath('.storage',name).read_text(encoding='utf-8'))
+                return value if isinstance(value,type(default)) else default
             except (OSError,ValueError):return default
         self.planner_enabled=read('pixora_voice_planner.json',{}).get('enabled') is True
         phrases=read('pixora_voice_flows.json',[])

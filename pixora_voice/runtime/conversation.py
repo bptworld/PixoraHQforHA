@@ -52,7 +52,10 @@ class LocalVoice:
         from .thermostat import request_kind as thermostat_kind, plan as thermostat_plan
         from .extra_reads import request_kind
         planner_text=planner_followup(user_input.text,previous)
-        if not thermostat_kind(user_input.text, [str(s.name) for s in self.hass.states.async_all() if s.entity_id.startswith("climate.")]) and not request_kind(user_input.text) and (planner_text or is_planner_question(user_input.text)):
+        from .engine import interpret,choose
+        local_property,_=interpret(user_input.text)
+        local_read=bool(local_property and choose(user_input.text,self.hass.catalog,local_property,self.hass.origin))
+        if not local_read and not thermostat_kind(user_input.text, [str(s.name) for s in self.hass.states.async_all() if s.entity_id.startswith("climate.")]) and not request_kind(user_input.text) and (planner_text or is_planner_question(user_input.text)):
             uid=user_input.context.user_id
             allowed=not uid or await self.hass.auth.async_get_user(uid)
             speech=await ask_planner(self.hass,planner_text or user_input.text) if allowed else "I can't read Planner from this account. Please check its permissions."

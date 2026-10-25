@@ -21,6 +21,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             {'entity_id':'lock.front','name':'Front door lock','state':'unlocked','attributes':{},'area':'Living Room','control':False},
             {'entity_id':'light.ceiling','name':'Ceiling light','state':'off','attributes':{},'area':'Living Room','control':True}],
             'origin':'Living Room','user_id':None,'valid_user':True,'admin':True,'device_id':'speaker','satellite_id':'assist_satellite.living','conversation_id':'test','timezone':'America/New_York','services':['light.turn_on','light.turn_off']}
+    async def test_malformed_optional_planner_settings_do_not_break_local_voice(self):
+        storage=self.root/'.storage';storage.mkdir()
+        for value in ('[]','null','42','"bad"','{broken'):
+            (storage/'pixora_voice_planner.json').write_text(value)
+            self.assertIn('closed',(await self.runtime.answer(self.payload))['speech'])
+        self.ha.assert_not_awaited()
+
     async def test_contact_read_is_local_and_command_uses_ha_bridge_once(self):
         result=await self.runtime.answer(self.payload)
         self.assertIn('closed',result['speech']);self.ha.assert_not_awaited()

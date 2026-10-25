@@ -6,6 +6,16 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice'))
 from diagnostics import summarize,recent_runs
 
 class TimingTests(unittest.IsolatedAsyncioTestCase):
+    def test_explicit_lookup_and_command_failures_are_not_successes(self):
+        replies=[("I can't reach Planner right now. You can still ask me to check or control your local home devices.",'planner-unavailable'),("I'm not sure whether that command went through. Please check the device before trying again.",'command-uncertain'),("I'm not sure whether that Flow started. Please check its history before trying again.",'flow-uncertain')]
+        for speech,code in replies:
+            events=[{'type':'intent-end','timestamp':'2026-10-25T12:00:01+00:00','data':{'intent_output':{'response':{'response_type':'action_done','speech':{'plain':{'speech':speech}}}}}}, {'type':'run-end','timestamp':'2026-10-25T12:00:02+00:00'}]
+            result=summarize(events)
+            self.assertEqual(result['status'],'failed');self.assertEqual(result['error_code'],code)
+            self.assertEqual(result['failure_stage'],'Question handling')
+            events[0]['data']['intent_output']['response']['speech']['plain']['speech']="I don't see any TV listings on your calendar tonight."
+            self.assertEqual(summarize(events)['status'],'completed')
+
     def test_not_found_reply_is_unanswered_even_when_pipeline_completed(self):
         events=[{'type':'stt-end','timestamp':'2026-10-25T15:26:40+00:00','data':{'stt_output':{'text':'private question'}}},
           {'type':'intent-end','timestamp':'2026-10-25T15:26:41+00:00','data':{'intent_output':{'response':{'response_type':'action_done','speech':{'plain':{'speech':"Sorry, I can't find the information you're looking for."}}}}}},

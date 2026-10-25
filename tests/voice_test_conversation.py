@@ -31,6 +31,28 @@ class Registry:
 
 
 class AdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_device_capability_wins_over_planner_keywords_in_names(self):
+        from unittest.mock import patch
+        for name,area in [('Home Office window','Home Office'),('Dinner room window','Dinner Room')]:
+            state=NS(entity_id='binary_sensor.office',name=name,state='on',attributes={'device_class':'window'})
+            self.states.append(state)
+            adapter.er.async_get(self.hass).values[state.entity_id]=NS(device_id=None,area_id='living',aliases=[],disabled_by=None,hidden_by=None)
+            with patch('runtime.planner.ask',AsyncMock()) as planner:
+                reply=await self.ask('Is the '+name+' open?')
+                self.assertIn('open',reply.speech);planner.assert_not_awaited()
+            self.states.remove(state)
+        with patch('runtime.planner.ask',AsyncMock(return_value='Amy is home.')) as planner:
+            self.assertIn('Amy is home',(await self.ask('Is Amy home?')).speech)
+            planner.assert_awaited_once()
+
+    async def test_tv_tonight_goes_to_planner_instead_of_device_matching(self):
+        from unittest.mock import patch
+        with patch('runtime.planner.ask',AsyncMock(return_value='Fire Country at 9 PM.')) as ask:
+            result=await self.ask("What's on TV tonight?")
+            self.assertEqual(result.speech,'Fire Country at 9 PM.');self.assertFalse(result.continue_conversation)
+            ask.assert_awaited_once_with(self.hass,"What's on TV tonight?")
+            self.hass.services.async_call.assert_not_awaited()
+
     async def test_actual_fish_tank_transcript_is_local_read_only_not_planner_search(self):
         from unittest.mock import patch
         state=NS(entity_id='switch.living_room_living_room_fishtank_light',name='Living Room Fishtank Light',state='on',attributes={})

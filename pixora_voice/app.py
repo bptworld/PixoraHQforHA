@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.2.0'
+VERSION='0.2.1'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 # Assist changes have their own release identity; app-only updates keep this unchanged.
 INTEGRATION_VERSION=json.loads((COMPONENT/'manifest.json').read_text(encoding='utf-8'))['version']
@@ -82,14 +82,19 @@ def prepare_integration_update(config_root, data_root, phrase_file=None):
             record['phase'] = 'installed'
             write_owned(journal, json.dumps(record))
         return record if record.get('version') == INTEGRATION_VERSION and record.get('phase') != 'complete' else None
+    # Keep the running integration intact until Restart now is approved. Its
+    # dynamically imported modules may still be needed while the user chooses Later.
+    if exists and record.get('version') == INTEGRATION_VERSION and record.get('phase') in {'awaiting-restart','restart-approved','restart-requested'}:
+        return record
     from planner_phrases import update_local_phrases
     speech_changed = update_local_phrases(phrase_file,check_only=True) if phrase_file else False
-    record = {'version': INTEGRATION_VERSION, 'phase': 'prepared', 'needRestart': exists, 'speechNeeded': speech_changed}
+    record = {'version': INTEGRATION_VERSION, 'phase': 'awaiting-restart' if exists else 'prepared',
+              'needRestart': exists, 'speechNeeded': speech_changed, 'activationPending': exists,
+              'phraseFile': str(phrase_file) if phrase_file else None}
     write_owned(journal, json.dumps(record))
+    if exists:return record
     install_component(config_root, data_root)
-    if phrase_file:
-        from planner_phrases import update_local_phrases
-        update_local_phrases(phrase_file)
+    if phrase_file:update_local_phrases(phrase_file)
     record['phase'] = 'installed'
     write_owned(journal, json.dumps(record))
     return record
@@ -113,7 +118,7 @@ async def _finish_integration_update(record, config_root, data_root, ha, notice,
         try:
             states = await ha('states')
             agents = [s for s in states if s.get('entity_id','').startswith('conversation.') and s.get('attributes',{}).get('friendly_name') in {'Pixora Voice','Pixora Voice (Beta)'}]
-            if any(s.get('attributes',{}).get('pixora_voice_version') == INTEGRATION_VERSION for s in agents):
+            if not record.get('activationPending') and any(s.get('attributes',{}).get('pixora_voice_version') == INTEGRATION_VERSION for s in agents):
                 if record.get('speechNeeded'):
                     if record['phase'] in {'speech-restart-requested','speech-uncertain'}:
                         notice.update(message='Voice and Assist are updated. Speech restart was not confirmed and was not repeated; check Speech-to-Phrase.',pending=False)
@@ -152,6 +157,13 @@ async def _finish_integration_update(record, config_root, data_root, ha, notice,
                 notice.update(message='Voice and Assist files are updated. Restart Home Assistant when you are ready to load them.',pending=False,restartRequired=True)
                 return
             if record['phase'] == 'restart-approved':
+                await asyncio.to_thread(install_component, config_root, data_root)
+                record['activationPending']=False
+                from speech_settings import read_settings
+                if record.get('phraseFile') and not read_settings(config_root).get('enabled'):
+                    from planner_phrases import update_local_phrases
+                    record['speechNeeded'] = await asyncio.to_thread(update_local_phrases, Path(record['phraseFile']))
+                else:record['speechNeeded'] = False
                 await asyncio.to_thread(save, 'restart-requested')
                 notice.update(message='Home Assistant is restarting once as requested. Waiting for Voice to return.', pending=True,restartRequired=False)
                 try:await ha('services/homeassistant/restart', {})
@@ -360,15 +372,19 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             return web.json_response({'error':'Voice trigger refresh or speech training could not be confirmed. Check the updated Assist integration, paired Home Control app and Speech-to-Phrase. It was not retried.'},status=503)
     async def install(request):
         try:
-            existed=(config_root/'custom_components/pixora_voice/manifest.json').exists()
-            await asyncio.to_thread(install_component,config_root,data_root)
-            if existed:
+            manifest=config_root/'custom_components/pixora_voice/manifest.json'
+            if manifest.exists():
+                value=json.loads(manifest.read_text())
+                if not isinstance(value,dict) or value.get('domain')!='pixora_voice' or value.get('codeowners')!=['@bptworld']:raise ValueError('An unrecognized Assist folder was preserved.')
+                if app.get('update_task') and not app['update_task'].done():return web.json_response({'error':'An update is already running.'},status=409)
                 from planner_phrases import write_owned
-                record={'version':INTEGRATION_VERSION,'phase':'awaiting-restart','needRestart':True,'speechNeeded':False}
+                record={'version':INTEGRATION_VERSION,'phase':'awaiting-restart','needRestart':True,'speechNeeded':False,'activationPending':True}
                 await asyncio.to_thread(write_owned,data_root/'integration-update.json',json.dumps(record))
-                app['maintenance'].update(message='Assist files repaired. Restart Home Assistant when you are ready.',pending=False,restartRequired=True)
-        except ValueError as exc:return web.json_response({'error':str(exc)},status=409)
-        return web.json_response({'message':'Assist integration installed. Restart Home Assistant once, add Pixora Voice under Settings → Devices & services, then select it in your local voice assistant.'})
+                app['maintenance'].update(message='Assist repair is ready. Current files stay intact until you choose Restart now.',pending=False,restartRequired=True)
+                return web.json_response({'message':'Assist repair is ready. Choose Restart now when convenient; Later keeps the current integration unchanged.'})
+            await asyncio.to_thread(install_component,config_root,data_root)
+        except (ValueError,OSError) as exc:return web.json_response({'error':str(exc)},status=409)
+        return web.json_response({'message':'Assist integration installed. Add Pixora Voice under Settings → Devices & services, then select it in your local voice assistant.'})
     async def local_phrases(request):
         if await asyncio.to_thread(groq_enabled):return web.json_response({'message':'Groq does not use phrase files. No training or restart needed.'})
         try:

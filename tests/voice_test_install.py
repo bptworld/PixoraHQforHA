@@ -16,6 +16,19 @@ class InstallTests(unittest.TestCase):
             self.assertFalse((target/'version_marker').exists());self.assertEqual(len(list((data/'integration-backups').glob('*/version_marker'))),1)
             self.assertEqual((unrelated/'__init__.py').read_text(),'untouched')
 
+    def test_later_preserves_all_running_integration_files_across_app_restarts(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);config=root/'config';data=root/'data';target=config/'custom_components/pixora_voice';target.mkdir(parents=True)
+            (target/'manifest.json').write_text(json.dumps({'domain':'pixora_voice','version':'0.1.21','codeowners':['@bptworld']}))
+            (target/'planner.py').write_text('def is_planner_question(text): return True')
+            (target/'engine.py').write_text('legacy_engine = True')
+            before={p.name:p.read_bytes() for p in target.iterdir()}
+            first=prepare_integration_update(config,data)
+            self.assertEqual(first['phase'],'awaiting-restart')
+            self.assertEqual(prepare_integration_update(config,data),first)
+            self.assertEqual({p.name:p.read_bytes() for p in target.iterdir()},before)
+            self.assertFalse((data/'integration-backups').exists())
+
     def test_unrecognized_existing_folder_is_preserved(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);target=root/'custom_components/pixora_voice';target.mkdir(parents=True);(target/'custom.txt').write_text('keep')
@@ -33,8 +46,8 @@ class AutomaticUpdateTests(unittest.IsolatedAsyncioTestCase):
    manifest=config/'custom_components/pixora_voice/manifest.json'
    value=json.loads(manifest.read_text());value['version']='0.1.6';manifest.write_text(json.dumps(value))
    record=prepare_integration_update(config,data,root/'phrases.yaml')
-   self.assertEqual(json.loads(manifest.read_text())['version'],VERSION)
-   self.assertTrue((root/'phrases.yaml').exists())
+   self.assertEqual(json.loads(manifest.read_text())['version'],'0.1.6')
+   self.assertFalse((root/'phrases.yaml').exists())
    calls=[];loaded=False
    async def ha(path,body=None):
     nonlocal loaded
@@ -53,6 +66,8 @@ class AutomaticUpdateTests(unittest.IsolatedAsyncioTestCase):
    record['phase']='restart-approved'
    await finish_integration_update(record,config,data,ha,notice,sleep=AsyncMock())
    self.assertEqual([c[0] for c in calls],['services/homeassistant/restart','services/pixora_voice/speech_ready?return_response','services/hassio/addon_restart','services/pixora_voice/speech_ready?return_response'])
+   self.assertEqual(json.loads(manifest.read_text())['version'],VERSION)
+   self.assertTrue((root/'phrases.yaml').exists())
    self.assertIsNone(prepare_integration_update(config,data,root/'phrases.yaml'))
    self.assertFalse(notice['pending'])
    self.assertFalse(notice['restartRequired'])

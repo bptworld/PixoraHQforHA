@@ -1,3 +1,7 @@
+## 0.2.1
+- Keep the running Assist files intact when deferring a bridge update; activate them only after Restart now is approved. Prefer matching local device capabilities over Planner keywords, isolate malformed optional settings, and classify unavailable/uncertain spoken answers as failures in the Voice log.
+- Route TV schedule questions such as “What’s on TV tonight?” directly to Planner calendar search. App-only update; the Assist bridge stays unchanged.
+
 ## 0.2.0
 - Move interpretation, device matching, follow-ups, Planner/Flow routing and Groq transcription into the app; retain a stable native Assist bridge with existing entity identities and permissions.
 - Routine app updates recover automatically without an HA restart or another button. This migration requires one confirmed HA restart; only future native bridge changes may require another.

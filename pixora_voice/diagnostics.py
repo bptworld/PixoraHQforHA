@@ -15,6 +15,17 @@ ERRORS = {
  'wake-word-detection-aborted': ('Wake word', 'Wake-word detection was stopped.', 'Check whether the satellite was muted, disconnected, or the request was cancelled.'),
 }
 
+# These are explicit failure replies, not ordinary empty calendar/search results.
+REPLY_FAILURES=(
+ ("i can't reach planner right now.",'planner-unavailable','Planner did not return an answer.','Check the paired Home Control connection and Planner availability. The lookup was not retried.'),
+ ("i'm not connected to planner yet.",'planner-not-configured','Planner integration is not enabled.','Enable Planner in the Voice app if you want shared Planner answers.'),
+ ("i'm not sure whether that flow started.",'flow-uncertain','Flow execution could not be confirmed.','Check Flow history before repeating the request; the Flow may already have started.'),
+ ("i'm not sure whether that command went through.",'command-uncertain','The device command could not be confirmed.','Check the device before repeating the request; the command may already have run.'),
+ ("i couldn't reach thermostat controller.",'controller-unavailable','Thermostat Controller did not respond.','Check that Thermostat Controller is running. No direct thermostat fallback was sent.'),
+ ("i can't control those devices from this account.",'control-denied','The account lacks device-control permission.','Review HA device permissions; no command was sent.'),
+)
+for prefix,code,reason,check in REPLY_FAILURES:ERRORS[code]=('Question handling',reason,check)
+
 def summarize(events,include_text=False):
     stamps={}
     error_code=None
@@ -47,6 +58,8 @@ def summarize(events,include_text=False):
                 normalized=speech.strip().replace('’',"'").lower()
                 unanswered=normalized in {"sorry, i can't find the information you're looking for.","sorry, i can't find the information you are looking for."} or normalized.startswith("i can't find the right device to check that.")
                 if error_code is None and (normalized.startswith("i couldn't finish that request.") or normalized=="i couldn't read the voice app's answer."):error_code='voice-app-unavailable'
+                if error_code is None:
+                    error_code=next((code for prefix,code,reason,check in REPLY_FAILURES if normalized.startswith(prefix)),None)
     def elapsed(start,end):
         try:return round(max(0,(stamps[end]-stamps[start]).total_seconds()),3)
         except (KeyError,TypeError):return None
