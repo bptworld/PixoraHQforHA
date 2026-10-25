@@ -1,3 +1,9 @@
+## 0.1.6
+- Name the schedule period and target in activity, distinguish requested adjustments from HA-confirmed targets, and record period changes that need no thermostat command.
+- Add per-sensor Okay/Ignore notification actions for unavailable contact/outdoor readings, persistent ignored-device tracking, and Fixed buttons to restore checks. Ignored sensors stay configured; the thermostat itself cannot be ignored.
+- Preserve reselected unavailable contacts, follow HA notification service availability without polling, and show override expiry in local 12-hour time for the UI and Voice.
+- Wait 60 seconds before notifying about continuously unavailable door/window readings, avoiding brief reconnect alerts. Unknown readings still block thermostat adjustments immediately; recovery cancels the pending alert.
+
 ## 0.1.5
 - Display schedule and activity times in 12-hour format with AM/PM.
 

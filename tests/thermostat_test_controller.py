@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pixora_thermostat_controller"))
 from policy import validate, schedule_at, next_period, service_for, temperature, same
-from engine import Store, Engine, clock_time
+from engine import Store, Engine, clock_time, hold_detail
 
 
 def zone():
@@ -51,6 +51,10 @@ class FakeHA:
 
 
 class PolicyTests(unittest.TestCase):
+    def test_override_details_use_local_twelve_hour_time(self):
+        self.assertEqual(hold_detail({'until':'2026-10-25T14:21:00+00:00'}, 'America/New_York'), 'Until Oct 25, 2026 at 10:21 AM')
+        self.assertIn('12:00 AM', hold_detail({'until':'2026-10-25T04:00:00+00:00'}, 'America/New_York'))
+        self.assertEqual(hold_detail({'until':datetime.max.replace(tzinfo=timezone.utc).isoformat(),'returnPerson':'person.bryan'}, 'America/New_York'), 'Until the selected person returns home')
     def test_clock_time_is_twelve_hour(self):
         for raw, expected in [('00:00','12:00 AM'),('12:00','12:00 PM'),('22:05','10:05 PM'),('06:30','6:30 AM')]:
             self.assertEqual(clock_time(raw), expected)
@@ -130,6 +134,107 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
 
     def runtime(self): return self.store.data["runtime"].get("living", {})
 
+    async def test_missing_notification_service_is_not_claimed_as_sent(self):
+        self.ha.services.remove('notify.mobile_app_bryan')
+        self.ha.states['binary_sensor.window']['state']='unavailable'
+        await self.tick(); await self.tick(60)
+        self.assertFalse(self.ha.notifications())
+        self.assertFalse(self.runtime().get('issue'))
+        self.ha.services.add('notify.mobile_app_bryan')
+        await self.tick()
+        self.assertEqual(len(self.ha.notifications()),1)
+        await self.tick()
+        self.assertEqual(len(self.ha.notifications()),1)
+
+    async def test_activity_names_period_target_and_waits_for_confirmation(self):
+        self.store.data["zones"][0]["schedule"][0]["name"] = "Morning"
+        self.ha.states["climate.living"]["attributes"]["temperature"] = 65
+        await self.tick()
+        message = self.store.data["events"][-1]["message"]
+        self.assertIn('Requested: Schedule “Morning” — Heat 70°F', message)
+        self.assertIn('Waiting for thermostat confirmation', message)
+        self.assertFalse(any(e['message'].startswith('Confirmed:') for e in self.store.data['events']))
+        await self.tick()
+        self.assertTrue(any('Confirmed: Schedule “Morning” — Heat 70°F' in e['message'] for e in self.store.data['events']))
+        count = len(self.store.data['events'])
+        await self.tick()
+        self.assertEqual(len(self.store.data['events']), count)
+
+    async def test_new_period_is_logged_when_target_already_matches(self):
+        self.store.data["zones"][0]["schedule"][0]["name"] = "Morning"
+        await self.tick()
+        self.assertIn('Thermostat already matches; no command needed',self.store.data['events'][-1]['message'])
+        self.assertFalse(self.ha.device_calls())
+        self.store.data["zones"][0]["schedule"][1].update(name="Bedtime", heat=70)
+        await self.tick(10*60*60)
+        self.assertIn('“Bedtime”',self.store.data['events'][-1]['message'])
+        self.assertFalse(self.ha.device_calls())
+
+    async def test_ignore_action_is_per_sensor_persistent_and_preserves_configuration(self):
+        self.ha.states["binary_sensor.window"]["state"] = "unavailable"
+        await self.tick(); await self.tick(60)
+        fields = self.ha.notifications()[-1][1]
+        self.assertEqual([a["title"] for a in fields["data"]["actions"]], ["Okay", "Ignore"])
+        self.ha.actions.put_nowait(fields["data"]["actions"][1]["action"])
+        await self.tick()
+        self.assertIn("binary_sensor.window", self.runtime()["ignored"])
+        self.assertEqual(self.store.data["zones"][0]["openings"], ["binary_sensor.window"])
+        self.assertIn("binary_sensor.window", Store(self.temp.name).data["runtime"]["living"]["ignored"])
+        self.engine = Engine(self.store, self.ha, now=lambda:self.now)
+        await self.tick()
+        self.assertNotEqual(self.engine.status["living"]["reason"], "Needs attention")
+
+    async def test_okay_and_stale_ignore_never_disable_protection(self):
+        self.ha.states["binary_sensor.window"]["state"] = "unknown"
+        await self.tick(); await self.tick(60)
+        actions = self.ha.notifications()[-1][1]["data"]["actions"]
+        self.ha.actions.put_nowait(actions[0]["action"])
+        await self.tick()
+        self.assertFalse(self.runtime().get("ignored"))
+        self.assertEqual(self.engine.status["living"]["reason"], "Needs attention")
+        self.ha.actions.put_nowait(actions[1]["action"])
+        await self.tick()
+        self.assertFalse(self.runtime().get("ignored"))
+
+    async def test_recovered_sensor_rejects_old_ignore(self):
+        self.ha.states["binary_sensor.window"]["state"] = "unknown"
+        await self.tick(); await self.tick(60)
+        action = self.ha.notifications()[-1][1]["data"]["actions"][1]["action"]
+        self.ha.states["binary_sensor.window"]["state"] = "off"
+        self.ha.actions.put_nowait(action)
+        await self.tick()
+        self.assertFalse(self.runtime().get("ignored"))
+
+    async def test_ignored_outdoor_reading_does_not_disable_contact_protection(self):
+        self.outdoor()
+        self.ha.states["sensor.outdoor"]["state"] = "unavailable"
+        await self.tick()
+        action = self.ha.notifications()[-1][1]["data"]["actions"][1]["action"]
+        self.ha.actions.put_nowait(action)
+        await self.tick()
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick(); await self.tick(180); await self.tick()
+        self.assertEqual(self.ha.states["climate.living"]["attributes"]["temperature"], 60)
+
+    async def test_reconnect_grace_blocks_heat_but_suppresses_brief_alert(self):
+        self.ha.states["climate.living"]["attributes"]["temperature"] = 65
+        self.ha.states["binary_sensor.window"]["state"] = "unavailable"
+        await self.tick(); await self.tick(59)
+        self.assertFalse(self.ha.notifications()); self.assertFalse(self.ha.device_calls())
+        self.ha.states["binary_sensor.window"]["state"] = "off"
+        await self.tick()
+        self.assertFalse(self.ha.notifications())
+        self.ha.states["binary_sensor.window"]["state"] = "unknown"
+        await self.tick(); await self.tick(59)
+        self.assertFalse(self.ha.notifications())
+        await self.tick(1)
+        self.assertEqual(len(self.ha.notifications()), 1)
+        self.assertIn("Living room window (unknown)", self.ha.notifications()[0][1]["message"])
+        count = len(self.ha.device_calls())
+        await self.tick(600)
+        self.assertEqual(len(self.ha.notifications()), 1)
+        self.assertEqual(len(self.ha.device_calls()), count)
+
     def outdoor(self, mode="auto"):
         self.z["outdoor"].update(enabled=True, mode=mode)
         data = copy.deepcopy(self.store.data); data["zones"] = [self.z]; self.store.write(data)
@@ -146,7 +251,7 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_recent_activity_records_sent_sensor_alert(self):
         self.ha.states["binary_sensor.window"]["state"] = "unavailable"
-        await self.tick()
+        await self.tick(); await self.tick(60)
         self.assert_notice_logged()
         count = len(self.store.data["events"])
         await self.tick()
@@ -171,7 +276,7 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
     async def test_uncertain_notification_is_warning_not_sent_and_not_retried(self):
         self.ha.fail = True
         self.ha.states["binary_sensor.window"]["state"] = "unavailable"
-        await self.tick(); await self.tick()
+        await self.tick(); await self.tick(60)
         self.assertEqual(len(self.ha.notifications()), 1)
         events = self.store.data["events"]
         self.assertFalse(any(e["message"].startswith("Notification sent to ") for e in events))
@@ -181,14 +286,15 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.store.data["zones"][0]["openings"] += ["binary_sensor.front_door", "binary_sensor.missing"]
         self.ha.states["binary_sensor.window"]["state"] = "unknown"
         self.ha.states["binary_sensor.front_door"] = {"state": "on", "attributes": {"friendly_name": "Front door"}}
-        await self.tick()
+        await self.tick(); await self.tick(60)
         message = self.ha.notifications()[-1][1]["message"]
         for text in ("Living room window (unknown)", "binary_sensor.missing (missing from Home Assistant)", "Also open: Front door"):
             self.assertIn(text, message)
             self.assertIn(text, self.engine.status["living"]["detail"])
         self.assertFalse(self.ha.device_calls())
         await self.tick()
-        self.assertEqual(len(self.ha.notifications()), 1)
+        self.assertEqual(len(self.ha.notifications()), 2)
+        self.assertNotEqual(self.ha.notifications()[0][1]["data"]["actions"][1]["action"], self.ha.notifications()[1][1]["data"]["actions"][1]["action"])
 
     async def test_open_protection_notification_names_window(self):
         self.ha.states["binary_sensor.window"]["state"] = "on"
@@ -289,7 +395,7 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_sensor_alert_deduplicates_and_respects_choice(self):
         self.ha.states["binary_sensor.window"]["state"] = "unavailable"
-        await self.tick(); await self.tick()
+        await self.tick(); await self.tick(60)
         self.assertEqual(len(self.ha.notifications()), 1)
         self.assertFalse(self.ha.device_calls())
         self.ha.states["binary_sensor.window"]["state"] = "off"

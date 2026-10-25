@@ -58,8 +58,6 @@ class HomeAssistant:
                 ZoneInfo(config["time_zone"])
                 self.timezone = config["time_zone"]
                 self.unit = str(config["unit_system"]["temperature"]).replace("\u00b0", "").upper()
-                services = await self.request("services")
-                self.services = {row["domain"] + "." + name for row in services for name in row.get("services", {})}
                 async with self.session.ws_connect("http://supervisor/core/websocket", heartbeat=25, receive_timeout=75,
                         max_msg_size=16 * 1024 * 1024) as ws:
                     hello = await ws.receive_json()
@@ -72,7 +70,11 @@ class HomeAssistant:
                     await ws.send_json({"id": 2, "type": "get_states"})
                     await ws.send_json({"id": 3, "type": "subscribe_events", "event_type": "mobile_app_notification_action"})
                     await ws.send_json({"id": 4, "type": "subscribe_events", "event_type": "pixora_thermostat_voice_request"})
+                    await ws.send_json({"id": 5, "type": "subscribe_events", "event_type": "service_registered"})
+                    await ws.send_json({"id": 6, "type": "subscribe_events", "event_type": "service_removed"})
+                    await ws.send_json({"id": 7, "type": "get_services"})
                     initial = False
+                    services_ready = False
                     async for message in ws:
                         if message.type != WSMsgType.TEXT:
                             if message.type in {WSMsgType.CLOSED, WSMsgType.ERROR, WSMsgType.CLOSE}:
@@ -88,9 +90,26 @@ class HomeAssistant:
                                 self.update(state)
                             for state in buffered.values():
                                 self.update(state)
-                            initial = self.connected = True
+                            initial = True
+                            self.connected = services_ready
                             self.notice, delay = "", 2
+                        elif packet.get("id") == 7 and packet.get("type") == "result":
+                            self.services = {domain + "." + name for domain, rows in packet["result"].items() for name in rows}
+                            services_ready = True
+                            self.connected = initial
                         elif packet.get("type") == "event":
+                            kind = packet.get("event", {}).get("event_type")
+                            if kind in {"service_registered", "service_removed"}:
+                                data = packet["event"].get("data", {})
+                                domain, name = data.get("domain"), data.get("service")
+                                if isinstance(domain, str) and isinstance(name, str):
+                                    service = domain + "." + name
+                                    if kind == "service_registered":
+                                        self.services.add(service)
+                                    else:
+                                        self.services.discard(service)
+                                    self.wake.set()
+                                continue
                             if packet.get("event", {}).get("event_type") == "pixora_thermostat_voice_request":
                                 if not self.voice.full():
                                     self.voice.put_nowait(packet["event"].get("data", {}))

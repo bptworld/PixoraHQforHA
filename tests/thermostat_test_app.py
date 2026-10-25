@@ -37,6 +37,37 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
     async def save(self, z=None, revision=0):
         return await route(self.app, "POST", "/api/settings")(request({"revision": revision, "zones": [z or zone()]}))
 
+    async def test_notification_settings_invalidate_old_ignore_buttons(self):
+        await self.save()
+        store=self.app['store']
+        data=copy.deepcopy(store.data)
+        data['runtime']['living']['sensorActions']={'binary_sensor.window':'old-token'}
+        store.write(data)
+        z=copy.deepcopy(store.data['zones'][0]);z['notify']['person']='New recipient'
+        await self.save(z,revision=1)
+        self.assertFalse(store.data['runtime']['living'].get('sensorActions'))
+        self.ha.states['binary_sensor.window']['state']='unavailable'
+        self.ha.actions.put_nowait('pixora_thermostat:old-token:ignore')
+        await self.app['engine'].tick()
+        self.assertFalse(store.data['runtime']['living'].get('ignored'))
+
+    async def test_fixed_restores_sensor_checks_and_hides_notification_tokens(self):
+        await self.save()
+        store = self.app["store"]
+        data = copy.deepcopy(store.data)
+        data["runtime"]["living"] = {"ignored":{"binary_sensor.window":{"name":"Living room window","at":"2026-10-25T12:00:00+00:00"}},"sensorActions":{"binary_sensor.window":"secret-ignore-token"}}
+        store.write(data)
+        self.ha.states["binary_sensor.window"]["state"] = "unavailable"
+        response = await route(self.app,"GET","/api/status")(request(None))
+        self.assertNotIn("secret-ignore-token", response.text)
+        self.assertIn('"ignored"', response.text)
+        await route(self.app,"POST","/api/action")(request({"id":"living","action":"fixed","sensor":"binary_sensor.window"}))
+        self.assertFalse(store.data["runtime"]["living"]["ignored"])
+        self.assertEqual(self.app["engine"].status["living"]["reason"],"Needs attention")
+        self.assertEqual(store.data["zones"][0]["openings"],["binary_sensor.window"])
+        with self.assertRaises(ValueError):
+            await route(self.app,"POST","/api/action")(request({"id":"living","action":"fixed","sensor":"climate.living"}))
+
     async def test_ingress_and_csrf_guards(self):
         gate = self.app.middlewares[0]; handler = AsyncMock(return_value=web.json_response({"ok": True}))
         with self.assertRaises(web.HTTPForbidden):
@@ -145,7 +176,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             async def send_json(self, value): self.sent.append(value)
             def __aiter__(self): return self.packets()
             async def packets(self):
-                for packet in [{"id": 1, "type": "result", "success": True}, {"id": 2, "type": "result", "success": True, "result": []}, {"type": "event", "event": {"event_type": "mobile_app_notification_action", "data": {"action": "pixora_thermostat:example:yes"}}}]:
+                for packet in [{"id": 1, "type": "result", "success": True}, {"id": 2, "type": "result", "success": True, "result": []}, {"id": 7, "type": "result", "success": True, "result": {"notify": {"mobile_app_old": {}}}}, {"type": "event", "event": {"event_type": "service_registered", "data": {"domain": "notify", "service": "mobile_app_new"}}}, {"type": "event", "event": {"event_type": "service_removed", "data": {"domain": "notify", "service": "mobile_app_old"}}}, {"type": "event", "event": {"event_type": "mobile_app_notification_action", "data": {"action": "pixora_thermostat:example:yes"}}}]:
                     yield NS(type=WSMsgType.TEXT, data=json.dumps(packet))
                 closed.set(); await asyncio.Event().wait()
         socket = Socket(); session = NS(ws_connect=lambda *a, **k: socket)
@@ -156,6 +187,8 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.wait_for(closed.wait(), 2)
             self.assertEqual(ha.actions.get_nowait(), "pixora_thermostat:example:yes")
             self.assertTrue(ha.connected)
+            self.assertIn("notify.mobile_app_new", ha.services)
+            self.assertNotIn("notify.mobile_app_old", ha.services)
             self.assertIn({"id": 3, "type": "subscribe_events", "event_type": "mobile_app_notification_action"}, socket.sent)
         finally:
             task.cancel(); await asyncio.gather(task, return_exceptions=True)

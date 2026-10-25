@@ -10,12 +10,26 @@ import math
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from policy import schedule_at, next_period, target, temperature, observed, same, service_for
 
 
 def clock_time(value):
     hour, minute = map(int, value.split(":"))
     return f"{hour % 12 or 12}:{minute:02d} {'AM' if hour < 12 else 'PM'}"
+
+
+def hold_detail(hold, zone):
+    if hold.get("returnPerson"):
+        return "Until the selected person returns home"
+    end = datetime.fromisoformat(hold["until"]).astimezone(ZoneInfo(zone))
+    return f"Until {end.strftime('%b')} {end.day}, {end.year} at {clock_time(end.strftime('%H:%M'))}"
+
+
+def target_text(wanted, unit):
+    if wanted["mode"] == "off":
+        return "Off"
+    return " / ".join(key.capitalize() + f" {wanted[key]:g}°{unit}" for key in ("heat", "cool") if key in wanted)
 
 
 def utcnow():
@@ -73,6 +87,7 @@ class Engine:
         self.timers = {}
         self.status = {}
         self.voice_seen = deque(maxlen=64)
+        self.contact_notice_since = {}
 
     async def send_notice(self, z, fields):
         service = z["notify"]["service"]
@@ -91,6 +106,8 @@ class Engine:
 
     async def tick(self):
         async with self.lock:
+            active = {z["id"] for z in self.store.data["zones"]}
+            self.contact_notice_since = {k: v for k, v in self.contact_notice_since.items() if k in active}
             voice = getattr(self.ha, "voice", None)
             while voice is not None and not voice.empty():
                 request = voice.get_nowait()
@@ -118,6 +135,19 @@ class Engine:
 
     async def issue_notice(self, z, message, category):
         if not z["enabled"] or not self.ha.connected:
+            self.contact_notice_since.pop(z["id"], None)
+            return
+        if category == "sensor" and message.startswith("Door/window readings unavailable:"):
+            # Only delay the notification, never the safety decision in evaluate.
+            # One continuous outage keeps its age even if the affected set changes.
+            since = self.contact_notice_since.setdefault(z["id"], self.now())
+            if (self.now() - since).total_seconds() < 60:
+                return
+        else:
+            self.contact_notice_since.pop(z["id"], None)
+        # A missing service is not a send attempt. Wait for its registration;
+        # after an actual attempt the durable claim still prevents retries.
+        if message and z.get("alerts", {}).get(category, True) and z["notify"]["service"] not in self.ha.services:
             return
         runtime = copy.deepcopy(self.store.data["runtime"].get(z["id"], {}))
         if runtime.get("issue", "") == message:
@@ -125,10 +155,41 @@ class Engine:
         runtime["issue"] = message
         self.store.patch_runtime(z["id"], runtime)
         if message and z.get("alerts", {}).get(category, True) and z["notify"]["service"] in self.ha.services:
+            problems = self.problem_sensors(z, runtime) if category == "sensor" else []
+            if problems and z["notify"]["service"].startswith("notify.mobile_app_"):
+                for sensor in problems:
+                    runtime = copy.deepcopy(self.store.data["runtime"].get(z["id"], {}))
+                    actions = runtime.setdefault("sensorActions", {})
+                    if sensor in actions:
+                        continue
+                    token = secrets.token_hex(16)
+                    actions[sensor] = token
+                    self.store.patch_runtime(z["id"], runtime)
+                    name = self.sensor_name(sensor)
+                    prefix = "pixora_thermostat:" + token + ":"
+                    try:
+                        await self.send_notice(z, {"title": z["name"] + ": " + name, "message": message + " Okay keeps protection unchanged. Ignore excludes only " + name + " until you mark it Fixed in the app.", "data": {"tag": "pixora-issue-" + z["id"] + "-" + sensor, "actions": [{"action": prefix + "okay", "title": "Okay"}, {"action": prefix + "ignore", "title": "Ignore"}]}})
+                    except (ValueError, OSError, asyncio.TimeoutError):
+                        pass
+                return
             try:
                 await self.send_notice(z, {"title": z["name"], "message": message})
             except (ValueError, OSError, asyncio.TimeoutError):
                 pass
+
+    def sensor_name(self, ident):
+        return str(self.ha.states.get(ident, {}).get("attributes", {}).get("friendly_name") or ident)
+
+    def problem_sensors(self, z, runtime):
+        ignored = runtime.get("ignored", {})
+        result = [ident for ident in z["openings"] if ident not in ignored and self.ha.states.get(ident, {}).get("state") not in {"on", "off"}]
+        outdoor = z["outdoor"]
+        if outdoor["enabled"] and outdoor["entity"] not in ignored:
+            try:
+                temperature(self.ha.states.get(outdoor["entity"]), z["unit"])
+            except ValueError:
+                result.append(outdoor["entity"])
+        return result
 
     async def preview(self, z):
         # Copies are bounded by the controller/catalog limits. No real store or
@@ -219,6 +280,22 @@ class Engine:
     def handle_approval(self, action):
         for z in self.store.data["zones"]:
             runtime = copy.deepcopy(self.store.data["runtime"].get(z["id"], {}))
+            for sensor, token in list(runtime.get("sensorActions", {}).items()):
+                prefix = "pixora_thermostat:" + token + ":"
+                if action not in {prefix + "okay", prefix + "ignore"}:
+                    continue
+                if not z["enabled"] or not self.ha.connected or sensor not in self.problem_sensors(z, runtime):
+                    return
+                runtime["sensorActions"].pop(sensor, None)
+                if action.endswith(":ignore"):
+                    runtime.setdefault("ignored", {})[sensor] = {"name": self.sensor_name(sensor), "at": self.now().isoformat()}
+                    runtime["issue"] = ""
+                    self.timers.pop(z["id"], None)
+                    message = self.sensor_name(sensor) + " ignored by notification action. Its protection is excluded until marked Fixed."
+                else:
+                    message = self.sensor_name(sensor) + " issue acknowledged. Protection remains active."
+                self.store.patch_runtime(z["id"], runtime, message, "warning" if action.endswith(":ignore") else "info")
+                return
             approval = runtime.get("approval")
             if not approval or approval.get("decision") != "pending" or not z["enabled"] or not self.ha.connected:
                 continue
@@ -231,7 +308,7 @@ class Engine:
                 outside = temperature(self.ha.states.get(z["outdoor"]["entity"]), z["unit"])
             except ValueError:
                 return
-            if not z["outdoor"]["enabled"] or z["outdoor"]["mode"] != "ask" or outside <= z["outdoor"]["limit"]:
+            if not z["outdoor"]["enabled"] or z["outdoor"]["entity"] in runtime.get("ignored", {}) or z["outdoor"]["mode"] != "ask" or outside <= z["outdoor"]["limit"]:
                 approval["decision"] = "expired"
                 self.store.patch_runtime(z["id"], runtime, "Outdoor action ignored: the temperature rule no longer matches.")
                 return
@@ -243,6 +320,12 @@ class Engine:
         ident, now = z["id"], self.now()
         previous = copy.deepcopy(self.store.data["runtime"].get(ident, {}))
         runtime = copy.deepcopy(previous)
+        problems = self.problem_sensors(z, runtime)
+        stale = [key for key in runtime.get("sensorActions", {}) if key not in problems]
+        if stale:
+            for key in stale:
+                runtime["sensorActions"].pop(key, None)
+            self.store.patch_runtime(ident, runtime)
         timers = self.timers.setdefault(ident, {})
         if not z["enabled"]:
             self.status[ident] = {"reason": "Disabled", "detail": "The thermostat keeps its current settings."}
@@ -261,6 +344,9 @@ class Engine:
         if pending:
             if same(actual, pending["target"]):
                 runtime.update(last=pending["target"], pending=None, blocked="")
+                context = pending.get("context") or "Thermostat adjustment"
+                runtime["activityContext"] = context
+                self.store.patch_runtime(ident, runtime, "Confirmed: " + context + ". Home Assistant reports " + target_text(actual, z["unit"]) + ".")
             elif (now - datetime.fromisoformat(pending["at"])).total_seconds() >= 30:
                 runtime["blocked"] = "A thermostat command could not be confirmed. Check the thermostat before resuming; it will not be retried."
         if runtime.get("blocked"):
@@ -292,12 +378,14 @@ class Engine:
         if not desired:
             raise ValueError("No schedule is configured.")
         reason = "Temporary override" if override else "Schedule"
-        detail = ("Until " + override["until"]) if override else row.get("name", "Period starting " + clock_time(row["time"])) + " at " + clock_time(row["time"])
+        detail = hold_detail(override, self.ha.timezone) if override else row.get("name", "Period starting " + clock_time(row["time"])) + " at " + clock_time(row["time"])
 
         opened, unknown = [], []
         contacts = timers.setdefault("contacts", {})
         close_signature = []
         for sensor in z["openings"]:
+            if sensor in runtime.get("ignored", {}):
+                continue
             contact = self.ha.states.get(sensor, {})
             close_signature.append((sensor, contact.get("last_changed")))
             if contact.get("state") == "on":
@@ -335,12 +423,12 @@ class Engine:
                 timers["closedSignature"] = close_signature
                 if (now - timers["closed"]).total_seconds() >= z["closeMinutes"] * 60:
                     runtime["window"] = False
-        if not z["openings"]:
+        if not any(sensor not in runtime.get("ignored", {}) for sensor in z["openings"]):
             runtime["window"] = False
 
         outdoor = z["outdoor"]
         outside = None
-        if outdoor["enabled"]:
+        if outdoor["enabled"] and outdoor["entity"] not in runtime.get("ignored", {}):
             outside = temperature(self.ha.states.get(outdoor["entity"]), z["unit"])
             if outside > outdoor["limit"]:
                 runtime["outdoorCrossed"] = True
@@ -387,14 +475,16 @@ class Engine:
                 desired = {"mode": "off"}
 
         flags = {"window": bool(runtime.get("window")), "outdoor": bool(runtime.get("outdoor"))}
+        period_name = row.get("name") or "Period at " + clock_time(row["time"])
+        activity = ("Schedule “" + period_name + "”" if reason == "Schedule" else reason + " (scheduled period: “" + period_name + "”)") + " — " + target_text(desired, z["unit"])
         self.status[ident] = {"reason": reason, "detail": detail, "target": desired, "actual": actual, "outdoor": outside,
                               "open": opened, "openSince": timers.get("open").isoformat() if timers.get("open") else None,
                               "override": override, "schedule": {"name": row.get("name", "Period starting " + row["time"]), "time": row["time"], "target": target(row)}, "protection": flags, "nextPeriod": next_period(z["schedule"], now, self.ha.timezone).isoformat()}
         if not same(actual, desired):
             action, fields = service_for(desired, state, z["unit"], self.ha.unit, self.ha.services)
             # Write the claim before the network request. A crash/timeout is never replayed.
-            runtime["pending"] = {"target": desired, "at": now.isoformat()}
-            self.store.patch_runtime(ident, runtime, reason + ": sent thermostat adjustment.")
+            runtime["pending"] = {"target": desired, "at": now.isoformat(), "context": activity}
+            self.store.patch_runtime(ident, runtime, "Requested: " + activity + ". Waiting for thermostat confirmation.")
             try:
                 await self.ha.call(action, fields)
             except (ValueError, asyncio.TimeoutError, OSError) as exc:
@@ -402,6 +492,9 @@ class Engine:
                 self.store.patch_runtime(ident, runtime, runtime["blocked"], "warning")
             return
         runtime["last"] = actual
+        if runtime.get("activityContext") != activity:
+            runtime["activityContext"] = activity
+            self.store.patch_runtime(ident, runtime, "Following: " + activity + ". Thermostat already matches; no command needed.")
         # Notify once per observed protection transition, after the target is confirmed.
         notices = runtime.setdefault("notices", {})
         for flag, active in flags.items():

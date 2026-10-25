@@ -11,7 +11,7 @@ from engine import Store, Engine
 from ha import HomeAssistant
 from policy import validate, target, next_period, service_for, observed, number
 
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 ROOT = Path(__file__).parent
 
 
@@ -45,6 +45,7 @@ def make_app(root=Path("/data"), test_ha=None):
         ha, engine = app["ha"], app["engine"]
         runtime = copy.deepcopy(store.data["runtime"])
         for item in runtime.values():
+            item.pop("sensorActions", None)
             if item.get("approval"):
                 item["approval"].pop("token", None)
         entities = [{"id": s["entity_id"], "name": s.get("attributes", {}).get("friendly_name") or s["entity_id"],
@@ -104,6 +105,11 @@ def make_app(root=Path("/data"), test_ha=None):
             for z in value["zones"]:
                 if old.get(z["id"], {}).get("outdoor") != z["outdoor"] or old.get(z["id"], {}).get("notify") != z["notify"] or old.get(z["id"], {}).get("enabled") != z["enabled"]:
                     saved["runtime"].get(z["id"], {}).pop("approval", None)
+                prior = old.get(z["id"], {})
+                if any(prior.get(key) != z.get(key) for key in ("outdoor", "notify", "enabled", "openings", "alerts")):
+                    current = saved["runtime"].get(z["id"], {})
+                    current.pop("sensorActions", None)
+                    current.pop("issue", None)
             store.write(saved)
             # Preserve observations for unchanged protection settings, including
             # when a different controller or just its display name is edited.
@@ -149,6 +155,14 @@ def make_app(root=Path("/data"), test_ha=None):
                 runtime["override"] = {"target": wanted, "until": until.isoformat(), "source": "Away hold" if person or body.get("until") else "Controller override"}
                 if person:
                     runtime["override"].update(returnPerson=person, seenAway=ha.states[person].get("state") not in {None, "home", "unknown", "unavailable"})
+            elif kind == "fixed":
+                sensor = body.get("sensor")
+                if not isinstance(sensor, str) or sensor not in runtime.get("ignored", {}):
+                    raise ValueError("Choose an ignored sensor.")
+                runtime["ignored"].pop(sensor)
+                runtime.get("sensorActions", {}).pop(sensor, None)
+                runtime["issue"] = ""
+                engine.timers.pop(z["id"], None)
             elif kind == "resume":
                 runtime["override"] = None
             elif kind == "checked":
@@ -158,7 +172,8 @@ def make_app(root=Path("/data"), test_ha=None):
                 runtime.update(pending=None, blocked="", last=observed(ha.states[z["entity"]]))
             else:
                 raise ValueError("Choose a supported controller action.")
-            store.patch_runtime(z["id"], runtime, {"override": "Temporary override saved.", "resume": "Schedule resumed; protection remains active.", "checked": "User checked the thermostat and resumed control."}[kind])
+            message = (engine.sensor_name(body["sensor"]) + " marked Fixed. Sensor checks restored; unknown readings still block changes.") if kind == "fixed" else {"override": "Temporary override saved.", "resume": "Schedule resumed; protection remains active.", "checked": "User checked the thermostat and resumed control."}[kind]
+            store.patch_runtime(z["id"], runtime, message)
         await engine.tick()
         return web.json_response({"ok": True})
 
