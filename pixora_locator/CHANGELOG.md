@@ -1,3 +1,6 @@
+## 1.5.3
+- Show the actual phone location freshness and last report on the status page. A saved position no longer incorrectly means Current; freshness matches the Home Control map and HA Location Health sensor.
+
 # 1.5.2
 
 **IMPORTANT — This is the current app from PixoraHQ for Home Assistant.**

@@ -34,7 +34,7 @@ REGISTRATIONS_PATH = Path("/data/registrations.json")
 MIGRATION_SOURCE_PATH = Path("/data/migration-source-id")
 PIXORA_URL = "https://planner.pixorahq.com/api/locator/home-assistant/current"
 HA_API = "http://supervisor/core/api"
-APP_VERSION = "1.5.2"
+APP_VERSION = "1.5.3"
 INGRESS_PORT = 8099
 MAX_MIGRATION_ZONES = 50
 MAX_MIGRATION_FILE_BYTES = 512_000
@@ -418,6 +418,8 @@ class LocatorBridge:
                 "name": str(device.get("name") or "Pixora Locator")[:80],
                 "sharing": str(device.get("sharing") or "off"),
                 "available": bool(device.get("available")),
+                "locationHealth": str(device.get("locationHealth") or "unknown"),
+                "updatedAt": str(device.get("updatedAt") or ""),
             }
             for device in devices
             if isinstance(device, dict) and device.get("deviceId")
@@ -460,12 +462,21 @@ def status_page(bridge: LocatorBridge) -> bytes:
         if not isinstance(device, dict):
             continue
         available = bool(device.get("available"))
+        sharing = str(device.get("sharing") or "off")
+        health = str(device.get("locationHealth") or "unknown")
+        label = "Not sharing" if sharing == "off" else "Location unavailable" if not available else {
+            "current": "Current", "delayed": "Delayed", "stale": "Stale",
+            "unavailable": "Location unavailable", "one-time": "One-time location",
+            "off": "Not sharing",
+        }.get(health, "Freshness unknown")
+        report = str(device.get("updatedAt") or "Not reported")
         rows.append(
-            '<div class="device"><div><strong>{}</strong><small>{}</small></div><span class="{}">{}</span></div>'.format(
+            '<div class="device"><div><strong>{}</strong><small>{}</small><small>Last phone report: {}</small></div><span class="{}">{}</span></div>'.format(
                 html.escape(str(device.get("name") or "Pixora Locator")),
                 html.escape(str(device.get("sharing") or "off").replace("_", " ").title()),
-                "online" if available else "offline",
-                "Current" if available else "Not sharing",
+                html.escape(report),
+                "online" if available and health == "current" and sharing != "off" else "offline",
+                label,
             )
         )
     device_list = "".join(rows) or '<p class="empty">No Locator phones have been registered with this household yet.</p>'

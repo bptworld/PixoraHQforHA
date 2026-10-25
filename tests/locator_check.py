@@ -117,7 +117,7 @@ def run() -> None:
             locator.request_json = fake_request
             bridge.home_checked_at = 0
             saved_registration = json.loads(locator.REGISTRATIONS_PATH.read_text())["phone-1"]
-            assert saved_registration["webhook_id"] == "managed-webhook-1" and saved_registration["app_version"] == "1.5.2"
+            assert saved_registration["webhook_id"] == "managed-webhook-1" and saved_registration["app_version"] == locator.APP_VERSION
             page = locator.status_page(bridge).decode()
             assert "Bryan&#x27;s phone" in page and "Connected" in page and "Last successful sync" in page
             assert "42.36" not in page and "-71.06" not in page and "pha1.test" not in page
@@ -125,6 +125,17 @@ def run() -> None:
             assert "Location history" not in page
             assert "Invalid" not in page and "Boolean" not in page and "Bad identity" not in page and "Too long" not in page and "migration.js" in page and "X Place" in page
             assert "selection-count" in page
+            for health, label in [("stale", "Stale"), ("delayed", "Delayed"), ("one-time", "One-time location"), ("unknown", "Freshness unknown")]:
+                snapshot["devices"][0]["locationHealth"] = health
+                snapshot["devices"][0]["updatedAt"] = "2026-09-19T12:05:00+00:00"
+                bridge.poll()
+                assert bridge.status_snapshot()["devices"][0]["locationHealth"] == health
+                health_page = locator.status_page(bridge).decode()
+                assert f'">{label}</span>' in health_page and '">Current</span>' not in health_page
+                assert "Last phone report: 2026-09-19T12:05:00+00:00" in health_page
+            snapshot["devices"][0]["locationHealth"] = "current"
+            bridge.poll()
+            assert '">Current</span>' in locator.status_page(bridge).decode()
             catalog = bridge.migration_catalog()
             assert next(item for item in catalog["zones"] if item["entityId"] == "zone.x")["name"] == "X Place"
 
