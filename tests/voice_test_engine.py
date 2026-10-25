@@ -1,7 +1,7 @@
 """Offline acceptance cases, including the user's exact six requests."""
 import sys,unittest
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice/custom_components/pixora_voice'))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice/runtime'))
 from engine import Entity,answer,duration_answer
 from datetime import datetime,timedelta,timezone
 

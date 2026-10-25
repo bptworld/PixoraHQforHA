@@ -7,11 +7,13 @@ from datetime import datetime,timedelta,timezone
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import voice_test_conversation as adapter_fixture
 module=adapter_fixture.module
-from custom_components.pixora_voice.engine import Entity,Result
-from custom_components.pixora_voice.controls import plan
-from custom_components.pixora_voice.timers import timer_request,reply as timer_reply
-from custom_components.pixora_voice.extra_reads import reply as extra_reply
-from custom_components.pixora_voice.flows import variable_question
+from runtime.engine import Entity,Result
+from runtime.controls import plan
+from runtime.timers import timer_request
+from custom_components.pixora_voice.native_timer import reply as native_timer_reply
+async def timer_reply(hass,request):return await native_timer_reply(hass,request,dict(zip(("kind","values"),timer_request(request.text))))
+from runtime.extra_reads import reply as extra_reply
+from runtime.flows import variable_question
 
 class ControlTests(unittest.TestCase):
  def setUp(self):
@@ -38,7 +40,7 @@ class ControlTests(unittest.TestCase):
   media=Entity('media_player.media','Speaker','playing',{'supported_features':1},'Media Room')
   self.assertEqual(plan('Pause the Media Room speaker',[kitchen,media],'Kitchen').command['data']['entity_id'],media.entity_id)
  def test_weather_does_not_intercept_titles_or_device_names(self):
-  from custom_components.pixora_voice.extra_reads import request_kind
+  from runtime.extra_reads import request_kind
   for text in ('When is the Rain concert tomorrow?','Turn off the rain light','What time is the Weather Report concert?'):
    self.assertIsNone(request_kind(text),text)
   for text in ("What's the weather like outside?",'Will it rain tomorrow?','Is it raining?','What is the forecast for tomorrow?'):
@@ -77,15 +79,13 @@ class ReadTests(unittest.IsolatedAsyncioTestCase):
   self.assertIn('80 percent',(await extra_reply(hass,'Will it rain tomorrow?',[entity])).speech);service.assert_awaited_once()
   self.assertIn('share one weather',(await extra_reply(hass,'Will it rain today?',[])).speech)
  async def test_history_single_device_one_day(self):
-  now=datetime.now(timezone.utc);calls=[]
-  async def execute(fn):calls.append(fn);return {'binary_sensor.front':[NS(state='on',last_changed=now-timedelta(minutes=10))]}
-  module('homeassistant.components.recorder',get_instance=lambda hass:NS(async_add_executor_job=execute))
-  module('homeassistant.components.recorder.history',get_significant_states=lambda *a,**kw:None)
-  hass=NS(config=NS(time_zone='UTC'),data={});entity=Entity('binary_sensor.front','Front door','off',{'device_class':'door'})
+  now=datetime.now(timezone.utc)
+  rpc=AsyncMock(return_value=[{'state':'on','last_changed':(now-timedelta(minutes=10)).isoformat()}])
+  hass=NS(config=NS(time_zone='UTC'),rpc=rpc);entity=Entity('binary_sensor.front','Front door','off',{'device_class':'door'})
   result=await extra_reply(hass,'When did the front door last open?',[entity]);self.assertIn('last recorded open',result.speech)
-  self.assertEqual(calls[0].args[3],['binary_sensor.front']);self.assertEqual(calls[0].args[2]-calls[0].args[1],timedelta(hours=24));self.assertFalse(calls[0].keywords['include_start_time_state'])
-  pending=asyncio.create_task(asyncio.sleep(10));hass.data['pixora_voice']['history_task']=pending
-  self.assertIn('still checking',(await extra_reply(hass,'When did the front door last open?',[entity])).speech);pending.cancel()
+  rpc.assert_awaited_once_with('history',{'entity_id':'binary_sensor.front'})
+  rpc.side_effect=RuntimeError('busy')
+  self.assertIn("couldn't read",(await extra_reply(hass,'When did the front door last open?',[entity])).speech)
 
 class SpeechCoverageTests(unittest.TestCase):
  def test_local_examples_use_real_bounded_grammar(self):
@@ -117,7 +117,7 @@ class AdapterCapabilityTests(unittest.IsolatedAsyncioTestCase):
  def setUp(self):adapter_fixture.AdapterTests.setUp(self)
  async def ask(self,text):return await adapter_fixture.AdapterTests.ask(self,text)
  async def test_device_not_found_never_becomes_calendar_search(self):
-  with patch('custom_components.pixora_voice.planner.ask',AsyncMock()) as ask:
+  with patch('runtime.planner.ask',AsyncMock()) as ask:
    result=await self.ask('Is the missing door open?');ask.assert_not_awaited();self.assertIn('device',result.speech)
  async def test_control_permissions_and_single_turn(self):
   self.states.append(NS(entity_id='fan.living',name='Living fan',state='on',attributes={'supported_features':1}));self.control_denied.add('fan.living')
@@ -132,18 +132,18 @@ class AdapterCapabilityTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(self.hass.services.async_call.await_args.args[2]['entity_id'],'light.living')
  async def test_invalid_account_cannot_read_variables(self):
   self.hass.auth.async_get_user=AsyncMock(return_value=None)
-  with patch('custom_components.pixora_voice.flows.ask',AsyncMock()) as read:
+  with patch('runtime.flows.ask',AsyncMock()) as read:
    reply=await self.ask('Read isKitchenMotion variable');self.assertIn('permissions',reply.speech);read.assert_not_awaited()
  async def test_variable_read_goes_to_existing_flow_connection(self):
   self.context.user_id=None
-  with patch('custom_components.pixora_voice.flows.ask',AsyncMock(return_value='isKitchenMotion is true.')) as read:
+  with patch('runtime.flows.ask',AsyncMock(return_value='isKitchenMotion is true.')) as read:
    result=await self.ask("What's the value of isKitchenMotion?")
    self.assertEqual(result.speech,'isKitchenMotion is true.');self.assertFalse(result.continue_conversation);read.assert_awaited_once_with(self.hass,'__pixora_voice_variable__:isKitchenMotion')
 if __name__=='__main__':unittest.main()
 
 class ThermostatRequestTests(unittest.TestCase):
  def test_named_requests_and_unrelated_topics(self):
-  from custom_components.pixora_voice.thermostat import request_kind
+  from runtime.thermostat import request_kind
   for text, kind in [('Resume Nest schedule','controller_resume'),('What is Nest status','controller_status'),('How long is Nest override','controller_status'),('Why is Nest off','controller_status')]:
    self.assertEqual(request_kind(text,['Nest']),kind)
   self.assertIsNone(request_kind('Why is the light off',['Nest']))

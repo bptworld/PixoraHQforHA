@@ -3,7 +3,7 @@ import asyncio,re
 from datetime import datetime,timedelta,timezone
 from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
 from functools import partial
-from homeassistant.exceptions import HomeAssistantError
+HomeAssistantError=RuntimeError
 from .engine import Result,choose,spoken_name,words,canonical_request
 from .controls import select
 
@@ -67,20 +67,15 @@ async def reply(hass,text,catalog,area=''):
  best=rows[0][0];matches=[e for score,e in rows if score==best]
  if len(matches)!=1:return Result('Which device do you mean? Please include its full name and room.','capability')
  entity=matches[0];wanted={'open':'on' if entity.domain=='binary_sensor' else 'open','close':'off' if entity.domain=='binary_sensor' else 'closed','lock':'locked','unlock':'unlocked','turn on':'on','turn off':'off'}[action]
- state=hass.data.setdefault('pixora_voice',{})
- task=state.get('history_task')
- if task and not task.done():return Result("I'm still checking a recent history request. Please give it a moment.",'unavailable')
  try:
-  from homeassistant.components.recorder import get_instance
-  from homeassistant.components.recorder.history import get_significant_states
-  now=datetime.now(timezone.utc)
-  task=asyncio.ensure_future(get_instance(hass).async_add_executor_job(partial(get_significant_states,hass,now-timedelta(hours=24),now,[entity.entity_id],include_start_time_state=False,significant_changes_only=True,no_attributes=True)))
-  task.add_done_callback(lambda done:done.exception() if not done.cancelled() else None)
-  state['history_task']=task
-  result=await asyncio.wait_for(asyncio.shield(task),5)
- except (ImportError,HomeAssistantError,asyncio.TimeoutError,KeyError,RuntimeError,ValueError):return Result("I couldn't read that history. Recorder must be available; I only check one device over the last 24 hours.",'unavailable')
- rows=result.get(entity.entity_id,[])
- changed=[item for item in rows if getattr(item,'state',None)==wanted and isinstance(getattr(item,'last_changed',None),datetime) and item.last_changed.tzinfo is not None]
+  rows=await hass.rpc('history',{'entity_id':entity.entity_id})
+ except (RuntimeError,asyncio.TimeoutError):return Result("I couldn't read that history. Recorder must be available; I only check one device over the last 24 hours.",'unavailable')
+ changed=[]
+ for item in rows:
+  try:
+   at=datetime.fromisoformat(item['last_changed'])
+   if item['state']==wanted and at.tzinfo is not None:changed.append(at)
+  except (ValueError,KeyError,TypeError):pass
  if not changed:return Result("I don't see that change recorded in the last 24 hours.")
- last=max(item.last_changed for item in changed).astimezone(zone)
+ last=max(changed).astimezone(zone)
  return Result(spoken_name(entity)+' was last recorded '+{'open':'open','close':'closed','lock':'locked','unlock':'unlocked','turn on':'on','turn off':'off'}[action]+' at '+last.strftime('%I:%M %p').lstrip('0')+(' today.' if last.date()==datetime.now(zone).date() else ' yesterday.'))

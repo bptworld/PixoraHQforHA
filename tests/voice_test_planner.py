@@ -6,6 +6,7 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice'))
 from planner_phrases import update_phrases,write_owned,MARKER
 from custom_components.pixora_voice import planner
+from runtime.planner import is_planner_question
 class PhraseTests(unittest.TestCase):
  def test_manual_calendar_team_and_search_are_recognized(self):
   from hassil import Intents,recognize
@@ -23,7 +24,7 @@ class PhraseTests(unittest.TestCase):
    value=json.loads(p.read_text(encoding='utf-8')[len(MARKER):]);intents=Intents.from_dict(value)
    for text in ('is Fire Country on tonight','what time is Fire Country tonight','when is Fire Country on tonight','is Boston Blue on tomorrow','when is School concert today'):
     self.assertIsNotNone(recognize(text,intents),text)
-    self.assertTrue(planner.is_planner_question(text),text)
+    self.assertTrue(is_planner_question(text),text)
    self.assertIn('Fire Country',value['lists']['pv_calendar_event']['values'])
    self.assertIn('Fire Country New Episode',value['lists']['pv_calendar_event']['values'])
    update_phrases(p,{'events':[str(i)+' — New Episode' for i in range(50)]})
@@ -50,12 +51,12 @@ class PhraseTests(unittest.TestCase):
    p=Path(d)/'settings.json';write_owned(p,'{"enabled":true}');self.assertTrue(json.loads(p.read_text())['enabled'])
 class BridgeTests(unittest.IsolatedAsyncioTestCase):
  async def test_red_sox_question_routes_to_planner_without_game_keyword(self):
-  self.assertTrue(planner.is_planner_question('are the red sox playing tomorrow?'))
-  self.assertTrue(planner.is_planner_question('Are the Boston Red Sox playing today?'))
-  self.assertFalse(planner.is_planner_question('turn on the ceiling light'))
-  self.assertFalse(planner.is_planner_question('is the front door open?'))
-  self.assertTrue(planner.is_planner_question('Are the Kraken playing tomorrow?'))
-  self.assertTrue(planner.is_planner_question('What time is the school concert tomorrow?'))
+  self.assertTrue(is_planner_question('are the red sox playing tomorrow?'))
+  self.assertTrue(is_planner_question('Are the Boston Red Sox playing today?'))
+  self.assertFalse(is_planner_question('turn on the ceiling light'))
+  self.assertFalse(is_planner_question('is the front door open?'))
+  self.assertTrue(is_planner_question('Are the Kraken playing tomorrow?'))
+  self.assertTrue(is_planner_question('What time is the school concert tomorrow?'))
 
  async def test_connection_failure_speaks_and_cleans_pending(self):
   with tempfile.TemporaryDirectory() as d:

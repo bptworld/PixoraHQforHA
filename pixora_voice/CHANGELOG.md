@@ -1,3 +1,9 @@
+## 0.2.0
+- Move interpretation, device matching, follow-ups, Planner/Flow routing and Groq transcription into the app; retain a stable native Assist bridge with existing entity identities and permissions.
+- Routine app updates recover automatically without an HA restart or another button. This migration requires one confirmed HA restart; only future native bridge changes may require another.
+- Authenticate the internal connection, bound request/audio sizes and concurrency, expire request-scoped operations, recheck exposure/control permissions, preserve the originating HA context and reject command replays. Retain Thermostat Controller protections.
+- Preserve household settings, Groq key, Planner/Flow data, voice logs, usage counters and one request per wake word.
+
 ## 0.1.21
 - Make every Voice log entry expandable with recognized words and the actual reply. Successful requests start collapsed; failures open with additional diagnostic detail. Timing-only reads still omit text, and no extra transcript/audio storage is added.
 

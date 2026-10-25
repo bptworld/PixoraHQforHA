@@ -1,7 +1,7 @@
 import json,sys,tempfile,unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'pixora_voice'))
-from app import install_component,prepare_integration_update,finish_integration_update,VERSION
+from app import install_component,prepare_integration_update,finish_integration_update,INTEGRATION_VERSION as VERSION
 
 class InstallTests(unittest.TestCase):
     def test_first_install_update_backup_and_other_integrations(self):
@@ -10,7 +10,7 @@ class InstallTests(unittest.TestCase):
             unrelated=config/'custom_components/unrelated';unrelated.mkdir(parents=True);(unrelated/'__init__.py').write_text('untouched')
             install_component(config,data)
             target=config/'custom_components/pixora_voice'
-            self.assertTrue((target/'phrase_tools.py').exists());self.assertTrue((target/'engine.py').exists());(target/'version_marker').write_text('old')
+            self.assertTrue((target/'phrase_tools.py').exists());self.assertTrue((target/'bridge.py').exists());self.assertFalse((target/'engine.py').exists());(target/'version_marker').write_text('old')
             self.assertTrue((target/'stt.py').exists());self.assertIn('from .phrase_tools import write_owned',(target/'speech_settings.py').read_text())
             install_component(config,data)
             self.assertFalse((target/'version_marker').exists());self.assertEqual(len(list((data/'integration-backups').glob('*/version_marker'))),1)
@@ -107,6 +107,27 @@ class AutomaticRecoveryTests(unittest.IsolatedAsyncioTestCase):
    self.assertTrue(all(call.args==('states',) for call in ha.await_args_list))
 
 class UnchangedUpdateTests(unittest.TestCase):
+ def test_app_only_update_does_not_copy_assist_or_request_restart(self):
+  from unittest.mock import patch
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);config=root/'config';data=root/'data';install_component(config,data)
+   before=(config/'custom_components/pixora_voice/manifest.json').read_bytes()
+   with patch('app.VERSION','99.0.0'), patch('app.install_component') as install:
+    self.assertIsNone(prepare_integration_update(config,data))
+    install.assert_not_called()
+   self.assertEqual((config/'custom_components/pixora_voice/manifest.json').read_bytes(),before)
+   self.assertFalse((data/'integration-update.json').exists())
+
+ def test_app_only_update_preserves_pending_assist_restart(self):
+  from unittest.mock import patch
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);config=root/'config';data=root/'data';install_component(config,data);data.mkdir(exist_ok=True)
+   pending={'version':VERSION,'phase':'awaiting-restart','needRestart':True,'speechNeeded':False}
+   (data/'integration-update.json').write_text(json.dumps(pending))
+   with patch('app.VERSION','99.0.0'), patch('app.install_component') as install:
+    self.assertEqual(prepare_integration_update(config,data),pending)
+    install.assert_not_called()
+
  def test_groq_update_never_recreates_local_phrases(self):
   from speech_settings import save_settings
   with tempfile.TemporaryDirectory() as folder:

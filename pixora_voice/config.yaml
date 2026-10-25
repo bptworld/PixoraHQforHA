@@ -1,5 +1,5 @@
 name: Pixora Voice (Beta)
-version: "0.1.21"
+version: "0.2.0"
 slug: pixora_voice
 description: "IN BETA TESTING. Local home questions and controls, with optional Groq speech and Planner answers. No LLM. Brought to you by PixoraHQ.com."
 arch: [aarch64, amd64]
@@ -7,6 +7,8 @@ startup: application
 boot: auto
 init: false
 homeassistant_api: true
+hassio_api: true
+hassio_role: default
 ingress: true
 ingress_port: 4190
 panel_icon: mdi:microphone-message

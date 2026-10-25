@@ -2,6 +2,8 @@
 from homeassistant.const import Platform
 
 async def async_setup_entry(hass,entry):
+    from .bridge import install_service
+    install_service(hass)
     from .planner import install_reply_service
     install_reply_service(hass)
     from .flows import install_services
@@ -12,9 +14,10 @@ async def async_setup_entry(hass,entry):
 async def async_unload_entry(hass,entry):
     unloaded=await hass.config_entries.async_unload_platforms(entry,[Platform.CONVERSATION,Platform.STT])
     if unloaded:
+        hass.data.get('pixora_voice',{}).get('bridge_requests',{}).clear()
         for future in hass.data.get('pixora_voice',{}).get('planner_pending',{}).values():
             if not future.done():future.cancel()
         for future in hass.data.get('pixora_voice',{}).get('flow_pending',{}).values():
             if not future.done():future.cancel()
-        for service in ('planner_reply','planner_vocabulary','flow_reply','flow_vocabulary','refresh_flow_phrases','speech_ready'):hass.services.async_remove('pixora_voice',service)
+        for service in ('planner_reply','planner_vocabulary','flow_reply','flow_vocabulary','refresh_flow_phrases','speech_ready','runtime_action'):hass.services.async_remove('pixora_voice',service)
     return unloaded

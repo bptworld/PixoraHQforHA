@@ -2,6 +2,7 @@
 from datetime import datetime
 
 ERRORS = {
+ 'voice-app-unavailable': ('Question handling', 'The local Voice app did not return a usable answer.', 'The app may have been updating, unavailable or timed out. Check its running state and app logs. A command may already have run; check the device before repeating it.'),
  'stt-no-text-recognized': ('Speech recognition', 'The recognizer could not match the spoken request.', 'This request may not be in Speech-to-Phrase’s trained vocabulary, even with clear audio. HA returned no text, so it cannot tell us which words were spoken or prove the exact cause. Try the same question in Ask Pixora: if it works there, check phrase coverage and training. If a known trained phrase also fails, then check microphone mute, audio, distance and background noise.'),
  'stt-provider-missing': ('Speech recognition', 'The speech recognition provider is missing.', 'Check the assistant’s speech-to-text selection and that Speech-to-Phrase is installed and running.'),
  'stt-provider-unsupported-metadata': ('Speech recognition', 'The recognizer rejected the audio format.', 'Check satellite firmware and the selected local speech recognizer.'),
@@ -45,6 +46,7 @@ def summarize(events,include_text=False):
                 reply=speech[:1500]
                 normalized=speech.strip().replace('’',"'").lower()
                 unanswered=normalized in {"sorry, i can't find the information you're looking for.","sorry, i can't find the information you are looking for."} or normalized.startswith("i can't find the right device to check that.")
+                if error_code is None and (normalized.startswith("i couldn't finish that request.") or normalized=="i couldn't read the voice app's answer."):error_code='voice-app-unavailable'
     def elapsed(start,end):
         try:return round(max(0,(stamps[end]-stamps[start]).total_seconds()),3)
         except (KeyError,TypeError):return None

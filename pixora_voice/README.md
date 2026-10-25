@@ -1,3 +1,7 @@
+**One app, automatic routine updates:** Interpretation, matching, follow-ups, Planner/Flow request routing and optional Groq transcription now run inside the Voice app. HA keeps a small Assist bridge for satellite context, fresh exposure/permission checks, native timers/history and device execution. Migrating to this bridge needs one confirmed HA restart. Later app-only updates restart just the app and recover automatically; they do not replace or reload Assist. A future change to the bridge itself may still require an HA restart. No command is replayed after a timeout or app restart.
+
+The bridge uses an authenticated internal HA-to-app connection, with no published port or additional account. Requests carry fresh permitted state and expire after 30 seconds; at most four conversation requests and two transcription requests run at once. Audio and transcripts are not retained by the app. Existing settings, Groq key, Planner opt-in, Flow definitions and satellite entity identities are preserved.
+
 **Voice log outcomes:** Unanswered questions are flagged even when the pipeline completed. Failed entries expand with bounded recognized words, the reply, the failed stage and checks, read on demand from existing HA traces in the local admin page. No extra transcript/audio storage or background collector is added. Successful entries start collapsed and expand to show heard words/reply; response-timing reads still omit text.
 
 **Usage & limits:** Speech recognition → Refresh usage shows this hub’s daily attempts/outcomes and audio duration of attempted requests since this update, with sanitized quota/reset headers from Groq’s last transcription response. Provider figures may include other organization clients and are not live polling. Missing headers show Not reported. Counts use HA’s local day, exclude connection tests, and are not billing estimates. No audio, text or API key is stored in the statistics.
@@ -10,7 +14,7 @@ Open **Speech recognition** in the Voice app. Enter your Groq API key, enable th
 
 **Restart choice:** Voice updates its Assist files automatically. When Home Assistant must restart, open Voice and choose **Restart now** or **Later**. Later keeps the current session running and leaves a restart button. No HA restart is sent without Restart now; uncertain requests are not repeated.
 
-**Voice and Assist now update together automatically. Updating this app may restart Home Assistant once and Speech-to-Phrase once; no separate Assist update step is required. Repair tools are optional.**
+**Required bridge updates install automatically. Routine app releases need no extra action or HA restart. Repair tools are optional.**
 
 # Pixora Voice — local Home Assistant app
 

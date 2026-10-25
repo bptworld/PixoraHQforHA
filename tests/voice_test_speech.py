@@ -78,6 +78,7 @@ class SpeechTests(unittest.IsolatedAsyncioTestCase):
         self.calls=[];self.status=200;self.response={'text':'What is the heat set to?'}
         owner=self
         class Response:
+            headers={}
             @property
             def status(self):return owner.status
             @property
@@ -102,6 +103,13 @@ class SpeechTests(unittest.IsolatedAsyncioTestCase):
         self.provider=self.stt.GroqWhisper('test')
         self.provider.hass=NS(config=NS(path=lambda:self.tmp.name))
         save_settings(self.tmp.name,{'enabled':True,'key':'gsk_'+'fake_for_test_'*3})
+        from runtime.speech import transcribe
+        async def bridge_transport(hass,path,body=None,audio=None):
+            self.assertEqual(path,'speech')
+            return await transcribe(NS(post=post),self.tmp.name,audio)
+        self.transport_patch=patch('custom_components.pixora_voice.bridge.transport',bridge_transport)
+        self.transport_patch.start();self.addCleanup(self.transport_patch.stop)
+
 
     async def audio(self,chunks=None):
         for chunk in chunks or [b'\x00\x00'*16000]:yield chunk

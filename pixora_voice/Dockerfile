@@ -3,5 +3,6 @@ FROM ${BUILD_FROM}
 RUN apk add --no-cache python3 py3-aiohttp
 COPY app.py diagnostics.py planner_phrases.py speech_settings.py index.html icon.svg run.sh /app/
 COPY custom_components /app/custom_components
+COPY runtime /app/runtime
 RUN chmod 0755 /app/run.sh
 CMD ["/app/run.sh"]

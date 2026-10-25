@@ -94,10 +94,3 @@ def install_services(hass):
  if not hass.services.has_service(DOMAIN,'refresh_flow_phrases'):hass.services.async_register(DOMAIN,'refresh_flow_phrases',refresh)
  if not hass.services.has_service(DOMAIN,'flow_reply'):hass.services.async_register(DOMAIN,'flow_reply',receive)
  if not hass.services.has_service(DOMAIN,'flow_vocabulary'):hass.services.async_register(DOMAIN,'flow_vocabulary',vocabulary,supports_response=SupportsResponse.ONLY)
-
-def variable_question(text):
- q=str(text).strip().rstrip('?.!')
- match=re.fullmatch(r"(?:what is|what's|read|tell me) (?:the )?(?:value of (?:the )?|variable )(.+?)(?: variable)?",q,re.I)
- if match:return match[1].strip()
- match=re.fullmatch(r"(?:what is|what's|read|tell me) (?:the )?(.+?) variable",q,re.I)
- return match[1].strip() if match else None

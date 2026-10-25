@@ -19,6 +19,12 @@ class TimingTests(unittest.IsolatedAsyncioTestCase):
         successful=summarize([{'type':'stt-end','timestamp':'2026-10-25T15:26:40+00:00','data':{'stt_output':{'text':'private success'}}},{'type':'run-end','timestamp':'2026-10-25T15:26:41+00:00'}],include_text=True)
         self.assertEqual(successful['heard'],'private success')
         self.assertNotIn('heard',summarize(events))
+    def test_app_outage_reply_is_a_handling_failure_even_if_pipeline_completed(self):
+        events=[{'type':'intent-end','timestamp':'2026-10-25T12:00:01+00:00','data':{'intent_output':{'response':{'response_type':'action_done','speech':{'plain':{'speech':"I couldn't finish that request. Voice may be updating. Please check any device you asked to control before trying again."}}}}}}, {'type':'run-end','timestamp':'2026-10-25T12:00:02+00:00'}]
+        result=summarize(events)
+        self.assertEqual(result['status'],'failed');self.assertEqual(result['error_code'],'voice-app-unavailable')
+        self.assertEqual(result['failure_stage'],'Question handling');self.assertIn('before repeating',result['next_check'])
+
     def test_groq_failure_does_not_blame_phrase_training(self):
         result=summarize([{'type':'stt-start','timestamp':'2026-10-25T12:00:00+00:00','data':{'engine':'stt.pixora_groq_whisper'}},
              {'type':'error','timestamp':'2026-10-25T12:00:01+00:00','data':{'code':'stt-stream-failed'}}])

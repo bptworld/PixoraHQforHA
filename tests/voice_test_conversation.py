@@ -13,12 +13,15 @@ module('homeassistant');module('homeassistant.components');module('homeassistant
 module('homeassistant.auth');module('homeassistant.auth.permissions')
 module('homeassistant.auth.permissions.const',POLICY_READ='read',POLICY_CONTROL='control')
 module('homeassistant.const',Platform=NS(CONVERSATION='conversation'))
-class HAError(Exception):pass
+class HAError(RuntimeError):pass
 module('homeassistant.exceptions',HomeAssistantError=HAError)
 module('homeassistant.components.homeassistant',async_should_expose=lambda hass,assistant,eid:eid not in hass.hidden)
 module('homeassistant.components.conversation',ConversationEntity=object,ConversationEntityFeature=NS(CONTROL=1),AssistantContent=lambda **kw:NS(**kw),async_get_result_from_chat_log=lambda request,log:NS(speech=log.messages[-1].content,continue_conversation=log.messages[-1].content.endswith('?')))
 for name in ('area_registry','device_registry','entity_registry'):module('homeassistant.helpers.'+name,async_get=lambda hass:None)
-adapter=importlib.import_module('custom_components.pixora_voice.conversation')
+module('homeassistant.helpers.aiohttp_client',async_get_clientsession=lambda h:None)
+bridge=importlib.import_module('custom_components.pixora_voice.bridge')
+adapter=importlib.import_module('runtime.conversation')
+adapter.er=bridge.er;adapter.dr=bridge.dr;adapter.ar=bridge.ar
 
 
 class Registry:
@@ -33,7 +36,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         state=NS(entity_id='switch.living_room_living_room_fishtank_light',name='Living Room Fishtank Light',state='on',attributes={})
         self.states.append(state)
         adapter.er.async_get(self.hass).values[state.entity_id]=NS(device_id=None,area_id='living',aliases=[],disabled_by=None,hidden_by=None)
-        with patch('custom_components.pixora_voice.planner.enabled',AsyncMock(return_value=True)),patch('custom_components.pixora_voice.planner.ask',AsyncMock()) as planner:
+        with patch('runtime.planner.enabled',AsyncMock(return_value=True)),patch('runtime.planner.ask',AsyncMock()) as planner:
             reply=await self.ask('The fish tank lights on.')
             self.assertIn('is on',reply.speech);self.assertFalse(reply.continue_conversation)
             planner.assert_not_awaited();self.hass.services.async_call.assert_not_awaited()
@@ -68,9 +71,11 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
         self.agent=adapter.LocalVoice(NS(entry_id='local'));self.agent.entity_id='conversation.pixora_voice'
         self.read_denied=set();self.control_denied=set()
         permissions=NS(check_entity=lambda eid,policy:eid not in (self.read_denied if policy=='read' else self.control_denied))
-        self.hass=NS(hidden=set(),auth=NS(async_get_user=AsyncMock(return_value=NS(permissions=permissions))),services=NS(has_service=lambda *args:True,async_call=AsyncMock()))
+        self.hass=NS(hidden=set(),auth=NS(async_get_user=AsyncMock(return_value=NS(permissions=permissions,is_admin=False))),services=NS(has_service=lambda *args:True,async_call=AsyncMock()))
         self.states=[NS(entity_id='light.kitchen',name='Ceiling light',state='on',attributes={}),NS(entity_id='light.living',name='Ceiling light',state='off',attributes={})]
         self.hass.states=NS(async_all=lambda:self.states);self.agent.hass=self.hass
+        self.hass.phrases=[];self.hass.planner_enabled=False;self.hass.rpc=AsyncMock();self.hass.config=NS(time_zone='America/New_York')
+        self.hass.services.async_services=lambda:{}
         entities=Registry({s.entity_id:NS(device_id=None,area_id='kitchen' if 'kitchen' in s.entity_id else 'living',aliases=set(),disabled_by=None,hidden_by=None) for s in self.states})
         devices=Registry({'speaker':NS(area_id='living')});areas=Registry({'living':NS(name='Living Room'),'kitchen':NS(name='Kitchen')})
         adapter.er.async_get=lambda h:entities;adapter.dr.async_get=lambda h:devices;adapter.ar.async_get=lambda h:areas
@@ -78,12 +83,17 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def ask(self,text):
         self.request.text=text
+        try:payload=await bridge.snapshot(self.hass,self.request,'test')
+        except HAError:payload={'catalog':[],'origin':''}
+        from runtime.engine import Entity
+        self.hass.catalog=[Entity(e['entity_id'],e['name'],e['state'],e['attributes'],e['area'],e['aliases'],last_changed=next((getattr(s,'last_changed',None) for s in self.states if s.entity_id==e['entity_id']),None)) for e in payload['catalog']]
+        self.hass.origin=payload['origin']
         log=NS(conversation_id='test',messages=[]);log.async_add_assistant_content_without_tools=log.messages.append
         return await self.agent._async_handle_message(self.request,log)
 
     async def test_configured_voice_flow_is_exact_and_stops_listening(self):
         from unittest.mock import patch
-        with patch('custom_components.pixora_voice.flows.matches',AsyncMock(return_value=True)),patch('custom_components.pixora_voice.flows.ask',AsyncMock(return_value='Started Bedtime.')) as start:
+        with patch('runtime.flows.matches',AsyncMock(return_value=True)),patch('runtime.flows.ask',AsyncMock(return_value='Started Bedtime.')) as start:
             self.context.user_id=None
             reply=await self.ask('Good night')
             self.assertEqual(reply.speech,'Started Bedtime.');self.assertFalse(reply.continue_conversation)
@@ -91,13 +101,13 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
             self.hass.services.async_call.assert_not_awaited()
     async def test_non_admin_cannot_start_voice_flow(self):
         from unittest.mock import patch
-        with patch('custom_components.pixora_voice.flows.matches',AsyncMock(return_value=True)),patch('custom_components.pixora_voice.flows.ask',AsyncMock()) as start:
+        with patch('runtime.flows.matches',AsyncMock(return_value=True)),patch('runtime.flows.ask',AsyncMock()) as start:
             reply=await self.ask('Good night')
             self.assertIn('administrator',reply.speech);self.assertFalse(reply.continue_conversation);start.assert_not_awaited()
     async def test_clock_bypasses_planner_and_stops_listening(self):
         from unittest.mock import patch
         self.hass.config=NS(time_zone='America/New_York')
-        with patch('custom_components.pixora_voice.planner.ask',AsyncMock()) as planner_ask:
+        with patch('runtime.planner.ask',AsyncMock()) as planner_ask:
             reply=await self.ask('what time is it')
             self.assertTrue(reply.speech.startswith("It's "));self.assertFalse(reply.continue_conversation)
             planner_ask.assert_not_awaited();self.hass.services.async_call.assert_not_awaited()
@@ -147,6 +157,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_context_survives_new_wake_conversation_but_not_new_user(self):
         await self.ask('Is the ceiling light off?')
         self.states[1].last_changed=datetime.now(timezone.utc)-timedelta(minutes=3)
+        next(e for e in self.hass.catalog if e.entity_id=='light.living').last_changed=self.states[1].last_changed
         self.request.text='How long has it been off?'
         log=NS(conversation_id='new-wake',messages=[]);log.async_add_assistant_content_without_tools=log.messages.append
         result=await self.agent._async_handle_message(self.request,log)
@@ -191,7 +202,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_planner_date_followup_uses_same_question(self):
         from unittest.mock import patch
-        with patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value='A shared event.')) as ask:
+        with patch('runtime.planner.ask',new=AsyncMock(return_value='A shared event.')) as ask:
             self.assertFalse((await self.ask("What's Bryan's schedule today?")).continue_conversation)
             self.assertFalse((await self.ask('And tomorrow?')).continue_conversation)
             self.assertEqual(ask.await_args.args[1],"What's Bryan's schedule tomorrow?")
@@ -200,7 +211,7 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_unknown_question_searches_enabled_planner(self):
         from unittest.mock import patch
-        with patch('custom_components.pixora_voice.planner.enabled',new=AsyncMock(return_value=True)), patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value='School concert is at Town Hall.')) as ask:
+        with patch('runtime.planner.enabled',new=AsyncMock(return_value=True)), patch('runtime.planner.ask',new=AsyncMock(return_value='School concert is at Town Hall.')) as ask:
             result=await self.ask('Tell me about the school concert')
             ask.assert_awaited_once_with(self.hass,'Tell me about the school concert')
             self.assertIn('Town Hall',result.speech)
@@ -209,15 +220,15 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_missing_answer_uses_requested_fallback(self):
         from unittest.mock import patch
-        from custom_components.pixora_voice.engine import NOT_FOUND_REPLY
-        with patch('custom_components.pixora_voice.planner.enabled',new=AsyncMock(return_value=True)), patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value=NOT_FOUND_REPLY)):
+        from runtime.engine import NOT_FOUND_REPLY
+        with patch('runtime.planner.enabled',new=AsyncMock(return_value=True)), patch('runtime.planner.ask',new=AsyncMock(return_value=NOT_FOUND_REPLY)):
             result=await self.ask('Tell me about the lunar cheese festival')
             self.assertEqual(result.speech,NOT_FOUND_REPLY)
             self.assertFalse(result.continue_conversation)
 
     async def test_playing_question_followup_keeps_calendar_subject(self):
         from unittest.mock import patch
-        with patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value='A shared game.')) as ask:
+        with patch('runtime.planner.ask',new=AsyncMock(return_value='A shared game.')) as ask:
             await self.ask('Are the Kraken playing today?')
             result=await self.ask('And tomorrow?')
             self.assertEqual(ask.await_args.args[1],'Are the Kraken playing tomorrow?')
@@ -225,14 +236,14 @@ class AdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_unknown_device_command_never_falls_through_to_search(self):
         from unittest.mock import patch
-        with patch('custom_components.pixora_voice.planner.ask',new=AsyncMock()) as ask:
+        with patch('runtime.planner.ask',new=AsyncMock()) as ask:
             await self.ask('Turn on the unknown lamp')
             ask.assert_not_awaited()
             self.hass.services.async_call.assert_not_awaited()
 
     async def test_command_word_inside_read_only_question_still_searches(self):
         from unittest.mock import patch
-        with patch('custom_components.pixora_voice.planner.enabled',new=AsyncMock(return_value=True)), patch('custom_components.pixora_voice.planner.ask',new=AsyncMock(return_value='The manual is in the drawer.')) as ask:
+        with patch('runtime.planner.enabled',new=AsyncMock(return_value=True)), patch('runtime.planner.ask',new=AsyncMock(return_value='The manual is in the drawer.')) as ask:
             reply=await self.ask('Tell me about the TV set manual')
             ask.assert_awaited_once_with(self.hass,'Tell me about the TV set manual')
             self.assertIn('drawer',reply.speech)

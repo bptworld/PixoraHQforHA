@@ -78,7 +78,7 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_restart_requires_explicit_confirmation_and_cannot_be_queued_twice(self):
         import asyncio
-        from app import VERSION
+        from app import INTEGRATION_VERSION as VERSION
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);app=make_app(root,root)
             app['maintenance']={'pending':False,'restartRequired':True}
@@ -111,14 +111,14 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(all(method=='GET' for method,url in calls))
     async def test_direct_access_and_cross_origin_installs_denied(self):
         app=make_app();handler=AsyncMock(return_value=web.json_response({'ok':True}));gate=app.middlewares[0]
-        with self.assertRaises(web.HTTPForbidden):await gate(NS(remote='127.0.0.1',method='POST'),handler)
-        request=NS(remote='172.30.32.2',method='POST',headers={'Origin':'https://elsewhere.invalid'},host='homeassistant.local')
+        with self.assertRaises(web.HTTPForbidden):await gate(NS(remote='127.0.0.1',method='POST',path='/api/install',content_length=0),handler)
+        request=NS(remote='172.30.32.2',method='POST',path='/api/install',content_length=0,headers={'Origin':'https://elsewhere.invalid'},host='homeassistant.local')
         with self.assertRaises(web.HTTPForbidden):await gate(request,handler)
         handler.assert_not_awaited()
 
     async def test_ingress_allows_authenticated_same_origin(self):
         app=make_app();handler=AsyncMock(return_value=web.json_response({'ok':True}))
-        request=NS(remote='172.30.32.2',method='POST',headers={'Origin':'http://homeassistant.local:8123','X-Forwarded-Host':'homeassistant.local:8123'},host='internal')
+        request=NS(remote='172.30.32.2',method='POST',path='/api/install',content_length=0,headers={'Origin':'http://homeassistant.local:8123','X-Forwarded-Host':'homeassistant.local:8123'},host='internal')
         response=await app.middlewares[0](request,handler)
         self.assertEqual(response.status,200);self.assertEqual(response.headers['Cache-Control'],'no-store')
 

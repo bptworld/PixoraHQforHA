@@ -1,10 +1,35 @@
-"""HA ingress app. All home interpretation runs in the native local Assist agent."""
+"""Local Voice runtime and ingress UI; the stable HA bridge retains authorization."""
 import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.21'
+VERSION='0.2.0'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
+# Assist changes have their own release identity; app-only updates keep this unchanged.
+INTEGRATION_VERSION=json.loads((COMPONENT/'manifest.json').read_text(encoding='utf-8'))['version']
+
+
+async def configure_bridge(session,config_root):
+    """Publish only a Supervisor-provided internal address and persistent private bridge key."""
+    import secrets,re
+    path=config_root/'.storage/pixora_voice_bridge.json'
+    try:previous=json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:previous={}
+    if not isinstance(previous,dict):raise ValueError('Local bridge settings need repair.')
+    key=previous.get('token')
+    # Preserve the established local connection across app updates, even while
+    # Supervisor is temporarily unavailable. No background polling or key rotation.
+    if isinstance(key,str) and re.fullmatch(r'[a-f0-9]{64}',key) and re.fullmatch(r'http://[a-z0-9-]+-pixora-voice:4190',previous.get('url','')):return
+    token=os.environ.get('SUPERVISOR_TOKEN','')
+    if not token:raise ValueError('Home Assistant access is unavailable.')
+    async with session.get('http://supervisor/addons/self/info',headers={'Authorization':'Bearer '+token},timeout=ClientTimeout(total=10)) as response:
+        if response.status!=200:raise ValueError('Local app address unavailable.')
+        value=await response.json()
+    hostname=value.get('data',{}).get('hostname','')
+    if not re.fullmatch(r'[a-z0-9-]+-pixora-voice',hostname):raise ValueError('Unexpected local app address.')
+    if not isinstance(key,str) or not re.fullmatch(r'[a-f0-9]{64}',key):key=secrets.token_hex(32)
+    from planner_phrases import write_owned
+    await asyncio.to_thread(write_owned,path,json.dumps({'url':'http://'+hostname+':4190','token':key}))
 
 
 def install_component(config_root,data_root):
@@ -21,9 +46,6 @@ def install_component(config_root,data_root):
     stage=Path(tempfile.mkdtemp(prefix='.pixora-voice-',dir=parent))
     try:
         shutil.copytree(COMPONENT,stage,dirs_exist_ok=True,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
-        shutil.copyfile(Path(__file__).with_name('planner_phrases.py'),stage/'phrase_tools.py')
-        settings_source=Path(__file__).with_name('speech_settings.py').read_text(encoding='utf-8')
-        (stage/'speech_settings.py').write_text(settings_source.replace('from planner_phrases import write_owned','from .phrase_tools import write_owned'),encoding='utf-8')
         if target.exists():
             backup=data_root/'integration-backups'/str(time.time_ns());backup.parent.mkdir(parents=True,exist_ok=True)
             shutil.copytree(target,backup)
@@ -51,18 +73,18 @@ def prepare_integration_update(config_root, data_root, phrase_file=None):
     exists = manifest.exists()
     installed = json.loads(manifest.read_text()) if exists else {}
     if not isinstance(installed,dict) or exists and (installed.get('domain')!='pixora_voice' or installed.get('codeowners')!=['@bptworld']):raise ValueError('An unrecognized Assist folder was preserved; automatic update stopped.')
-    if installed.get('version') == VERSION:
-        if record.get('version') == VERSION and record.get('phase') == 'prepared':
+    if installed.get('version') == INTEGRATION_VERSION:
+        if record.get('version') == INTEGRATION_VERSION and record.get('phase') == 'prepared':
             if record.get('speechNeeded'):
                 if not phrase_file:raise ValueError('Speech phrase recovery needs its saved destination.')
                 from planner_phrases import update_local_phrases
                 update_local_phrases(phrase_file)
             record['phase'] = 'installed'
             write_owned(journal, json.dumps(record))
-        return record if record.get('version') == VERSION and record.get('phase') != 'complete' else None
+        return record if record.get('version') == INTEGRATION_VERSION and record.get('phase') != 'complete' else None
     from planner_phrases import update_local_phrases
     speech_changed = update_local_phrases(phrase_file,check_only=True) if phrase_file else False
-    record = {'version': VERSION, 'phase': 'prepared', 'needRestart': exists, 'speechNeeded': speech_changed}
+    record = {'version': INTEGRATION_VERSION, 'phase': 'prepared', 'needRestart': exists, 'speechNeeded': speech_changed}
     write_owned(journal, json.dumps(record))
     install_component(config_root, data_root)
     if phrase_file:
@@ -91,7 +113,7 @@ async def _finish_integration_update(record, config_root, data_root, ha, notice,
         try:
             states = await ha('states')
             agents = [s for s in states if s.get('entity_id','').startswith('conversation.') and s.get('attributes',{}).get('friendly_name') in {'Pixora Voice','Pixora Voice (Beta)'}]
-            if any(s.get('attributes',{}).get('pixora_voice_version') == VERSION for s in agents):
+            if any(s.get('attributes',{}).get('pixora_voice_version') == INTEGRATION_VERSION for s in agents):
                 if record.get('speechNeeded'):
                     if record['phase'] in {'speech-restart-requested','speech-uncertain'}:
                         notice.update(message='Voice and Assist are updated. Speech restart was not confirmed and was not repeated; check Speech-to-Phrase.',pending=False)
@@ -143,7 +165,14 @@ async def _finish_integration_update(record, config_root, data_root, ha, notice,
 def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
     @web.middleware
     async def ingress(request,handler):
+        if request.path.startswith('/bridge/'):
+            import hmac
+            token=app.get('bridge_token','')
+            supplied=request.headers.get('X-Pixora-Bridge','')
+            if not token or not hmac.compare_digest(token,supplied):raise web.HTTPForbidden(text='Local bridge authorization required.')
+            return await handler(request)
         if request.remote!='172.30.32.2':raise web.HTTPForbidden(text='Open Pixora Voice from Home Assistant.')
+        if request.content_length and request.content_length>4096:raise web.HTTPRequestEntityTooLarge(max_size=4096,actual_size=request.content_length)
         if request.method=='POST':
             origin=request.headers.get('Origin')
             if origin:
@@ -155,7 +184,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'"
         response.headers['X-Content-Type-Options']='nosniff'
         return response
-    app=web.Application(middlewares=[ingress],client_max_size=4096)
+    app=web.Application(middlewares=[ingress],client_max_size=2*1024*1024)
 
     async def ha(path,body=None):
         token=os.environ.get('SUPERVISOR_TOKEN','')
@@ -163,6 +192,31 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         async with app['session'].request('POST' if body is not None else 'GET','http://supervisor/core/api/'+path,headers={'Authorization':'Bearer '+token},json=body,timeout=ClientTimeout(total=60 if path=='services/hassio/addon_restart' else 20)) as response:
             if response.status>=400:raise ValueError('Home Assistant could not confirm the request (HTTP '+str(response.status)+'). It was not retried.')
             return await response.json()
+
+    async def bridge_request(request):
+        try:
+            payload=await request.json()
+            if not isinstance(payload,dict) or not isinstance(payload.get('text'),str) or not 0<len(payload['text'])<=2000 or not isinstance(payload.get('catalog'),list) or len(payload['catalog'])>5000 or not isinstance(payload.get('request_id'),str):raise web.HTTPBadRequest(text='Invalid local request.')
+            app['ha_timezone']=payload.get('timezone','UTC')
+            async with asyncio.timeout(28):result=await app['runtime'].answer(payload)
+            return web.json_response(result)
+        except (ValueError,KeyError,TypeError,RuntimeError,asyncio.TimeoutError):
+            return web.json_response({'speech':"I couldn't finish that request. Please check any device you asked to control before trying again."},status=503)
+    async def bridge_speech(request):
+        from runtime.speech import transcribe,MAX_AUDIO
+        if request.content_length and request.content_length>MAX_AUDIO:raise web.HTTPRequestEntityTooLarge(max_size=MAX_AUDIO,actual_size=request.content_length)
+        if app.get('speech_active',0)>=2:return web.json_response({'text':None},status=503)
+        app['speech_active']=app.get('speech_active',0)+1
+        audio=bytearray()
+        try:
+            async with asyncio.timeout(5):
+                async for chunk in request.content.iter_chunked(16384):
+                    if len(audio)+len(chunk)>MAX_AUDIO:raise web.HTTPRequestEntityTooLarge(max_size=MAX_AUDIO,actual_size=len(audio)+len(chunk))
+                    audio.extend(chunk)
+            result=await transcribe(app['session'],config_root,audio,request.headers.get('X-Pixora-Timezone',app.get('ha_timezone','UTC'))[:80])
+            return web.json_response(result)
+        finally:
+            audio.clear();app['speech_active']-=1
 
     async def agents():
         states=await ha('states')
@@ -239,7 +293,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             journal=data_root/'integration-update.json'
             try:
                 record=json.loads(journal.read_text())
-                if not isinstance(record,dict) or record.get('version')!=VERSION or record.get('phase')!='awaiting-restart':
+                if not isinstance(record,dict) or record.get('version')!=INTEGRATION_VERSION or record.get('phase')!='awaiting-restart':
                     raise ValueError('No pending restart is available. Refresh Voice status.')
                 from planner_phrases import write_owned
                 record['phase']='restart-approved'
@@ -310,7 +364,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             await asyncio.to_thread(install_component,config_root,data_root)
             if existed:
                 from planner_phrases import write_owned
-                record={'version':VERSION,'phase':'awaiting-restart','needRestart':True,'speechNeeded':False}
+                record={'version':INTEGRATION_VERSION,'phase':'awaiting-restart','needRestart':True,'speechNeeded':False}
                 await asyncio.to_thread(write_owned,data_root/'integration-update.json',json.dumps(record))
                 app['maintenance'].update(message='Assist files repaired. Restart Home Assistant when you are ready.',pending=False,restartRequired=True)
         except ValueError as exc:return web.json_response({'error':str(exc)},status=409)
@@ -341,12 +395,23 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
             return web.json_response({'error':str(exc) if isinstance(exc,ValueError) else 'The request timed out. It was not retried; check any device you asked to control.'},status=503)
     async def startup(app):
         app['session']=ClientSession(timeout=ClientTimeout(total=20))
-        app['maintenance']={'message':'Voice and Assist update together automatically.', 'pending':False}
+        app['maintenance']={'message':'Checking the local Voice bridge.', 'pending':False}
+        from runtime.server import Runtime
+        app['runtime']=Runtime(config_root,ha)
+        try:
+            await configure_bridge(app['session'],config_root)
+            bridge=json.loads((config_root/'.storage/pixora_voice_bridge.json').read_text(encoding='utf-8'))
+            app['bridge_token']=bridge['token']
+        except (OSError,ValueError,KeyError,TypeError,ClientError,asyncio.TimeoutError):
+            app['maintenance'].update(message='Local Voice connection could not be prepared. No restart was requested.',pending=False)
+            return
         try:
             record=await asyncio.to_thread(prepare_integration_update,config_root,data_root,phrase_file.with_name('pixora_voice_language.yaml'))
             if record:
                 app['maintenance'].update(message='Updating Assist automatically…',pending=True)
                 app['update_task']=asyncio.create_task(finish_integration_update(record,config_root,data_root,ha,app['maintenance']))
+            else:
+                app['maintenance'].update(message='Voice app is up to date. Assist files are unchanged; no Home Assistant restart needed.',pending=False,restartRequired=False)
         except (ValueError,OSError,TypeError) as exc:
             app['maintenance'].update(message='Automatic Assist update needs attention: '+str(exc)[:180],pending=False)
     async def cleanup(app):
@@ -357,6 +422,7 @@ def make_app(config_root=Path('/homeassistant'),data_root=Path('/data')):
         await app['session'].close()
     app.on_startup.append(startup);app.on_cleanup.append(cleanup)
     app['restart_lock']=asyncio.Lock()
+    app.router.add_post('/bridge/request',bridge_request);app.router.add_post('/bridge/speech',bridge_speech)
     app.router.add_get('/',index);app.router.add_get('/icon.svg',icon);app.router.add_get('/api/status',status)
     app.router.add_get('/api/planner',planner_settings);app.router.add_post('/api/planner',planner_settings);app.router.add_post('/api/planner/refresh',refresh_planner)
     app.router.add_post('/api/install',install);app.router.add_post('/api/ask',ask)
