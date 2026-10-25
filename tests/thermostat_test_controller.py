@@ -130,6 +130,41 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.z["outdoor"].update(enabled=True, mode=mode)
         data = copy.deepcopy(self.store.data); data["zones"] = [self.z]; self.store.write(data)
 
+    async def test_contact_alert_names_bad_readings_and_open_contacts(self):
+        self.store.data["zones"][0]["openings"] += ["binary_sensor.front_door", "binary_sensor.missing"]
+        self.ha.states["binary_sensor.window"]["state"] = "unknown"
+        self.ha.states["binary_sensor.front_door"] = {"state": "on", "attributes": {"friendly_name": "Front door"}}
+        await self.tick()
+        message = self.ha.notifications()[-1][1]["message"]
+        for text in ("Living room window (unknown)", "binary_sensor.missing (missing from Home Assistant)", "Also open: Front door"):
+            self.assertIn(text, message)
+            self.assertIn(text, self.engine.status["living"]["detail"])
+        self.assertFalse(self.ha.device_calls())
+        await self.tick()
+        self.assertEqual(len(self.ha.notifications()), 1)
+
+    async def test_open_protection_notification_names_window(self):
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick()
+        await self.tick(180)
+        await self.tick()
+        self.assertIn("Open: Living room window.", self.ha.notifications()[-1][1]["message"])
+        self.assertEqual(self.ha.states["climate.living"]["attributes"]["temperature"], 60)
+
+    async def test_new_opening_updates_active_protection_alert_without_repeat(self):
+        self.store.data["zones"][0]["openings"].append("binary_sensor.door")
+        self.ha.states["binary_sensor.door"] = {"state": "off", "attributes": {"friendly_name": "Kitchen door"}}
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick(); await self.tick(180); await self.tick()
+        count = len(self.ha.notifications())
+        self.ha.states["binary_sensor.door"]["state"] = "on"
+        await self.tick()
+        self.assertEqual(len(self.ha.notifications()), count + 1)
+        self.assertIn("Kitchen door", self.ha.notifications()[-1][1]["message"])
+        self.assertIn("Living room window", self.ha.notifications()[-1][1]["message"])
+        await self.tick()
+        self.assertEqual(len(self.ha.notifications()), count + 1)
+
     async def test_approval_storage_failure_does_not_kill_loop(self):
         self.outdoor("ask"); self.ha.states["sensor.outdoor"]["state"] = "55"
         await self.tick()

@@ -90,9 +90,9 @@ class Engine:
                     issue = self.status.get(zone["id"], {})
                     await self.issue_notice(zone, issue.get("detail", "") if issue.get("reason") == "Check thermostat" else "", "failure")
                 except (ValueError, OSError, TypeError, KeyError) as exc:
-                    self.status[zone["id"]] = {"reason": "Needs attention", "detail": str(exc)[:240]}
+                    self.status[zone["id"]] = {"reason": "Needs attention", "detail": str(exc)[:16384]}
                     try:
-                        await self.issue_notice(zone, str(exc)[:240], "sensor" if "unavailable" in str(exc).lower() else "failure")
+                        await self.issue_notice(zone, str(exc)[:16384], "sensor" if "unavailable" in str(exc).lower() else "failure")
                     except (ValueError, OSError, TypeError, KeyError):
                         pass
 
@@ -286,7 +286,9 @@ class Engine:
                 if not seen or seen["stamp"] != contact.get("last_changed"):
                     contacts[sensor] = {"at": now, "stamp": contact.get("last_changed")}
             elif contact.get("state") != "off":
-                unknown.append(sensor)
+                name = str(contact.get("attributes", {}).get("friendly_name") or sensor)[:160]
+                reading = str(contact.get("state") or "missing from Home Assistant")[:80]
+                unknown.append(f"{name} ({reading})")
                 contacts.pop(sensor, None)
             else:
                 contacts.pop(sensor, None)
@@ -295,7 +297,10 @@ class Engine:
             timers.pop("open", None)
             timers.pop("closed", None)
             contacts.clear()
-            raise ValueError("A monitored door/window is unavailable. Its previous protection is retained; no new command sent.")
+            message = "Door/window readings unavailable: " + "; ".join(unknown) + "."
+            if opened:
+                message += " Also open: " + ", ".join(opened) + "."
+            raise ValueError(message + " Previous protection is retained; no new command sent.")
         if opened:
             timers.pop("closed", None)
             timers["open"] = min(c["at"] for c in contacts.values())
@@ -380,11 +385,15 @@ class Engine:
         # Notify once per observed protection transition, after the target is confirmed.
         notices = runtime.setdefault("notices", {})
         for flag, active in flags.items():
-            if notices.get(flag, False) == active:
+            open_signature = sorted(opened) if flag == "window" and active else []
+            changed_openings = flag == "window" and active and bool(open_signature) and notices.get("openings", []) != open_signature
+            if notices.get(flag, False) == active and not changed_openings:
                 continue
             notices[flag] = active
+            if flag == "window":
+                notices["openings"] = open_signature
             setting = "off" if actual["mode"] == "off" else " / ".join(k.capitalize() + " " + str(v) + " degrees " + z["unit"] for k, v in actual.items() if k != "mode")
-            text = ("Door/window protection is active. Thermostat confirmed: " + setting + "." if flag == "window" else "Outdoor heat limit reached: heating is off.") if active else ("All monitored openings are closed. Following the active schedule or override." if flag == "window" else "Outdoor heat limit cleared. Following the active schedule or override.")
+            text = (("Open: " + ", ".join(opened) + ". " if opened else "All monitored openings are now closed; waiting for the return delay. ") + "Door/window protection is active. Thermostat confirmed: " + setting + "." if flag == "window" else "Outdoor heat limit reached: heating is off.") if active else ("All monitored openings are closed. Following the active schedule or override." if flag == "window" else "Outdoor heat limit cleared. Following the active schedule or override.")
             # Durable claim also prevents notification replay after a crash.
             self.store.patch_runtime(ident, runtime, text)
             service = z["notify"]["service"]

@@ -1,3 +1,6 @@
+## 0.1.3
+- Name the affected doors/windows in missing-reading and open-protection alerts, including unavailable/unknown readings and entity IDs when names are missing.
+
 ## 0.1.2
 - Add thermostat Voice status, hold duration and resume-schedule requests. Refresh local phrases after updating Assist.
 - Controller adds date/return-home holds, day copying, notification choices, read-only protection previews and settings backup/restore. Restored controllers are disabled.
