@@ -10,7 +10,7 @@ class InstallTests(unittest.TestCase):
             unrelated=config/'custom_components/unrelated';unrelated.mkdir(parents=True);(unrelated/'__init__.py').write_text('untouched')
             install_component(config,data)
             target=config/'custom_components/pixora_voice'
-            self.assertTrue((target/'engine.py').exists());(target/'version_marker').write_text('old')
+            self.assertTrue((target/'phrase_tools.py').exists());self.assertTrue((target/'engine.py').exists());(target/'version_marker').write_text('old')
             install_component(config,data)
             self.assertFalse((target/'version_marker').exists());self.assertEqual(len(list((data/'integration-backups').glob('*/version_marker'))),1)
             self.assertEqual((unrelated/'__init__.py').read_text(),'untouched')

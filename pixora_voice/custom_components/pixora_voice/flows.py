@@ -34,7 +34,27 @@ def install_services(hass):
   try:value=json.loads(await ask(hass,'__pixora_voice_flow_vocabulary__'))
   except ValueError:return {'available':False}
   return {'available':True,'phrases':value.get('phrases',[]),'variables':value.get('variables',[])} if isinstance(value,dict) else {'available':False}
+ async def refresh(call):
+  user_id=getattr(getattr(call,'context',None),'user_id',None)
+  if user_id:
+   user=await hass.auth.async_get_user(user_id)
+   if not user or not user.is_admin:raise HomeAssistantError('An administrator must refresh speech training.')
+  state=hass.data.setdefault(DOMAIN,{})
+  if state.get('flow_refresh_busy'):raise HomeAssistantError('Voice trigger training is already being requested. It was not repeated.')
+  state['flow_refresh_busy']=True
+  try:
+   value=getattr(call,'data',None)
+   if not isinstance(value,dict) or not isinstance(value.get('phrases'),list) or not isinstance(value.get('variables'),list):raise HomeAssistantError('Choose saved Flow phrases before refreshing speech training.')
+   from .phrase_tools import update_voice_phrases,write_owned
+   path=Path('/share/speech-to-phrase/custom_sentences/en/pixora_voice_flows.yaml')
+   await asyncio.to_thread(update_voice_phrases,path,value.get('phrases',[]),value.get('variables',[]))
+   await asyncio.to_thread(write_owned,Path(hass.config.path('.storage','pixora_voice_flows.json')),json.dumps(value.get('phrases',[])))
+   await hass.services.async_call('hassio','addon_restart',{'addon':'core_speech-to-phrase'},blocking=True)
+  except (ValueError,OSError,asyncio.TimeoutError) as exc:
+   raise HomeAssistantError('Voice refresh could not be confirmed. Check Pixora Voice and Speech-to-Phrase before trying again.') from exc
+  finally:state['flow_refresh_busy']=False
  from homeassistant.core import SupportsResponse
+ if not hass.services.has_service(DOMAIN,'refresh_flow_phrases'):hass.services.async_register(DOMAIN,'refresh_flow_phrases',refresh)
  if not hass.services.has_service(DOMAIN,'flow_reply'):hass.services.async_register(DOMAIN,'flow_reply',receive)
  if not hass.services.has_service(DOMAIN,'flow_vocabulary'):hass.services.async_register(DOMAIN,'flow_vocabulary',vocabulary,supports_response=SupportsResponse.ONLY)
 

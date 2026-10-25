@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.11'
+VERSION='0.1.12'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 
@@ -21,6 +21,7 @@ def install_component(config_root,data_root):
     stage=Path(tempfile.mkdtemp(prefix='.pixora-voice-',dir=parent))
     try:
         shutil.copytree(COMPONENT,stage,dirs_exist_ok=True,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
+        shutil.copyfile(Path(__file__).with_name('planner_phrases.py'),stage/'phrase_tools.py')
         if target.exists():
             backup=data_root/'integration-backups'/str(time.time_ns());backup.parent.mkdir(parents=True,exist_ok=True)
             shutil.copytree(target,backup)

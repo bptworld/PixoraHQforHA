@@ -1,3 +1,7 @@
+## 0.1.12
+- Add a local refresh service so the Flows editor can request Voice trigger training through the existing paired Home Control connector. Update Assist and restart HA once to enable this service.
+- No extra login, polling service or automatic speech restarts.
+
 ## 0.1.11
 - Add thermostat Voice status, hold duration and resume-schedule requests. Refresh local phrases after updating Assist.
 - Controller adds date/return-home holds, day copying, notification choices, read-only protection previews and settings backup/restore. Restored controllers are disabled.

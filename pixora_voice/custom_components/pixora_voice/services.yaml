@@ -20,3 +20,16 @@ flow_reply:
 flow_vocabulary:
   name: Read enabled Flow phrases
   description: Read up to 64 enabled voice trigger phrases using the paired Home Control connection.
+
+refresh_flow_phrases:
+  name: Refresh Voice triggers
+  description: Accept saved enabled Flow phrases and global variable names from Flows, save local speech vocabulary and restart Speech-to-Phrase once. No automatic retry.
+  fields:
+    phrases:
+      required: true
+      selector:
+        object:
+    variables:
+      required: true
+      selector:
+        object:
