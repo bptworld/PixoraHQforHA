@@ -1,3 +1,6 @@
+## 0.1.4
+- Record notification recipients and full sent messages in Recent activity, including outdoor Yes/No prompts. Uncertain sends are recorded as warnings without retrying.
+
 ## 0.1.3
 - Name the affected doors/windows in missing-reading and open-protection alerts, including unavailable/unknown readings and entity IDs when names are missing.
 

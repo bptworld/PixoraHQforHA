@@ -130,6 +130,49 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.z["outdoor"].update(enabled=True, mode=mode)
         data = copy.deepcopy(self.store.data); data["zones"] = [self.z]; self.store.write(data)
 
+    def assert_notice_logged(self):
+        message = self.ha.notifications()[-1][1]["message"]
+        entries = [e for e in self.store.data["events"] if e["message"].startswith("Notification sent to ")]
+        self.assertTrue(entries)
+        self.assertIn("Bryan (notify.mobile_app_bryan)", entries[-1]["message"])
+        self.assertTrue(entries[-1]["message"].endswith(message))
+        self.assertEqual(entries[-1]["zone"], "living")
+        self.assertNotIn("pixora_thermostat:", entries[-1]["message"])
+        self.assertEqual(Store(self.temp.name).data["events"], self.store.data["events"])
+
+    async def test_recent_activity_records_sent_sensor_alert(self):
+        self.ha.states["binary_sensor.window"]["state"] = "unavailable"
+        await self.tick()
+        self.assert_notice_logged()
+        count = len(self.store.data["events"])
+        await self.tick()
+        self.assertEqual(len(self.store.data["events"]), count)
+
+    async def test_recent_activity_records_sent_setback_and_restore(self):
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick(); await self.tick(180); await self.tick()
+        self.assert_notice_logged()
+        self.ha.states["binary_sensor.window"]["state"] = "off"
+        await self.tick(); await self.tick(60); await self.tick()
+        self.assert_notice_logged()
+        self.assertIn("closed", self.ha.notifications()[-1][1]["message"])
+
+    async def test_recent_activity_records_ask_without_action_tokens(self):
+        self.outdoor("ask"); self.ha.states["sensor.outdoor"]["state"] = "60"
+        await self.tick()
+        self.assert_notice_logged()
+        self.assertIn("Should I turn the heat off?", self.ha.notifications()[-1][1]["message"])
+        self.assertFalse(self.ha.device_calls())
+
+    async def test_uncertain_notification_is_warning_not_sent_and_not_retried(self):
+        self.ha.fail = True
+        self.ha.states["binary_sensor.window"]["state"] = "unavailable"
+        await self.tick(); await self.tick()
+        self.assertEqual(len(self.ha.notifications()), 1)
+        events = self.store.data["events"]
+        self.assertFalse(any(e["message"].startswith("Notification sent to ") for e in events))
+        self.assertTrue(any(e["kind"] == "warning" and "Bryan" in e["message"] and self.ha.notifications()[0][1]["message"] in e["message"] for e in events))
+
     async def test_contact_alert_names_bad_readings_and_open_contacts(self):
         self.store.data["zones"][0]["openings"] += ["binary_sensor.front_door", "binary_sensor.missing"]
         self.ha.states["binary_sensor.window"]["state"] = "unknown"

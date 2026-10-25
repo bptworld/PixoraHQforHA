@@ -126,8 +126,11 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
         token = self.app["store"].data["runtime"]["living"]["approval"]["token"]
         z["enabled"] = False; await self.save(z, revision=1)
         self.assertNotIn("approval", self.app["store"].data["runtime"]["living"])
+        # Saving an enabled controller may apply the current day/night schedule.
+        # A stale Yes after disabling must add no further device commands.
+        before = copy.deepcopy(self.ha.device_calls())
         self.ha.actions.put_nowait("pixora_thermostat:" + token + ":yes")
-        await self.app["engine"].tick(); self.assertFalse(self.ha.device_calls())
+        await self.app["engine"].tick(); self.assertEqual(self.ha.device_calls(), before)
 
 
 class TransportTests(unittest.IsolatedAsyncioTestCase):

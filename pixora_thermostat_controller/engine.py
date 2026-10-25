@@ -69,6 +69,21 @@ class Engine:
         self.status = {}
         self.voice_seen = deque(maxlen=64)
 
+    async def send_notice(self, z, fields):
+        service = z["notify"]["service"]
+        recipient = z["notify"]["person"]
+        message = fields["message"]
+        try:
+            if service not in self.ha.services:
+                raise ValueError("Notification destination unavailable.")
+            await self.ha.call(service, fields)
+        except (ValueError, OSError, asyncio.TimeoutError):
+            self.store.patch_runtime(z["id"], self.store.data["runtime"].get(z["id"], {}),
+                f"Notification to {recipient} ({service}) could not be confirmed; it was not retried. Message: {message}", "warning")
+            raise
+        self.store.patch_runtime(z["id"], self.store.data["runtime"].get(z["id"], {}),
+            f"Notification sent to {recipient} ({service}): {message}")
+
     async def tick(self):
         async with self.lock:
             voice = getattr(self.ha, "voice", None)
@@ -106,7 +121,7 @@ class Engine:
         self.store.patch_runtime(z["id"], runtime)
         if message and z.get("alerts", {}).get(category, True) and z["notify"]["service"] in self.ha.services:
             try:
-                await self.ha.call(z["notify"]["service"], {"title": z["name"], "message": message})
+                await self.send_notice(z, {"title": z["name"], "message": message})
             except (ValueError, OSError, asyncio.TimeoutError):
                 pass
 
@@ -340,7 +355,7 @@ class Engine:
                 try:
                     if z["notify"]["service"] not in self.ha.services:
                         raise ValueError("Notification destination unavailable.")
-                    await self.ha.call(z["notify"]["service"], {"title": z["name"], "message": f"It's over {outdoor['limit']} degrees {z['unit']} outside. Should I turn the heat off?", "data": {"tag": "pixora-thermostat-" + ident, "actions": [{"action": prefix + "yes", "title": "Yes"}, {"action": prefix + "no", "title": "No"}]}})
+                    await self.send_notice(z, {"title": z["name"], "message": f"It's over {outdoor['limit']} degrees {z['unit']} outside. Should I turn the heat off?", "data": {"tag": "pixora-thermostat-" + ident, "actions": [{"action": prefix + "yes", "title": "Yes"}, {"action": prefix + "no", "title": "No"}]}})
                 except (ValueError, asyncio.TimeoutError, OSError):
                     self.store.patch_runtime(ident, runtime, "Action notification could not be confirmed; no thermostat approval was assumed.", "warning")
             if approval and now >= datetime.fromisoformat(approval["until"]) and approval["decision"] == "pending":
@@ -401,7 +416,7 @@ class Engine:
                 try:
                     if service not in self.ha.services:
                         raise ValueError("Notification destination is unavailable.")
-                    await self.ha.call(service, {"title": "Pixora Thermostat Controller", "message": z["name"] + ": " + text})
+                    await self.send_notice(z, {"title": "Pixora Thermostat Controller", "message": z["name"] + ": " + text})
                 except (ValueError, asyncio.TimeoutError, OSError):
                     self.store.patch_runtime(ident, runtime, "Notification delivery could not be confirmed; it was not retried.", "warning")
         if runtime != self.store.data["runtime"].get(ident, {}):
