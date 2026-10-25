@@ -3,7 +3,7 @@ import asyncio,json,os,shutil,tempfile,time,logging
 from pathlib import Path
 from aiohttp import web,ClientSession,ClientTimeout,ClientError
 
-VERSION='0.1.20'
+VERSION='0.1.21'
 COMPONENT=Path(__file__).parent/'custom_components'/'pixora_voice'
 
 

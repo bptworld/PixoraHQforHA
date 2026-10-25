@@ -1,3 +1,6 @@
+## 0.1.21
+- Make every Voice log entry expandable with recognized words and the actual reply. Successful requests start collapsed; failures open with additional diagnostic detail. Timing-only reads still omit text, and no extra transcript/audio storage is added.
+
 ## 0.1.20
 - Treat incomplete on/off status questions as read-only, match fish tank / fishtank, and recognize switches explicitly named as lights without selecting unrelated switches. Assist exposure and permissions still apply.
 - Mark not-found replies as unanswered in the Voice log even when speech recognition and playback completed. Show the handling-stage reason and checks; failed entries display bounded recognized words/reply from HA’s existing traces on demand in the admin UI, without new storage. Successful entries remain compact and omit text.

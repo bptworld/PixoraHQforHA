@@ -67,14 +67,14 @@ def summarize(events,include_text=False):
             'stages':stages,'failure_stage':details[0] if details else None,
             'reason':details[1] if details else None,'next_check':details[2] if details else None,
             'error_code':error_code or ('answer-not-found' if unanswered else 'assistant-response-error' if intent_error else None)}
-    if include_text and failed:result.update(heard=heard,reply=reply)
+    if include_text:result.update(heard=heard,reply=reply)
     return result
 
 
 async def recent_runs(session,token,agents,limit=5,include_text=False):
     # Close immediately after a user-requested read. Never return audio URLs,
     # tokens or other assistants' traces to the ingress browser. The admin
-    # Voice log may display bounded heard/reply text for failed requests only.
+    # Voice log may display bounded heard/reply text on demand for each request.
     async with session.ws_connect('ws://supervisor/core/websocket',max_msg_size=1024*1024) as ws:
         if (await ws.receive_json(timeout=8)).get('type')!='auth_required':raise ValueError('Assist timing is unavailable.')
         await ws.send_json({'type':'auth','access_token':token})

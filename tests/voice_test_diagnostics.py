@@ -17,7 +17,8 @@ class TimingTests(unittest.IsolatedAsyncioTestCase):
         detailed=summarize(events,include_text=True)
         self.assertEqual(detailed['heard'],'private question');self.assertIn("can't find",detailed['reply'])
         successful=summarize([{'type':'stt-end','timestamp':'2026-10-25T15:26:40+00:00','data':{'stt_output':{'text':'private success'}}},{'type':'run-end','timestamp':'2026-10-25T15:26:41+00:00'}],include_text=True)
-        self.assertNotIn('heard',successful);self.assertNotIn('private success',json.dumps(successful))
+        self.assertEqual(successful['heard'],'private success')
+        self.assertNotIn('heard',summarize(events))
     def test_groq_failure_does_not_blame_phrase_training(self):
         result=summarize([{'type':'stt-start','timestamp':'2026-10-25T12:00:00+00:00','data':{'engine':'stt.pixora_groq_whisper'}},
              {'type':'error','timestamp':'2026-10-25T12:00:01+00:00','data':{'code':'stt-stream-failed'}}])
