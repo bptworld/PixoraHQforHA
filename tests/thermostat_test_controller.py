@@ -304,6 +304,41 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Open: Living room window.", self.ha.notifications()[-1][1]["message"])
         self.assertEqual(self.ha.states["climate.living"]["attributes"]["temperature"], 60)
 
+    async def test_off_thermostat_suppresses_open_change_and_closed_notifications(self):
+        self.store.data["zones"][0]["schedule"] = [{"id": "off", "time": "00:00", "days": list(range(7)), "mode": "off"}]
+        self.ha.states["climate.living"]["state"] = "off"
+        self.store.data["zones"][0]["openings"].append("binary_sensor.door")
+        self.ha.states["binary_sensor.door"] = {"state": "off", "attributes": {"friendly_name": "Kitchen door"}}
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick(); await self.tick(180); await self.tick()
+        self.assertTrue(self.runtime()["window"])
+        self.assertFalse(self.ha.notifications())
+        self.ha.states["binary_sensor.door"]["state"] = "on"
+        await self.tick()
+        self.assertFalse(self.ha.notifications())
+        self.assertTrue(any("Kitchen door" in event["message"] and "suppressed" in event["message"] for event in self.store.data["events"]))
+        self.store = Store(self.temp.name)
+        self.engine = Engine(self.store, self.ha, now=lambda: self.now)
+        await self.tick(); await self.tick(180)
+        self.assertFalse(self.ha.notifications())
+        self.ha.states["binary_sensor.window"]["state"] = "off"
+        self.ha.states["binary_sensor.door"]["state"] = "off"
+        await self.tick(); await self.tick(60)
+        self.assertFalse(self.runtime()["window"])
+        self.assertFalse(self.ha.notifications())
+        self.assertFalse(self.ha.device_calls())
+
+    async def test_outdoor_off_suppresses_window_updates_but_keeps_off_confirmation(self):
+        self.outdoor(); self.ha.states["sensor.outdoor"]["state"] = "62"
+        await self.tick(); await self.tick()
+        self.assertEqual(len(self.ha.notifications()), 1)
+        self.assertIn("Outdoor heat limit reached", self.ha.notifications()[0][1]["message"])
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick(); await self.tick(180); await self.tick()
+        self.assertTrue(self.runtime()["window"])
+        self.assertEqual(len(self.ha.notifications()), 1)
+        self.assertEqual(self.ha.states["climate.living"]["state"], "off")
+
     async def test_new_opening_updates_active_protection_alert_without_repeat(self):
         self.store.data["zones"][0]["openings"].append("binary_sensor.door")
         self.ha.states["binary_sensor.door"] = {"state": "off", "attributes": {"friendly_name": "Kitchen door"}}

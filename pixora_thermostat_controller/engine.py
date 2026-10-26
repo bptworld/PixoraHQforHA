@@ -507,6 +507,12 @@ class Engine:
                 notices["openings"] = open_signature
             setting = "off" if actual["mode"] == "off" else " / ".join(k.capitalize() + " " + str(v) + " degrees " + z["unit"] for k, v in actual.items() if k != "mode")
             text = (("Open: " + ", ".join(opened) + ". " if opened else "All monitored openings are now closed; waiting for the return delay. ") + "Door/window protection is active. Thermostat confirmed: " + setting + "." if flag == "window" else "Outdoor heat limit reached: heating is off.") if active else ("All monitored openings are closed. Following the active schedule or override." if flag == "window" else "Outdoor heat limit cleared. Following the active schedule or override.")
+            # Consume and persist door/window changes even while off, so they
+            # cannot queue up and replay after a restart or later schedule.
+            # The outdoor heat-off confirmation is a separate action result.
+            if flag == "window" and actual["mode"] == "off":
+                self.store.patch_runtime(ident, runtime, text + " Phone notification suppressed because the thermostat is off.")
+                continue
             # Durable claim also prevents notification replay after a crash.
             self.store.patch_runtime(ident, runtime, text)
             service = z["notify"]["service"]

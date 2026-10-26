@@ -1,3 +1,6 @@
+## 0.1.8
+- Keep door/window protection status notifications silent while the thermostat is confirmed off, including changes to the open-contact list and closed-contact restoration. Continue protection checks and activity logging, and preserve confirmations when the outdoor rule turns heating off.
+
 ## 0.1.7
 - Show a compact outside temperature, selected sensor and outdoor heat-off rule status on each thermostat card. Readings use the controller units and remain visible while the rule is off or another protection blocks control; unavailable readings are never presented as current.
 
