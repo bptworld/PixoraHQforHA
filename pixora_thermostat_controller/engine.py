@@ -11,6 +11,7 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from enhancements import freshness, indoor_value, household, RuntimeHistory, stamp
 from policy import schedule_at, next_period, target, temperature, observed, same, service_for
 
 
@@ -88,6 +89,9 @@ class Engine:
         self.status = {}
         self.voice_seen = deque(maxlen=64)
         self.contact_notice_since = {}
+        self.history = RuntimeHistory(store.data.get("usage", {}))
+        self.preview_only = False
+        self.history_notice = ""
 
     async def send_notice(self, z, fields):
         service = z["notify"]["service"]
@@ -121,7 +125,9 @@ class Engine:
                     for zone in self.store.data["zones"]:
                         self.status[zone["id"]] = {"reason": "Needs attention", "detail": "Notification response could not be saved. No approval assumed; automatic changes paused for this check."}
                     return
+            history_due = False
             for zone in copy.deepcopy(self.store.data["zones"]):
+                history_due = self.history.sample(zone, self.ha.states.get(zone["entity"]), self.ha.connected, self.now(), self.ha.timezone) or history_due
                 try:
                     await self.evaluate(zone)
                     issue = self.status.get(zone["id"], {})
@@ -132,6 +138,105 @@ class Engine:
                         await self.issue_notice(zone, str(exc)[:16384], "sensor" if "unavailable" in str(exc).lower() else "failure")
                     except (ValueError, OSError, TypeError, KeyError):
                         pass
+
+            history_due = history_due or any(k not in active for k in self.history.data)
+            self.history.data = {k: v for k, v in self.history.data.items() if k in active}
+            self.history.samples = {k: v for k, v in self.history.samples.items() if k in active}
+            if history_due:
+                saved = copy.deepcopy(self.store.data)
+                saved["usage"] = self.history.data
+                try:
+                    self.store.write(saved)
+                    self.history_notice = ""
+                except (OSError, ValueError):
+                    self.history_notice = "Runtime history could not be saved; current control continues. Recent unsaved totals may be lost on restart."
+                self.history.persisted = self.now()
+
+    async def check_temperatures(self, z, now):
+        fresh = z.get("freshness", {})
+        selected = [z["entity"]]
+        if z.get("indoorAlerts", {}).get("enabled") and z["indoorAlerts"].get("entity") and z["indoorAlerts"]["entity"] not in self.store.data["runtime"].get(z["id"], {}).get("ignored", {}):
+            selected.append(z["indoorAlerts"]["entity"])
+        if z["outdoor"]["enabled"] and z["outdoor"]["entity"] not in self.store.data["runtime"].get(z["id"], {}).get("ignored", {}):
+            selected.append(z["outdoor"]["entity"])
+        reports = []
+        for ident in dict.fromkeys(selected):
+            if fresh.get("enabled") and not self.preview_only and hasattr(self.ha, "verify_report"):
+                await self.ha.verify_report(ident, fresh["minutes"], now)
+            report = freshness(self.ha.states.get(ident), now, fresh.get("minutes", 60))
+            reports.append({"entity": ident, "name": self.sensor_name(ident), **report})
+        if fresh.get("enabled"):
+            bad = [r for r in reports if r["state"] != "current"]
+            if bad:
+                text = "; ".join(r["name"] + (f" (last report {r['ageMinutes']:g} minutes ago)" if r["ageMinutes"] is not None else " (report timestamp unavailable)") for r in bad)
+                raise ValueError("Temperature readings unavailable for control: " + text + ". No new thermostat command sent.")
+        return reports
+
+    async def indoor_warnings(self, z, runtime, now):
+        options = z.get("indoorAlerts", {})
+        if not options.get("enabled"):
+            runtime.pop("indoorWarning", None)
+            runtime.pop("indoorWarningUnavailable", None)
+            return
+        ident = options.get("entity") or z["entity"]
+        if ident in runtime.get("ignored", {}):
+            return
+        fresh = z.get("freshness", {})
+        if fresh.get("enabled") and freshness(self.ha.states.get(ident), now, fresh["minutes"])["state"] != "current":
+            return
+        before = copy.deepcopy(runtime.get("indoorWarning"))
+        try:
+            value = indoor_value(self.ha.states.get(ident), z["unit"], self.ha.unit)
+        except ValueError:
+            # An optional warning sensor must not disable scheduled control.
+            if not runtime.get("indoorWarningUnavailable"):
+                runtime["indoorWarningUnavailable"] = True
+                warning = runtime.get("indoorWarning", {})
+                if not warning.get("sent"):
+                    warning.pop("since", None)
+                message = self.sensor_name(ident) + " is unavailable for indoor temperature warnings. Thermostat control is unchanged."
+                fields = {"title": z["name"] + ": Indoor warning sensor", "message": message}
+                if ident != z["entity"] and z["notify"]["service"].startswith("notify.mobile_app_"):
+                    token = runtime.setdefault("sensorActions", {}).setdefault(ident, secrets.token_hex(16))
+                    prefix = "pixora_thermostat:" + token + ":"
+                    fields["data"] = {"tag": "pixora-issue-" + z["id"] + "-" + ident, "actions": [{"action": prefix+"okay", "title": "Okay"}, {"action": prefix+"ignore", "title": "Ignore"}]}
+                self.store.patch_runtime(z["id"], runtime, message, "warning")
+                if ident != z["entity"] and z["notify"]["service"] in self.ha.services:
+                    try:
+                        await self.send_notice(z, fields)
+                    except (ValueError, OSError, asyncio.TimeoutError):
+                        pass
+            return
+        if runtime.pop("indoorWarningUnavailable", False):
+            self.store.patch_runtime(z["id"], runtime, "Indoor temperature warning reading is available again.")
+        warning = runtime.setdefault("indoorWarning", {})
+        old = warning.get("kind", "")
+        kind = "low" if value < options["low"] else "high" if value > options["high"] else ""
+        if old == "low" and value < options["low"] + options["margin"]:
+            kind = "low"
+        elif old == "high" and value > options["high"] - options["margin"]:
+            kind = "high"
+        if kind != old:
+            warning.clear()
+            warning.update(kind=kind, since=now.isoformat())
+            if old and not kind:
+                self.store.patch_runtime(z["id"], runtime, "Indoor temperature warning cleared; reading is back within its return margin.")
+        if kind:
+            warning.setdefault("since", now.isoformat())
+        if before != warning:
+            self.store.patch_runtime(z["id"], runtime)
+        if not kind or warning.get("sent") or (now-stamp(warning["since"])).total_seconds() < options["minutes"]*60:
+            return
+        service = z["notify"]["service"]
+        if service not in self.ha.services:
+            return
+        warning["sent"] = True
+        message = f"{self.sensor_name(ident)} is unusually {'cold' if kind == 'low' else 'hot'}: {value:g}°{z['unit']}. Warning threshold {options[kind]:g}°{z['unit']}. No thermostat setting was changed by this alert."
+        self.store.patch_runtime(z["id"], runtime, message)
+        try:
+            await self.send_notice(z, {"title": z["name"] + ": Indoor temperature", "message": message})
+        except (ValueError, OSError, asyncio.TimeoutError):
+            pass
 
     async def issue_notice(self, z, message, category):
         if not z["enabled"] or not self.ha.connected:
@@ -189,7 +294,18 @@ class Engine:
                 temperature(self.ha.states.get(outdoor["entity"]), z["unit"])
             except ValueError:
                 result.append(outdoor["entity"])
-        return result
+        indoor = z.get("indoorAlerts", {})
+        if indoor.get("enabled") and indoor.get("entity") and indoor["entity"] not in ignored:
+            try:
+                indoor_value(self.ha.states.get(indoor["entity"]), z["unit"], self.ha.unit)
+            except ValueError:
+                result.append(indoor["entity"])
+        if z.get("freshness", {}).get("enabled"):
+            selected = ([outdoor["entity"]] if outdoor["enabled"] else []) + ([indoor["entity"]] if indoor.get("enabled") and indoor.get("entity") else [])
+            for ident in selected:
+                if ident not in ignored and freshness(self.ha.states.get(ident), self.now(), z["freshness"]["minutes"])["state"] != "current":
+                    result.append(ident)
+        return list(dict.fromkeys(result))
 
     async def preview(self, z):
         # Copies are bounded by the controller/catalog limits. No real store or
@@ -204,6 +320,7 @@ class Engine:
             calls.append({"service": service, "data": fields})
         ha.call = capture
         shadow = Engine(store, ha, self.now)
+        shadow.preview_only = True
         shadow.timers = copy.deepcopy(self.timers)
         try:
             await shadow.evaluate(copy.deepcopy(z))
@@ -335,6 +452,8 @@ class Engine:
             self.status[ident] = {"reason": "Reconnecting", "detail": "Waiting for fresh Home Assistant readings. No commands sent."}
             self.timers.pop(ident, None)
             return
+        await self.indoor_warnings(z, runtime, now)
+        reports = await self.check_temperatures(z, now)
         state = self.ha.states.get(z["entity"])
         if not state or state.get("state") in {"unknown", "unavailable"}:
             raise ValueError("Thermostat is unavailable. No commands sent.")
@@ -373,11 +492,14 @@ class Engine:
                 override = {"target": actual, "until": (now + timedelta(minutes=z["manualMinutes"])).isoformat(), "source": "Thermostat change"}
                 runtime.update(override=override, last=actual)
 
+        away, household_detail = household(z.get("household", {}), self.ha.states, runtime, now)
         row = schedule_at(z["schedule"], now, self.ha.timezone)
         desired = copy.deepcopy(override["target"] if override else target(row)) if row else None
         if not desired:
             raise ValueError("No schedule is configured.")
-        reason = "Temporary override" if override else "Schedule"
+        if away and not override:
+            desired = target(z["household"]["away"])
+        reason = "Temporary override" if override else "Household away" if away else "Schedule"
         detail = hold_detail(override, self.ha.timezone) if override else row.get("name", "Period starting " + clock_time(row["time"])) + " at " + clock_time(row["time"])
 
         opened, unknown = [], []
@@ -480,6 +602,26 @@ class Engine:
         self.status[ident] = {"reason": reason, "detail": detail, "target": desired, "actual": actual, "outdoor": outside,
                               "open": opened, "openSince": timers.get("open").isoformat() if timers.get("open") else None,
                               "override": override, "schedule": {"name": row.get("name", "Period starting " + row["time"]), "time": row["time"], "target": target(row)}, "protection": flags, "nextPeriod": next_period(z["schedule"], now, self.ha.timezone).isoformat()}
+        explanations = [{"rule": "Weekly schedule", "detail": period_name + " — " + target_text(target(row), z["unit"])}]
+        if z.get("household", {}).get("enabled"):
+            explanations.append({"rule": "Household Home/Away", "detail": household_detail + (" Away target: " + target_text(target(z["household"]["away"]), z["unit"]) if away else "")})
+        if override:
+            explanations.append({"rule": "Temporary override", "detail": hold_detail(override, self.ha.timezone)})
+        if flags["window"]:
+            explanations.append({"rule": "Door/window protection", "detail": "Open: " + ", ".join(opened) if opened else "Waiting for all contacts to remain closed."})
+        if flags["outdoor"]:
+            explanations.append({"rule": "Outdoor heat lockout", "detail": f"Outside {outside:g}°{z['unit']}; approved or automatic limit {z['outdoor']['limit']:g}°{z['unit']}."})
+        countdowns = []
+        for key, minutes, label in (("open", z["openMinutes"], "Open-contact delay"), ("closed", z["closeMinutes"], "Closed-contact return delay")):
+            if timers.get(key) and (key != "open" or not flags["window"]):
+                countdowns.append({"label": label, "seconds": max(0, int(minutes*60-(now-timers[key]).total_seconds()))})
+        if runtime.get("household", {}).get("since"):
+            h = runtime["household"]
+            delay = z["household"]["awayMinutes"] if h["candidate"] else z["household"]["homeMinutes"]
+            countdowns.append({"label": "Household change delay", "seconds": max(0, int(delay*60-(now-stamp(h["since"])).total_seconds()))})
+        self.status[ident].update(explanations=explanations, winner=reason, countdowns=countdowns, sensorReports=reports,
+                                  equipmentAction=state.get("attributes", {}).get("hvac_action") or "Not reported by Home Assistant",
+                                  household=household_detail, indoorWarningUnavailable=bool(runtime.get("indoorWarningUnavailable")))
         if not same(actual, desired):
             action, fields = service_for(desired, state, z["unit"], self.ha.unit, self.ha.services)
             # Write the claim before the network request. A crash/timeout is never replayed.
@@ -502,6 +644,12 @@ class Engine:
             changed_openings = flag == "window" and active and bool(open_signature) and notices.get("openings", []) != open_signature
             if notices.get(flag, False) == active and not changed_openings:
                 continue
+            if changed_openings and notices.get(flag) and actual["mode"] != "off":
+                last_sent = stamp(notices.get("windowSentAt"))
+                cooldown = z.get("notificationPolicy", {}).get("cooldownMinutes", 5)*60
+                if last_sent and 0 <= (now-last_sent).total_seconds() < cooldown:
+                    self.status[ident]["notificationPending"] = "Open-contact changes are grouped; the latest list will be sent after the cooldown."
+                    continue
             notices[flag] = active
             if flag == "window":
                 notices["openings"] = open_signature
@@ -513,6 +661,8 @@ class Engine:
             if flag == "window" and actual["mode"] == "off":
                 self.store.patch_runtime(ident, runtime, text + " Phone notification suppressed because the thermostat is off.")
                 continue
+            if flag == "window":
+                notices["windowSentAt"] = now.isoformat()
             # Durable claim also prevents notification replay after a crash.
             self.store.patch_runtime(ident, runtime, text)
             service = z["notify"]["service"]

@@ -106,3 +106,28 @@ Choose protection/restoration, unavailable-sensor and command-failure alerts ind
 Test protections runs a copy of current rules, observations and state without saving runtime, sending notifications or changing equipment. Disabled controllers preview as disabled; pending commands and missing readings remain visible. The preview is based on current data, not a guarantee of future equipment behavior.
 Download settings backup exports schedules, entity references, notification choices and names, without runtime holds, approvals or history. Restore validates the file and replaces settings with every controller disabled and runtime cleared. Review before enabling.
 Voice: “Why is the heat off?”, “What is the thermostat status?”, “How long is the thermostat override?” and “Resume the thermostat schedule.” Name the room when needed. Update both apps, update Assist, restart HA once, then Prepare added phrases. Each request still ends listening. Status/resume uses the existing on-demand local event bridge; no new background service, model or cloud dependency is added.
+
+## Optional controller tools
+
+Controller settings include household Home/Away, indoor temperature warnings and
+advanced temperature-report freshness checks. These options start disabled.
+Household Away requires every selected person to have a known away state;
+unknown presence retains the last household mode. Protection rules stay above
+manual holds, household Away and the weekly schedule.
+
+Freshness checks use report timestamps rather than the last value change. Only
+selected temperature sources are checked, with bounded local refreshes. Missing
+or old reports pause new thermostat commands when this option is enabled.
+Indoor warnings use their own delay and recovery margin and never change the
+thermostat target. A failed optional warning sensor does not stop scheduling.
+
+Follow-on changes to an active open-contact list are grouped for five minutes
+by default; the cooldown is configurable, including zero. Initial protection
+and restoration notices remain immediate. Door/window status phone notices
+remain silent when the thermostat is confirmed off.
+
+Open **Why this setting?** for rule priorities and countdowns. Heating/cooling
+history retains up to 90 days and shows the latest seven. It counts only observed
+Home Assistant equipment activity; restart, disconnect and long sampling gaps
+are not filled in. History is saved at most every five minutes or on an activity
+transition, without a chart library or cloud service.

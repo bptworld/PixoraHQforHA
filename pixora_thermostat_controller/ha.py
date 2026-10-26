@@ -2,6 +2,8 @@
 import asyncio
 import json
 from zoneinfo import ZoneInfo
+from urllib.parse import quote
+from datetime import datetime, timezone
 from aiohttp import ClientError, ClientTimeout, WSMsgType
 
 
@@ -15,6 +17,8 @@ class HomeAssistant:
         self.actions = asyncio.Queue(maxsize=32)
         self.voice = asyncio.Queue(maxsize=16)
         self.wake = asyncio.Event()
+        self.freshness_checks = {}
+        self.last_freshness_check = None
 
     async def request(self, path, data=None):
         if not self.token:
@@ -46,9 +50,30 @@ class HomeAssistant:
             self.states.pop(ident, None)
             return
         old = self.states.get(ident, {})
-        if str(state.get("last_updated", "")) >= str(old.get("last_updated", "")):
-            keep = {"friendly_name", "device_class", "unit_of_measurement", "temperature_unit", "temperature", "current_temperature", "target_temp_low", "target_temp_high", "supported_features", "hvac_modes", "min_temp", "max_temp", "target_temp_step"}
-            self.states[ident] = {**{k: state[k] for k in ("entity_id", "state", "last_changed", "last_updated") if k in state}, "attributes": {k: v for k, v in attrs.items() if k in keep}}
+        if (str(state.get("last_updated", "")), str(state.get("last_reported", ""))) >= (str(old.get("last_updated", "")), str(old.get("last_reported", ""))):
+            keep = {"friendly_name", "device_class", "unit_of_measurement", "temperature_unit", "temperature", "current_temperature", "target_temp_low", "target_temp_high", "supported_features", "hvac_modes", "min_temp", "max_temp", "target_temp_step", "hvac_action"}
+            self.states[ident] = {**{k: state[k] for k in ("entity_id", "state", "last_changed", "last_updated", "last_reported") if k in state}, "attributes": {k: v for k, v in attrs.items() if k in keep}}
+
+    async def verify_report(self, ident, minutes, now):
+        from enhancements import freshness
+        if freshness(self.states.get(ident), now, minutes)["state"] == "current":
+            return
+        # Only opted-in, selected temperature entities are checked, and only
+        # after their report timestamp is old or missing. No global polling.
+        last = self.freshness_checks.get(ident)
+        if last and 0 <= (now-last).total_seconds() < 300:
+            return
+        if self.last_freshness_check and 0 <= (now-self.last_freshness_check).total_seconds() < 5:
+            return
+        self.last_freshness_check = now
+        self.freshness_checks[ident] = now
+        # Selected entities only; prune bindings removed by later settings.
+        self.freshness_checks = {key: at for key, at in self.freshness_checks.items() if (now-at).total_seconds() < 86400}
+        try:
+            state = await asyncio.wait_for(self.request("states/" + quote(ident, safe="")), timeout=3)
+            self.update(state)
+        except (ValueError, asyncio.TimeoutError):
+            pass  # Caller retains unknown/stale status and blocks new commands.
 
     async def listen(self):
         delay = 2

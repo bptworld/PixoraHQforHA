@@ -66,6 +66,38 @@ def validate(value):
         alerts = z.setdefault("alerts", {"setback": True, "restore": True, "sensor": True, "failure": True})
         if not isinstance(alerts, dict) or set(alerts) != {"setback", "restore", "sensor", "failure"} or any(type(v) is not bool for v in alerts.values()):
             raise ValueError("Choose valid notification options.")
+        fresh = z.setdefault("freshness", {"enabled": False, "minutes": 60})
+        if not isinstance(fresh, dict) or type(fresh.get("enabled")) is not bool:
+            raise ValueError("Choose sensor freshness settings.")
+        number(fresh.get("minutes"), 5, 1440, "Sensor report age")
+        notices = z.setdefault("notificationPolicy", {"cooldownMinutes": 5})
+        if not isinstance(notices, dict):
+            raise ValueError("Choose notification grouping settings.")
+        number(notices.get("cooldownMinutes"), 0, 120, "Notification cooldown")
+        home = z.setdefault("household", {"enabled": False, "people": [], "awayMinutes": 5, "homeMinutes": 1, "away": {"mode": "heat", "heat": 60 if z["unit"] == "F" else 16}})
+        if not isinstance(home, dict) or type(home.get("enabled")) is not bool or not isinstance(home.get("people"), list) or len(home["people"]) > 32 or any(not isinstance(person, str) for person in home["people"]) or len(set(home["people"])) != len(home["people"]):
+            raise ValueError("Choose up to 32 unique household people.")
+        for person in home["people"]:
+            entity(person, {"person"}, "household person")
+        if home["enabled"] and not home["people"]:
+            raise ValueError("Choose household people before enabling Home/Away.")
+        number(home.get("awayMinutes"), 0, 120, "Household away delay")
+        number(home.get("homeMinutes"), 0, 120, "Household home delay")
+        if not isinstance(home.get("away"), dict):
+            raise ValueError("Choose a household Away target.")
+        target(home["away"])
+        indoor = z.setdefault("indoorAlerts", {"enabled": False, "entity": "", "low": 45 if z["unit"] == "F" else 7, "high": 90 if z["unit"] == "F" else 32, "minutes": 10, "margin": 2})
+        if not isinstance(indoor, dict) or type(indoor.get("enabled")) is not bool:
+            raise ValueError("Choose indoor temperature alert settings.")
+        entity(indoor.get("entity"), {"sensor"}, "indoor temperature sensor", optional=True)
+        number(indoor.get("low"), -40, 140, "Indoor low warning")
+        number(indoor.get("high"), -40, 140, "Indoor high warning")
+        number(indoor.get("minutes"), 0, 120, "Indoor warning delay")
+        number(indoor.get("margin"), .5, 10, "Indoor warning return margin")
+        if indoor["low"] + indoor["margin"] >= indoor["high"] - indoor["margin"]:
+            raise ValueError("Separate indoor warning thresholds and return margins.")
+        if z["enabled"] and indoor["enabled"] and not notice["service"]:
+            raise ValueError("Choose a recipient for indoor temperature warnings.")
         schedules = z.get("schedule")
         if not isinstance(schedules, list) or len(schedules) > 64:
             raise ValueError("Use up to 64 weekly schedule periods.")

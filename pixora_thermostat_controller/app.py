@@ -9,9 +9,10 @@ from urllib.parse import urlsplit
 from aiohttp import ClientSession, web
 from engine import Store, Engine
 from ha import HomeAssistant
+from enhancements import freshness
 from policy import validate, target, next_period, service_for, observed, number, temperature
 
-VERSION = "0.1.8"
+VERSION = "0.1.9"
 ROOT = Path(__file__).parent
 
 
@@ -60,12 +61,14 @@ def make_app(root=Path("/data"), test_ha=None):
                 if ha.connected:
                     try:
                         reading.update(value=temperature(ha.states.get(sensor), zone["unit"]), state="current")
+                        if zone.get("freshness", {}).get("enabled"):
+                            reading["state"] = freshness(ha.states.get(sensor), engine.now(), zone["freshness"]["minutes"])["state"]
                     except ValueError:
                         pass
             outdoor_readings[zone["id"]] = reading
         return web.json_response({"version": VERSION, "connected": ha.connected, "notice": ha.notice, "timezone": ha.timezone,
             "unit": ha.unit, "revision": store.data["revision"], "zones": store.data["zones"], "runtime": runtime,
-            "status": engine.status, "outdoorReadings": outdoor_readings, "events": store.data["events"][-60:][::-1], "entities": entities,
+            "usage": engine.history.data, "usageNotice": engine.history_notice, "status": engine.status, "outdoorReadings": outdoor_readings, "events": store.data["events"][-60:][::-1], "entities": entities,
             "destinations": sorted(s for s in ha.services if s.startswith("notify.") and s != "notify.send_message")})
 
     async def settings(request):
@@ -104,6 +107,15 @@ def make_app(root=Path("/data"), test_ha=None):
                     from policy import temperature
                     temperature(ha.states.get(z["outdoor"]["entity"]), z["unit"])
                     service_for({"mode": "off"}, state, z["unit"], ha.unit, ha.services)
+                if z["household"]["enabled"]:
+                    for person in z["household"]["people"]:
+                        if person not in ha.states:
+                            raise ValueError("Choose available household people.")
+                    service_for(target(z["household"]["away"]), state, z["unit"], ha.unit, ha.services)
+                if z["indoorAlerts"]["enabled"] and z["indoorAlerts"]["entity"]:
+                    reading = ha.states.get(z["indoorAlerts"]["entity"])
+                    if not reading or reading.get("attributes", {}).get("device_class") != "temperature":
+                        raise ValueError("Choose an indoor temperature sensor.")
                 if z["notify"]["service"] and z["notify"]["service"] not in ha.services:
                     raise ValueError("Choose an available notification destination.")
                 prior = old.get(z["id"])
@@ -122,6 +134,12 @@ def make_app(root=Path("/data"), test_ha=None):
                     current = saved["runtime"].get(z["id"], {})
                     current.pop("sensorActions", None)
                     current.pop("issue", None)
+            for z in value["zones"]:
+                if old.get(z["id"], {}).get("household") != z.get("household"):
+                    saved["runtime"].get(z["id"], {}).pop("household", None)
+                if old.get(z["id"], {}).get("indoorAlerts") != z.get("indoorAlerts"):
+                    saved["runtime"].get(z["id"], {}).pop("indoorWarning", None)
+                    saved["runtime"].get(z["id"], {}).pop("indoorWarningUnavailable", None)
             store.write(saved)
             # Preserve observations for unchanged protection settings, including
             # when a different controller or just its display name is edited.
@@ -172,6 +190,8 @@ def make_app(root=Path("/data"), test_ha=None):
                 if not isinstance(sensor, str) or sensor not in runtime.get("ignored", {}):
                     raise ValueError("Choose an ignored sensor.")
                 runtime["ignored"].pop(sensor)
+                if sensor == z.get("indoorAlerts", {}).get("entity"):
+                    runtime.pop("indoorWarningUnavailable", None)
                 runtime.get("sensorActions", {}).pop(sensor, None)
                 runtime["issue"] = ""
                 engine.timers.pop(z["id"], None)

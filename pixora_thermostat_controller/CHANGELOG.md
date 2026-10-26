@@ -1,3 +1,9 @@
+## 0.1.9
+- Put the thermostat selector first in controller settings.
+- Add optional temperature-report freshness checks, household Home/Away targets, and delayed indoor temperature warnings.
+- Explain the winning setting, rule priorities and pending delays in each controller card.
+- Group follow-on open-contact updates with a configurable cooldown while preserving immediate initial protection and restoration notices.
+- Keep bounded observed heating/cooling history, with gaps left uncounted and no inference from configured heat mode.
 ## 0.1.8
 - Keep door/window protection status notifications silent while the thermostat is confirmed off, including changes to the open-contact list and closed-contact restoration. Continue protection checks and activity logging, and preserve confirmations when the outdoor rule turns heating off.
 

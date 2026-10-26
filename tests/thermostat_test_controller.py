@@ -340,6 +340,7 @@ class EngineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.ha.states["climate.living"]["state"], "off")
 
     async def test_new_opening_updates_active_protection_alert_without_repeat(self):
+        self.store.data["zones"][0]["notificationPolicy"] = {"cooldownMinutes": 0}
         self.store.data["zones"][0]["openings"].append("binary_sensor.door")
         self.ha.states["binary_sensor.door"] = {"state": "off", "attributes": {"friendly_name": "Kitchen door"}}
         self.ha.states["binary_sensor.window"]["state"] = "on"
