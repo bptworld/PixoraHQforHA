@@ -67,7 +67,7 @@
 
 # 1.2.30
 
-- Restore animated Pixel Aquarium on 64Ã—32 and 128Ã—32 displays, with independent randomized swimming paths, smooth turns and working speed choices. Refresh existing downloaded copies through the verified card catalog. No panel firmware update is needed.
+- Restore animated Pixel Aquarium on 64×32 and 128×32 displays, with independent randomized swimming paths, smooth turns and working speed choices. Refresh existing downloaded copies through the verified card catalog. No panel firmware update is needed.
 
 # 1.2.29
 
@@ -166,7 +166,7 @@
 
 # 1.2.10
 
-- Show failed display actions with the display name and actual cause. Keep each affected displayâ€™s error visible instead of incorrectly reporting every failure as a group action.
+- Show failed display actions with the display name and actual cause. Keep each affected display’s error visible instead of incorrectly reporting every failure as a group action.
 
 - Refresh and persist confirmed panel dimensions and firmware after USB flashing or size changes. Update setup controls and the Studio device screen from the selected panel without changing its name, pairing or playback.
 
@@ -186,7 +186,7 @@
 
 # 1.2.6
 
-- Add Panel size under Displays & firmware â†’ Display settings. Correct a 128Ã—32 panel that reports 64Ã—32 without resetting Wi-Fi, pairing, names or decks. Requires panel firmware 2.0.20. Verify the restart before updating saved dimensions.
+- Add Panel size under Displays & firmware → Display settings. Correct a 128×32 panel that reports 64×32 without resetting Wi-Fi, pairing, names or decks. Requires panel firmware 2.0.20. Verify the restart before updating saved dimensions.
 
 # 1.2.5
 
@@ -271,7 +271,7 @@
 
 # 1.0.7
 
-- Load Home Assistantâ€™s container environment before starting the app, restoring Supervisor discovery and the HA restart button.
+- Load Home Assistant’s container environment before starting the app, restoring Supervisor discovery and the HA restart button.
 - Hide the restart button when HA API access is unavailable and show an actionable error.
 
 # 1.0.6
@@ -296,15 +296,9 @@
 
 - Show connection progress and a clear success/error message beside Connect display. Clear the name and IP only after success; keep them on failure and select the connected display for sending.
 
-- Remove the unnecessary Important notice and migration wording from this new appâ€™s Information page.
+- Remove the unnecessary Important notice and migration wording from this new app’s Information page.
 
 # 1.0.2
-
-**IMPORTANT â€” This is the current app from PixoraHQ for Home Assistant.**
-
-**App repository: `https://github.com/bptworld/PixoraHQforHA`**
-
-Add this repository once in **Settings â†’ Apps â†’ App store â†’ â‹® â†’ Repositories** to find all PixoraHQ Home Assistant apps and their updates.
 
 **LED Displays runs locally on your HA hub and sends directly over Wi-Fi to S3 64x32 and 128x32 panels. No Cloud account is needed.** This app update does not install panel firmware automatically.
 

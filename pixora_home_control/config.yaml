@@ -1,7 +1,7 @@
 name: Pixora Home Control
 version: "1.0.11"
 slug: pixora_home_control
-description: "Current PixoraHQforHA app. See Information for setup and moving from older repositories. Brought to you by PixoraHQ.com."
+description: "Connect Home Assistant to Pixora Home Control, Planner and Flows. Brought to you by PixoraHQ.com."
 url: https://github.com/bptworld/PixoraHQforHA/tree/main/pixora_home_control
 arch:
   - aarch64

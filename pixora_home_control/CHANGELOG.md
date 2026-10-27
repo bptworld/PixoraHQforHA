@@ -1,16 +1,8 @@
-# Unreleased
+# 1.0.11
 
 - Preserve Home Control command source and Pixora Flow trigger/run origin with the exact local HA service context, and report it to Insight without delaying or retrying device actions.
 
 # 1.0.10
-
-**IMPORTANT â€” This is the current app from PixoraHQ for Home Assistant.**
-
-**App repository: `https://github.com/bptworld/PixoraHQforHA`**
-
-Add this repository once in **Settings â†’ Apps â†’ App store â†’ â‹® â†’ Repositories** to find all PixoraHQ Home Assistant apps and their updates.
-
-**Moving from an older repository?** Back up the old app, turn off its **Start on boot** and **Watchdog**, and **Stop** it before starting this replacement. Keep the old installation until this one works. Follow the pairing steps below; app configuration and credentials do not transfer automatically. Keep only the replacement running.
 
 Open **[planner.pixorahq.com](https://planner.pixorahq.com/)** to pair Home Control. Your Home Control layouts and Flows remain in your Pixora account.
 

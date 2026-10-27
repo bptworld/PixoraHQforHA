@@ -1,17 +1,3 @@
-**IMPORTANT — This is the current app from PixoraHQ for Home Assistant.**
-
-**App repository: `https://github.com/bptworld/PixoraHQforHA`**
-
-Add this repository once in **Settings → Apps → App store → ⋮ → Repositories** to find all PixoraHQ Home Assistant apps and their updates.
-
-**Moving from an older repository?** Back up the old app, turn off its **Start on boot** and **Watchdog**, and **Stop** it before starting this replacement. Keep the old installation until this one works. Follow the pairing steps below; app configuration and credentials do not transfer automatically. Keep only the replacement running.
-
-Your Pixora account is at **[planner.pixorahq.com](https://planner.pixorahq.com/)**. **The Locator phone app is required**; create the Home Assistant pairing token in the phone app under **Settings → Home Assistant App**.
-
-Brought to you by [PixoraHQ.com](https://pixorahq.com/).
-
----
-
 # Pixora Locator Home Assistant App
 
 Pixora Locator privately connects actively sharing phones to Home Assistant using a pairing token.

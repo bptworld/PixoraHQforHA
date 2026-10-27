@@ -1,7 +1,7 @@
 name: "Pixora Locator"
 version: "1.5.3"
 slug: "pixora_locator"
-description: "Current PixoraHQforHA app. See Information for setup and moving from older repositories. Brought to you by PixoraHQ.com."
+description: "Connect sharing Locator phones to Home Assistant. Brought to you by PixoraHQ.com."
 url: https://github.com/bptworld/PixoraHQforHA/tree/main/pixora_locator
 arch:
   - aarch64

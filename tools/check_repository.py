@@ -8,6 +8,11 @@ found={path.parent.name for path in ROOT.glob('*/config.yaml')}
 assert found==APPS,found
 for name in sorted(APPS):
     folder=ROOT/name
+    # HA displays these files directly in app information and update dialogs.
+    for path in [*folder.glob('*.md'), folder/'config.yaml']:
+        text=path.read_text(encoding='utf-8')
+        broken=('\ufffd','\u00e2\u20ac','\u00e2\u2020','\u00e2\u2039','\u00c3\u2014','\u00c2\u00b0')
+        assert not any(marker in text for marker in broken),str(path)+' contains corrupted text encoding'
     config=yaml.safe_load((folder/'config.yaml').read_text(encoding='utf-8'))
     assert config['slug']==name and isinstance(config['version'],str)
     assert config['url']=='https://github.com/bptworld/PixoraHQforHA/tree/main/'+name
