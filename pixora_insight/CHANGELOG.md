@@ -1,3 +1,6 @@
+## 0.1.5
+- Hide exclusion, restoration and settings housekeeping notices from activity, including earlier notices. Keep recording coverage and gap warnings visible.
+
 ## 0.1.4
 - Simplify History settings: select excluded entities in one list and use one Restore button; show only device/display exclusions below.
 

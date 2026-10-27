@@ -201,6 +201,20 @@ class Journal(unittest.TestCase):
         self.put(changed("sensor.new"))
         self.assertEqual(self.store.stats()["count"], 3)
 
+    def test_housekeeping_hidden_but_recording_gaps_remain_visible(self):
+        self.store.append([
+            system_event("An entity, device or display was excluded from future recording. Earlier records expire normally."),
+            system_event("An entity was excluded from future recording. Earlier records expire normally."),
+            system_event("Recording restored for an exclusion."),
+            system_event("Retention or exclusions changed. Exclusions affect future recording; retained earlier events expire normally."),
+            system_event("Recording gap: connection interrupted."),
+        ])
+        for kind in ("", "coverage"):
+            rows = self.store.query(kind=kind)["events"]
+            self.assertEqual(len(rows), 1)
+            self.assertIn("Recording gap", rows[0]["title"])
+        self.assertEqual(self.store.stats()["count"], 5)
+
     def test_pagination_and_restart_persistence(self):
         self.store.append([normalize(changed(), self.catalog)]*55)
         first = self.store.query(); second = self.store.query(before=first["next"])

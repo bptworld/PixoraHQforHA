@@ -93,7 +93,15 @@ class Store:
         return item
 
     def query(self, entity="", search="", kind="", before=0):
-        clauses, args = [], []
+        # Housekeeping notices are retained but do not clutter activity pages.
+        housekeeping = (
+            "An entity was excluded from future recording. Earlier records expire normally.",
+            "An entity, device or display was excluded from future recording. Earlier records expire normally.",
+            "Recording restored for an exclusion.",
+            "Retention or exclusions changed. Exclusions affect future recording; retained earlier events expire normally.",
+        )
+        clauses = ["NOT (kind='coverage' AND title IN (?,?,?,?))"]
+        args = list(housekeeping)
         if entity:
             clauses.append("id IN (SELECT event FROM targets WHERE entity=?)"); args.append(entity)
         if search:

@@ -10,7 +10,7 @@ from collector import Collector, system_event
 from model import ENTITY, EVENTS
 from store import Store
 
-VERSION = "0.1.4"
+VERSION = "0.1.5"
 ROOT = Path(__file__).parent
 
 
