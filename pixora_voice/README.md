@@ -196,3 +196,10 @@ Update this app, install/update Assist in Setup & maintenance, and restart HA on
 Updating Voice also updates its recognized Assist integration automatically. Existing settings are preserved and previous integration files are backed up. When necessary, the app requests one Home Assistant restart to load the code, then refreshes the owned local speech phrases and requests one Speech-to-Phrase restart. Expect a brief interruption to HA automations during the HA restart. Ordinary app starts do not restart HA again. Restart requests are journaled before sending and uncertain results are never blindly repeated. Unknown integration folders and user-owned phrase files are preserved with a maintenance notice. First-time users still add Pixora Voice under Devices & services and choose their voice pipeline; this does not change an existing pipeline or voice.
 
 Speech training now compares the generated vocabulary before writing it. Repeated refreshes, phrase ordering, capitalization/punctuation that produce the same spoken words, ordinary Flow action changes and app updates with unchanged language files do not restart Speech-to-Phrase. Changed phrases train once. Flows shows Restarting, then Training, then Ready only after the running service logs a new training completion. Checks are bounded and run only for a requested operation; raw logs stay local and are never returned to Planner. No audio or test device commands are generated to check readiness.
+
+## Built-in Insight activity
+
+Identify Voice-issued device commands in Insight using the existing HA context, without logging spoken request contents. This is automatic when using the matching app updates; no extra
+companion installation or training step is needed. Insight remains optional and
+local. Missing reports leave the cause unknown; commands are never repeated to
+fill a log. Older records without provenance are not reconstructed.

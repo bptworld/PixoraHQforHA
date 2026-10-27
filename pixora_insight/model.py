@@ -153,15 +153,25 @@ def normalize(event, catalog):
     else:
         # Opt-in contract for apps to report decisions. No raw metadata accepted.
         entities = ids(data.get("entity_id"), True)
-        if not entities:
-            return None
         source = text(data.get("source"), 80)
         reason = text(data.get("reason"), 600)
         outcome = data.get("outcome")
         if not source or not reason or not isinstance(outcome, str) or outcome not in {"requested", "confirmed", "blocked", "waiting", "cancelled"}:
             return None
+        operation = text(data.get("operation"), 100)
+        if not entities and not re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", operation):
+            return None
         details = {"source": source, "reason": reason, "outcome": outcome}
-        title = source + ": " + outcome
+        if operation:details["operation"] = operation
+        if isinstance(data.get("target_name"), str):details["targetName"] = text(data["target_name"], 120)
+        action_context = data.get("action_context")
+        if isinstance(action_context, str) and re.fullmatch(r"[A-Za-z0-9_-]{16,80}", action_context):
+            # The sender explicitly reports the context returned by HA for its
+            # device action. Keep it labelled as source-reported provenance.
+            context = {"id": action_context}
+            details["actionContext"] = action_context
+        title = source + ": " + (operation.replace('_',' ') + " " if operation else "") + outcome
+        if details.get("targetName"):title += " · " + details["targetName"]
     context = context if isinstance(context, dict) else {}
     return {"at": timestamp(event.get("time_fired")), "kind": kind, "title": title[:350], "name": name,
             "entities": entities, "context": text(context.get("id"), 80), "parent": text(context.get("parent_id"), 80),

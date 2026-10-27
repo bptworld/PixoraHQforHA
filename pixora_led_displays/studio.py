@@ -615,6 +615,9 @@ class Studio:
 
     async def deliver(self,client,body,width,duration,owner='deck',ident=None,once=False,wire_ident=None,synchronize=None,group_check=None,refresh_signal=None):
         frames=await self.prepared_frames(body,width)
+        try:
+            if callable(getattr(client,'origin_hook',None)):client.origin_hook('/insight/card',{})
+        except Exception:pass # One report per logical content item, never per animation frame.
         if synchronize:
             # All wall slices are decoded before the barrier releases any panel.
             start=await synchronize()

@@ -1,3 +1,6 @@
+## 0.2.3
+- Identify Voice-issued device commands in Insight using the existing HA context, without logging spoken request contents.
+
 ## 0.2.2
 - Recognize broader natural calendar and TV search questions and reuse the expanded shared Planner search. App-only release; the Assist bridge stays unchanged.
 

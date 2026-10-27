@@ -39,3 +39,11 @@ The Pixora connector socket and existing Flow engine run in the same server proc
 ---
 
 Brought to you by [PixoraHQ.com](https://pixorahq.com/).
+
+## Built-in Insight origins
+
+The matching Pixora server sends command origin alongside device requests.
+Home Control reports its own source, or the initiating Flow/trigger when supplied,
+using HA’s exact service context. Reports use a bounded background queue and
+cannot delay, fail or retry device commands. No re-pairing or extra companion
+installation is needed. Older entries without provenance remain unknown.

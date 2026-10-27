@@ -65,6 +65,18 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await client.post('/bridge/request',json={'text':'x'},headers={'X-Pixora-Bridge':'test-private-bridge-key'})).status,400)
 
 class LeaseTests(unittest.IsolatedAsyncioTestCase):
+    async def test_device_origin_uses_voice_context_without_spoken_words(self):
+        from unittest.mock import Mock
+        self.context.id='01VOICECOMMANDCONTEXT000001'
+        self.hass.bus=NS(async_fire=Mock())
+        await bridge.execute(self.hass,self.lease,'service',{'domain':'light','service':'turn_on','data':{'entity_id':'light.living'}})
+        kind, report=self.hass.bus.async_fire.call_args.args
+        self.assertEqual(kind,'pixora_insight')
+        self.assertEqual(report['action_context'],self.context.id)
+        self.assertEqual(report['source'],'Pixora Voice')
+        self.assertNotIn('text',report)
+        self.hass.services.async_call.assert_awaited_once()
+
     def setUp(self):
         fixture.AdapterTests.setUp(self)
         self.hass.data={};self.hass.states.get=lambda eid:next((s for s in self.states if s.entity_id==eid),None)

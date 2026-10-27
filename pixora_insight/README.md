@@ -115,3 +115,26 @@ Open an activity entry with **Explain**, then choose **Exclude entity** beside
 its entity ID. It stops future recording without removing earlier history.
 For events with multiple targets, choose each entity separately. Restore recording
 by removing the ID from the exclusions in **History settings**.
+
+## Pixora Flow origins
+
+With the matching Pixora server and existing Home Control connector update,
+Flow device commands carry their run/trigger description alongside the command.
+The connector reports the exact context returned by HA for that action, using its
+existing local socket. Insight can then show the Flow and trigger in a device
+change explanation, even when the origin report arrives after the change.
+Reports are best-effort and cannot delay, fail or retry the device action.
+No extra companion app is installed. Older entries without recorded Flow origin
+are not guessed or reconstructed. Unresolved area/device targets may remain
+unknown; direct entity actions are correlated explicitly.
+
+## Command origins across Pixora apps
+
+Matching Home Control/Flows, HAFlow, Voice, Thermostat Controller and LED Studio
+updates report their command origin automatically. Voice omits spoken words,
+notification origins omit message contents, and direct LED panel actions use
+app-reported named targets rather than invented HA entities. Logical card starts
+are recorded, not individual animation frames. Locator publishes readings and
+Insight observes activity; neither claims to control household devices. Exact
+HA contexts link device changes where available; unlinked source reports remain
+clearly app-reported requests. This does not add a new companion integration.

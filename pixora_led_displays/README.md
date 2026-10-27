@@ -145,3 +145,10 @@ Choose **USB on Home Assistant** to plug the MatrixPortal S3 directly into the H
 **From this computer** uses browser USB in supported Chrome/Edge secure contexts. Local HTTP pages and restricted HA frames can use **Download the file**, then open [ESPHome Web](https://web.esphome.io/) and select the downloaded file. With esptool, flash it at `0x0`. Return to the wizard to connect the display. **Later** keeps the saved setup for another day.
 
 This is a complete first-install image for **Adafruit MatrixPortal S3**, replacing existing firmware, Wi-Fi and pairing settings. It supports both 64×32 and 128×32; it does not support Tidbyt or arbitrary ESP32 boards. Configured downloads contain the Wi-Fi password and a private pairing key: keep them private and delete downloaded copies after installation. Normal firmware updates continue to use the existing settings-preserving OTA controls. No Cloud account is needed.
+
+## Built-in Insight activity
+
+Report logical card starts, priority messages, settings and restart requests to Insight with the panel name. Omit message contents and animation-frame noise; diagnostics never alter delivery. This is automatic when using the matching app updates; no extra
+companion installation or training step is needed. Insight remains optional and
+local. Missing reports leave the cause unknown; commands are never repeated to
+fill a log. Older records without provenance are not reconstructed.

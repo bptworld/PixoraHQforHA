@@ -58,3 +58,10 @@ Example importable flows are available in [`haflow/examples/`](haflow/examples/)
 ---
 
 Brought to you by [PixoraHQ.com](https://pixorahq.com/).
+
+## Built-in Insight activity
+
+HAFlow reports each device action’s Flow/trigger origin to Insight using the HA command context. Diagnostics are bounded and never replay commands. This is automatic when using the matching app updates; no extra
+companion installation or training step is needed. Insight remains optional and
+local. Missing reports leave the cause unknown; commands are never repeated to
+fill a log. Older records without provenance are not reconstructed.

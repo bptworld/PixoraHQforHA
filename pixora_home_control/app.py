@@ -127,6 +127,42 @@ class Connector:
     def __init__(self, data_dir=Path('/data')):
         self.data_dir = data_dir
         self.executed = {}
+        self.insight = asyncio.Queue(maxsize=32)
+
+    @staticmethod
+    def origin_warning(message):
+        try:LOG.warning(message)
+        except Exception:pass
+
+    def record_flow_origin(self, message, result):
+        trace = message.get('insight')
+        payload = message.get('payload')
+        if not isinstance(trace, dict) or not isinstance(payload, dict) or not isinstance(result, dict):return
+        source, reason = trace.get('source'), trace.get('reason')
+        if source not in {'Pixora Flow','Pixora Home Control'} or not isinstance(reason, str) or not reason.strip():return
+        targets = payload.get('entity_id')
+        targets = targets if isinstance(targets, list) else [targets]
+        targets = {v for v in targets[:128] if isinstance(v, str) and re.fullmatch(r'[a-z_]+\.[a-z0-9_]+', v)}
+        raw_context = result.get('context')
+        context = raw_context.get('id') if isinstance(raw_context, dict) else None
+        if not isinstance(context, str) or not re.fullmatch(r'[A-Za-z0-9_-]{16,80}', context):return
+        operation = '.'.join(message['path'].split('/')[-2:])
+        if targets or re.fullmatch(r'[a-z_]+\.[a-z0-9_]+', operation):
+            if self.insight.full():
+                self.origin_warning('Insight origin queue full; device command was not retried.')
+                return
+            self.insight.put_nowait((time.monotonic(), {'entity_id':sorted(targets), 'source':source, 'reason':reason[:600], 'outcome':'requested', 'operation':operation, 'action_context':context}))
+
+    async def send_insight(self, local):
+        while True:
+            queued, fields = await self.insight.get()
+            if time.monotonic()-queued>30:continue
+            try:
+                await asyncio.wait_for(local.request('/api/events/pixora_insight', 'POST', fields), 2)
+            except Exception:
+                # This task participates in the connection supervisor. Optional
+                # diagnostics must never end it and disconnect device control.
+                self.origin_warning('Insight origin could not be recorded; device command was not retried.')
 
     async def pair(self, session, local, code):
         config = await local.request('/api/config')
@@ -161,7 +197,17 @@ class Connector:
             expires = message.get('expiresAt')
             if type(expires) not in (int, float) or not time.time() < expires <= time.time() + 15 or not isinstance(path, str) or not allowed(path, method):
                 raise ValueError('Expired or unsupported request.')
-            result = await local.registry() if path == '/pixora/registry' else await local.request(path, method, message.get('payload'))
+            if method == 'POST' and isinstance(message.get('insight'), dict):
+                # HA returns the command's own context over its existing socket.
+                # REST's changed-state list may also include unrelated changes.
+                _, _, _, domain, service = path.split('/')
+                result = await local.query('call_service', domain=domain, service=service, service_data=message.get('payload') or {})
+            else:
+                result = await local.registry() if path == '/pixora/registry' else await local.request(path, method, message.get('payload'))
+            if method == 'POST':
+                try:self.record_flow_origin(message, result)
+                except Exception:
+                    self.origin_warning('Insight Flow origin unavailable; command result is unchanged.')
             response['data'] = None if method == 'POST' else result
             response['ok'] = True
         except (ValueError, aiohttp.ClientError, asyncio.TimeoutError) as error:
@@ -214,7 +260,7 @@ class Connector:
                         raise ValueError('Invalid cloud message.')
                 raise ConnectionError(f'Pixora connection closed (code {cloud.close_code}).')
 
-            tasks = [asyncio.create_task(coro) for coro in [local.listen(cloud, events, unified=reply.get("eventStream")=="unified"), send_events(), commands(), heartbeat(), receive()]]
+            tasks = [asyncio.create_task(coro) for coro in [local.listen(cloud, events, unified=reply.get("eventStream")=="unified"), send_events(), commands(), heartbeat(), receive(), self.send_insight(local)]]
             LOG.info('Paired connector connected to Pixora.')
             try:
                 done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)

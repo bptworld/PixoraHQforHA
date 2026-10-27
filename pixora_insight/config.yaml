@@ -1,5 +1,5 @@
 name: Pixora Insight
-version: "0.1.1"
+version: "0.1.2"
 slug: pixora_insight
 description: "Your home. Explained. Local device activity and evidence-based explanations. Brought to you by PixoraHQ.com."
 arch: [aarch64, amd64]

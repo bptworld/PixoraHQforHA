@@ -15,6 +15,22 @@ from client import DisplayClient, display_connection
 from automation import HomeAssistantSetup
 from firmware_updates import FirmwareUpdates, version, verify_restart, verify_panel_size
 from studio import Studio
+from insight_origin import ha_reporter
+
+
+class ObservedDisplayClient(DisplayClient):
+    async def _request(self,path,payload=None):
+        if payload is not None:
+            try:
+                if callable(getattr(self,'origin_hook',None)):self.origin_hook(path,payload)
+            except Exception:pass
+        return await super()._request(path,payload)
+
+    async def update_firmware(self,body):
+        try:
+            if callable(getattr(self,'origin_hook',None)):self.origin_hook('/insight/firmware',{})
+        except Exception:pass
+        return await super().update_firmware(body)
 
 
 def image_payload(body, width, height, duration):
@@ -29,7 +45,7 @@ def image_payload(body, width, height, duration):
     return {'rgb': base64.b64encode(pixels).decode('ascii'), 'width': width, 'height': height, 'duration': duration}
 
 
-def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_factory=DisplayClient, ingress_peer='172.30.32.2'):
+def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_factory=ObservedDisplayClient, ingress_peer='172.30.32.2'):
     app = web.Application(client_max_size=8 * 1024 * 1024)
     lock = asyncio.Lock()
     file = root / 'displays.json'
@@ -52,7 +68,16 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
         display = next((d for d in state['displays'] if d['id'] == ident), None)
         if not display:
             raise ValueError('Choose a connected display.')
-        return client_factory(app['session'], display['host'], display['key'])
+        client = client_factory(app['session'], display['host'], display['key'])
+        if isinstance(client, DisplayClient):
+            def origin(path, payload):
+                operations={'/api/message':('message','A priority message was requested.'),'/api/settings':('settings','Display settings were requested.'),'/api/reboot':('reboot','A display restart was requested.'),'/api/panel':('panel','Panel configuration was requested.'),'/insight/card':('card','Deck or priority content was requested for this display.'),'/insight/firmware':('firmware','A firmware update was requested for this display.')}
+                if path not in operations:return
+                operation, reason = operations[path]
+                reporter=app.get('insight_origin')
+                if reporter:reporter.emit([],reason,operation='pixora_led_studio.'+operation,target=display.get('name') or 'LED display')
+            client.origin_hook = origin
+        return client
 
     @web.middleware
     async def errors(request, handler):
@@ -338,6 +363,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
 
     async def startup(app):
         app['session'] = ClientSession()
+        app['insight_origin'] = ha_reporter(app['session'], 'Pixora LED Studio')
         studio.__init__(app, root, selected, lambda:state['displays'])
         app['firmware_updates'] = FirmwareUpdates(app['session'])
         app['automation'] = HomeAssistantSetup(app['session'], root, config_root)
@@ -350,6 +376,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
 
     async def cleanup(app):
         await studio.shutdown()
+        await app['insight_origin'].close()
         await app['session'].close()
 
     app.on_startup.append(startup)

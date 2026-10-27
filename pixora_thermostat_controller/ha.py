@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 from urllib.parse import quote
 from datetime import datetime, timezone
 from aiohttp import ClientError, ClientTimeout, WSMsgType
+from insight_origin import ha_reporter
 
 
 class HomeAssistant:
@@ -19,6 +20,8 @@ class HomeAssistant:
         self.wake = asyncio.Event()
         self.freshness_checks = {}
         self.last_freshness_check = None
+        self.socket, self.pending, self.counter = None, {}, 100
+        self.origin = ha_reporter(session, "Pixora Thermostat Controller")
 
     async def request(self, path, data=None):
         if not self.token:
@@ -33,11 +36,29 @@ class HomeAssistant:
             raise ValueError("Home Assistant request could not be confirmed. No automatic retry.") from exc
 
     async def call(self, service, fields):
+        return await self.call_with_origin(service, fields, "Thermostat Controller requested this service action.")
+
+    async def call_with_origin(self, service, fields, reason):
         domain, name = service.split(".", 1)
-        result = await self.request("services/" + domain + "/" + name, fields)
-        if isinstance(result, list):
-            for state in result:
-                self.update(state)
+        if not self.connected or self.socket is None or len(self.pending) >= 32:
+            raise ValueError("Home Assistant command connection is unavailable. No command sent.")
+        self.counter += 1
+        ident = self.counter
+        future = asyncio.get_running_loop().create_future()
+        self.pending[ident] = future
+        try:
+            await self.socket.send_json({"id": ident, "type": "call_service", "domain": domain, "service": name, "service_data": fields})
+            result = await asyncio.wait_for(future, 12)
+        except (ClientError, RuntimeError) as exc:
+            raise ValueError("Home Assistant command result could not be confirmed. No automatic retry.") from exc
+        finally:
+            self.pending.pop(ident, None)
+            if not future.done():future.cancel()
+        context = result.get("context", {}).get("id") if isinstance(result, dict) and isinstance(result.get("context"), dict) else None
+        targets = fields.get("entity_id", [])
+        targets = [targets] if isinstance(targets, str) else targets
+        try:self.origin.emit(targets, reason, context=context, operation=service)
+        except Exception:pass # Optional provenance never changes the service result.
 
     def update(self, state):
         if not isinstance(state, dict):
@@ -91,6 +112,7 @@ class HomeAssistant:
                     await ws.send_json({"type": "auth", "access_token": self.token})
                     if (await ws.receive_json()).get("type") != "auth_ok":
                         raise ValueError("Home Assistant did not authorize the app.")
+                    self.socket = ws
                     await ws.send_json({"id": 1, "type": "subscribe_events", "event_type": "state_changed"})
                     await ws.send_json({"id": 2, "type": "get_states"})
                     await ws.send_json({"id": 3, "type": "subscribe_events", "event_type": "mobile_app_notification_action"})
@@ -106,6 +128,12 @@ class HomeAssistant:
                                 break
                             continue
                         packet = json.loads(message.data)
+                        if packet.get("type") == "result" and packet.get("id") in self.pending:
+                            future = self.pending[packet["id"]]
+                            if not future.done():
+                                if packet.get("success"):future.set_result(packet.get("result"))
+                                else:future.set_exception(ValueError("Home Assistant rejected the command. It was not retried."))
+                            continue
                         if packet.get("type") == "result" and packet.get("success") is False:
                             raise ValueError("Home Assistant subscription could not be established.")
                         if packet.get("id") == 2 and packet.get("type") == "result":
@@ -158,6 +186,9 @@ class HomeAssistant:
                 self.notice = "Reconnecting to Home Assistant. Automatic changes are paused."
             finally:
                 self.connected = False
+                self.socket = None
+                for future in self.pending.values():
+                    if not future.done():future.set_exception(ValueError("Home Assistant disconnected. Command result is uncertain; no retry."))
                 # Never treat a snapshot from an earlier connection as fresh.
                 self.states = {}
             await asyncio.sleep(delay)

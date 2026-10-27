@@ -6,6 +6,7 @@ import json
 import sqlite3
 import sys
 import tempfile
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,6 +18,8 @@ from store import Store
 from collector import Collector, system_event
 spec = importlib.util.spec_from_file_location("insight_app", Path(__file__).resolve().parents[1]/"pixora_insight/app.py")
 app_module = importlib.util.module_from_spec(spec); spec.loader.exec_module(app_module)
+addon_spec = importlib.util.spec_from_file_location("insight_connector", Path(__file__).resolve().parents[1]/"pixora_home_control/app.py")
+addon = importlib.util.module_from_spec(addon_spec); addon_spec.loader.exec_module(addon)
 from aiohttp import web, WSMsgType
 
 
@@ -182,6 +185,38 @@ class Journal(unittest.TestCase):
         self.assertIsNone(self.store.explain(1))
         self.assertEqual(self.store.query()["events"][0]["id"], 2)
 
+    def test_late_explicit_flow_origin_explains_existing_device_change(self):
+        context = "01EXACTFLOWCOMMANDCONTEXT01"
+        self.put(changed(context=context))
+        self.put(event("pixora_insight", context="different-event-context", entity_id="light.kitchen", source="Pixora Flow", outcome="requested", reason="Kitchen motion triggered Flow Kitchen Motion Lights, which requested this light action.", action_context=context))
+        result = self.store.explain(1)
+        self.assertIn("Kitchen motion triggered Flow Kitchen Motion Lights", result["answer"])
+        self.assertEqual(result["evidence"][0]["kind"], "pixora_insight")
+
+    def test_flow_origin_matches_an_explicit_parent_context(self):
+        context = "01EXACTFLOWCOMMANDCONTEXT01"
+        self.put(changed(context="integration-child", parent=context))
+        self.put(event("pixora_insight", entity_id="light.kitchen", source="Pixora Flow", outcome="requested", reason="Kitchen Motion Lights requested this action.", action_context=context))
+        self.assertIn("Kitchen Motion Lights", self.store.explain(1)["answer"])
+
+    def test_flow_origin_for_another_entity_is_not_used(self):
+        context = "01EXACTFLOWCOMMANDCONTEXT01"
+        self.put(changed(context=context))
+        self.put(event("pixora_insight", entity_id="light.bedroom", source="Pixora Flow", outcome="requested", reason="Other Flow", action_context=context))
+        self.assertIn("unknown", self.store.explain(1)["answer"])
+
+    def test_indirect_scene_origin_uses_exact_context_not_guessed_targets(self):
+        context = "01EXACTSCENECOMMANDCONTEXT1"
+        self.put(changed(context=context))
+        self.put(event("pixora_insight", entity_id="scene.evening", source="Pixora Voice", outcome="requested", operation="scene.turn_on", reason="Voice requested the evening scene.", action_context=context))
+        self.assertIn("Voice requested the evening scene", self.store.explain(1)["answer"])
+
+    def test_operation_without_entity_records_direct_panel_source(self):
+        self.put(event("pixora_insight", source="Pixora LED Studio", operation="pixora_led_studio.card", target_name="Kitchen panel", outcome="requested", reason="Deck card requested."))
+        row = self.store.query()["events"][0]
+        self.assertIn("Kitchen panel", row["title"])
+        self.assertEqual(row["details"]["source"], "Pixora LED Studio")
+
     def test_later_command_and_ambiguous_requests_are_not_single_causes(self):
         state = normalize(changed(), self.catalog)
         self.store.append([state])
@@ -197,6 +232,46 @@ class Journal(unittest.TestCase):
 
 
 class AsyncTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unexpected_reporting_error_does_not_end_connector_worker(self):
+        connector = addon.Connector()
+        local = NS(request=AsyncMock(side_effect=RuntimeError('session unavailable')))
+        connector.insight.put_nowait((time.monotonic(), {'reason':'First'}))
+        connector.insight.put_nowait((time.monotonic(), {'reason':'Second'}))
+        task = asyncio.create_task(connector.send_insight(local))
+        try:
+            for _ in range(30):
+                if local.request.await_count == 2:break
+                await asyncio.sleep(.01)
+            self.assertEqual(local.request.await_count,2)
+            self.assertFalse(task.done())
+        finally:
+            task.cancel();await asyncio.gather(task,return_exceptions=True)
+    async def test_connector_keeps_exact_command_context_and_deduplicates_action(self):
+        connector = addon.Connector()
+        origin = {"source": "Pixora Flow", "reason": "Kitchen motion triggered Flow Kitchen Motion Lights."}
+        payload = {"entity_id": "light.kitchen"}
+        local = NS(query=AsyncMock(return_value={"context": {"id": "01EXACTFLOWCOMMANDCONTEXT01"}}), request=AsyncMock())
+        cloud = NS(send_json=AsyncMock())
+        command = {"id": "a"*32, "path": "/api/services/light/turn_on", "method": "POST", "payload": payload, "expiresAt": time.time()+10, "insight": origin}
+        await connector.execute(local, cloud, command)
+        await connector.execute(local, cloud, command)
+        local.query.assert_awaited_once_with('call_service', domain='light', service='turn_on', service_data=payload)
+        local.request.assert_not_awaited()
+        _, report = connector.insight.get_nowait()
+        self.assertEqual(report["action_context"], "01EXACTFLOWCOMMANDCONTEXT01")
+        self.assertEqual(payload, {"entity_id": "light.kitchen"})
+        self.assertTrue(cloud.send_json.call_args.args[0]["ok"])
+
+    async def test_origin_failure_does_not_fail_or_retry_device_action(self):
+        connector = addon.Connector()
+        connector.record_flow_origin = lambda *args: (_ for _ in ()).throw(RuntimeError("trace failed"))
+        local = NS(query=AsyncMock(return_value={"context": {"id": "01EXACTFLOWCOMMANDCONTEXT01"}}))
+        cloud = NS(send_json=AsyncMock())
+        command = {"id": "b"*32, "path": "/api/services/light/turn_on", "method": "POST", "payload": {"entity_id": "light.kitchen"}, "expiresAt": time.time()+10, "insight": {"source": "Pixora Flow", "reason": "Motion"}}
+        await connector.execute(local, cloud, command)
+        self.assertTrue(cloud.send_json.call_args.args[0]["ok"])
+        self.assertEqual(local.query.await_count, 1)
+
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.store = Store(self.temp.name); self.addCleanup(self.store.close)

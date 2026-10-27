@@ -163,3 +163,10 @@ and indoor-temperature warnings may bypass them. Routine notifications and
 outdoor Yes/No prompts are suppressed and recorded in activity, never queued or
 replayed later. A suppressed prompt grants no approval. Schedules, automatic
 protections and existing valid approvals continue operating normally.
+
+## Built-in Insight activity
+
+Report schedule, override and protection reasons for device commands to Insight using the exact HA action context. Notifications report their source without message contents. This is automatic when using the matching app updates; no extra
+companion installation or training step is needed. Insight remains optional and
+local. Missing reports leave the cause unknown; commands are never repeated to
+fill a log. Older records without provenance are not reconstructed.

@@ -24,4 +24,6 @@ for name in sorted(APPS):
             assert path.suffix not in {'.bin','.pem','.key','.cpp','.ino','.h','.hpp'},path
     print(name+': '+config['version']+' checked')
 assert yaml.safe_load((ROOT/'repository.yaml').read_text())['url']=='https://github.com/bptworld/PixoraHQforHA'
+for name in ('pixora_thermostat_controller','pixora_led_displays'):
+    assert (ROOT/name/'insight_origin.py').read_bytes()==(ROOT/'tools/insight_origin.py').read_bytes(),name+' origin reporter drift'
 print(f'All {len(APPS)} public HA app packages passed.')

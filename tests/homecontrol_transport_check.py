@@ -21,6 +21,8 @@ async def check(unified=True):
     application = web.Application()
     state = {'entity_id': 'binary_sensor.contact', 'state': 'on', 'attributes': {}}
     commands = []
+    origins = []
+    origin_seen = asyncio.Event()
     delivered = asyncio.Event()
     results = {}
     attempts = 0
@@ -29,6 +31,10 @@ async def check(unified=True):
     async def api(request):
         assert request.headers['Authorization'] == 'Bearer local-supervisor-token'
         if request.method == 'POST':
+            if request.path.endswith('/events/pixora_insight'):
+                origins.append(await request.json())
+                origin_seen.set()
+                return web.json_response({'message':'Event fired.'})
             commands.append(await request.json())
             return web.json_response([])
         # Real HA catalog bodies can arrive across several network reads.
@@ -77,7 +83,12 @@ async def check(unified=True):
             await ws.send_json({'id':3,'type':'event','event':{'event_type':'pixora_test_event','data':{'value':42}}})
         async for frame in ws:
             message = __import__('json').loads(frame.data)
-            await ws.send_json({'type': 'result', 'id': message['id'], 'success': True, 'result': []})
+            if message.get('type')=='call_service':
+                assert message['domain']=='light' and message['service']=='turn_on'
+                commands.append(message['service_data'])
+                result={'context':{'id':'01EXACTFLOWCOMMANDCONTEXT01'}}
+            else:result=[]
+            await ws.send_json({'type': 'result', 'id': message['id'], 'success': True, 'result': result})
         return ws
 
     async def cloud_socket(request):
@@ -111,12 +122,15 @@ async def check(unified=True):
         raw=await ws.receive_json()
         assert raw['type']=='ha_event' and raw['data']=={'event_type':'pixora_test_event','data':{'value':42}}
         for ident, path, method in [('a', '/api/states', 'GET'), ('b', '/pixora/registry', 'GET'), ('c', '/api/services/light/turn_on', 'POST')]:
-            await ws.send_json({'type': 'request', 'id': ident * 32, 'path': path, 'method': method, 'payload': {'entity_id': 'light.test'} if method == 'POST' else None, 'expiresAt': time.time() + 10})
+            await ws.send_json({'type': 'request', 'id': ident * 32, 'path': path, 'method': method, 'payload': {'entity_id': 'light.test'} if method == 'POST' else None, 'expiresAt': time.time() + 10, **({'insight':{'source':'Pixora Flow','reason':'Kitchen motion triggered Flow Kitchen Motion Lights.'}} if method=='POST' else {})})
         async for frame in ws:
             message = __import__('json').loads(frame.data)
             if message.get('type') == 'result':
                 results[message['id']] = message
                 if len(results) == 3:
+                    await asyncio.wait_for(origin_seen.wait(),2)
+                    assert origins[0]['action_context']=='01EXACTFLOWCOMMANDCONTEXT01'
+                    assert 'Kitchen Motion Lights' in origins[0]['reason']
                     delivered.set()
                     break
         await ws.close()

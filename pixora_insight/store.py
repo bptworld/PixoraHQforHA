@@ -134,7 +134,11 @@ class Store:
                         if related["id"] in seen:
                             continue
                         seen.add(related["id"])
-                        if related["at"] > item["at"]:
+                        indirect = bool(related["details"].get("operation")) and (not related["entities"] or related["details"].get("operation") == "scene.turn_on")
+                        reported_origin = (related["kind"] == "pixora_insight" and related["details"].get("actionContext") == key and (bool(set(item["entities"]) & set(related["entities"])) or indirect or item["kind"] == "call_service" and related["details"].get("operation") == item["details"].get("service")))
+                        if related["kind"] == "pixora_insight" and not reported_origin:
+                            continue
+                        if related["at"] > item["at"] and not reported_origin:
                             continue
                         # Same-context state reports on other entities are siblings,
                         # never evidence that one device caused another.
@@ -153,10 +157,17 @@ class Store:
                     break
             if item["kind"] == "call_service":
                 answer = "Home Assistant recorded this command request. A request alone does not confirm the device acted."
+                origins = [e for e in evidence if e["kind"] == "pixora_insight"]
+                if len(origins) == 1:answer = origins[0]["details"]["source"] + " reports: " + origins[0]["details"]["reason"] + " A request alone does not confirm the device acted."
             elif item["kind"] == "state_changed":
                 commands = [e for e in evidence if e["kind"] == "call_service"]
                 runs = [e for e in evidence if e["kind"] in {"automation_triggered", "script_started"}]
-                if len(commands) == 1:
+                origins = [e for e in evidence if e["kind"] == "pixora_insight"]
+                if len(origins) == 1:
+                    answer = origins[0]["details"]["source"] + " reports: " + origins[0]["details"]["reason"]
+                elif len(origins) > 1:
+                    answer = "Several app-reported origins share this device action context. Inspect the linked evidence; the exact origin is ambiguous."
+                elif len(commands) == 1:
                     action = commands[0]["details"]["service"].split(".", 1)[-1].replace("_", " ")
                     source = "“" + runs[0]["title"].split(": ", 1)[-1] + "” and its " if runs else "a "
                     answer = "Home Assistant links this reported change to " + source + "“" + action + "” request for this device."

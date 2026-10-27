@@ -165,7 +165,16 @@ async def execute(hass,lease,op,data):
             if not state or state.state in {'unknown','unavailable'} and domain!='scene':raise HomeAssistantError('Device reading is unavailable.')
             if domain=='cover' and (not state or state.attributes.get('device_class') not in {'blind','shade','curtain','shutter'}):raise HomeAssistantError('Door and garage controls are not supported.')
         if domain!='weather':mutate()
-        return await asyncio.wait_for(hass.services.async_call(domain,service,fields,blocking=True,context=request.context,return_response=domain=='weather'),10)
+        result=await asyncio.wait_for(hass.services.async_call(domain,service,fields,blocking=True,context=request.context,return_response=domain=='weather'),10)
+        if domain!='weather':
+            try:
+                hass.bus.async_fire('pixora_insight',{'entity_id':ids,'source':'Pixora Voice',
+                    'reason':'A Voice device request issued '+domain+'.'+service+'.',
+                    'outcome':'requested','operation':domain+'.'+service,
+                    'action_context':getattr(request.context,'id','')})
+            except Exception:
+                pass # Optional diagnostics must not change or repeat the device action.
+        return result
     raise HomeAssistantError('Unknown Voice operation.')
 
 def install_service(hass):

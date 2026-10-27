@@ -1,3 +1,6 @@
+## 0.1.13
+- Report schedule, override and protection reasons for device commands to Insight using the exact HA action context. Notifications report their source without message contents.
+
 ## 0.1.12
 - Match collapsed-section spacing for Protection timeline, Why this setting and Heating / cooling history.
 

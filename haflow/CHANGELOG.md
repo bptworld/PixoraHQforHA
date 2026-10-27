@@ -1,3 +1,6 @@
+## 0.1.70
+- HAFlow reports each device actionâ€™s Flow/trigger origin to Insight using the HA command context. Diagnostics are bounded and never replay commands.
+
 # Changelog
 
 ## 0.1.69
@@ -16,8 +19,8 @@
 **Moving from the old HAFlow? Import your saved flows in this app.**
 
 1. Open the **old HAFlow** app, save changes, expand **Library**, and choose **Export Backup**. Keep the downloaded JSON file.
-2. In **Settings → Apps → the old HAFlow**, turn off **Start on boot** and **Watchdog**, then **Stop** it. Keep it installed until the transfer is verified.
-3. Add `https://github.com/bptworld/PixoraHQforHA` under **App store → ⋮ → Repositories**. Install **HAFlow from PixoraHQ for Home Assistant**, version **0.1.68 or later**, then start and open it.
+2. In **Settings â†’ Apps â†’ the old HAFlow**, turn off **Start on boot** and **Watchdog**, then **Stop** it. Keep it installed until the transfer is verified.
+3. Add `https://github.com/bptworld/PixoraHQforHA` under **App store â†’ â‹® â†’ Repositories**. Install **HAFlow from PixoraHQ for Home Assistant**, version **0.1.68 or later**, then start and open it.
 4. Click the bold transfer notice's **Import old HAFlow** button in the new app. Choose your exported JSON file. Single **Export Flow** files also work.
 5. Close the import window, select each imported flow, and check its devices and connections. **Imported flows start paused; existing flows are preserved.**
 6. With the old app stopped, click **Resume** for the reviewed flows and test their triggers. Enable **Start on boot** and **Watchdog** for the new app after checking it works.

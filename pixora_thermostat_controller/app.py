@@ -252,6 +252,8 @@ def make_app(root=Path("/data"), test_ha=None):
                 for task in tasks:
                     task.cancel()
                 await asyncio.gather(*tasks, return_exceptions=True)
+                if hasattr(application["ha"], "origin"):
+                    await application["ha"].origin.close()
 
     app.cleanup_ctx.append(lifecycle)
     app.router.add_get("/api/status", status)

@@ -701,7 +701,10 @@ class Engine:
             runtime["pending"] = {"target": desired, "at": now.isoformat(), "context": activity}
             self.store.patch_runtime(ident, runtime, "Requested: " + activity + ". Waiting for thermostat confirmation.")
             try:
-                await self.ha.call(action, fields)
+                if hasattr(self.ha, "call_with_origin") and not self.preview_only:
+                    await self.ha.call_with_origin(action, fields, activity + ". " + detail)
+                else:
+                    await self.ha.call(action, fields)
             except (ValueError, asyncio.TimeoutError, OSError) as exc:
                 runtime["blocked"] = "Thermostat command result is uncertain. Check the thermostat before resuming. No automatic retry."
                 self.store.patch_runtime(ident, runtime, runtime["blocked"], "warning")

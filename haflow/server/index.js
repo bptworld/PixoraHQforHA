@@ -1,4 +1,6 @@
 import crypto from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { CommandContexts, originReport, createOriginRecorder } from './insight-origin.js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,6 +31,9 @@ let logs = []
 let clients = new Set()
 let haSocket = null
 let haMessageId = 1
+let haAuthenticated = false
+const commandContexts = new CommandContexts(() => haMessageId++)
+const originContext = new AsyncLocalStorage()
 let reconnectTimer = null
 let lastTimeKey = ''
 let activeScheduleWindows = new Set()
@@ -589,6 +594,10 @@ setInterval(() => {
 }, 15_000)
 
 async function runFlow(flow, startNodeId, options = {}) {
+  return originContext.run(options.insight || originContext.getStore() || { reason: 'A manual HAFlow run requested this device action.' }, () => runFlowSteps(flow, startNodeId, options))
+}
+
+async function runFlowSteps(flow, startNodeId, options = {}) {
   const nodes = flow.nodes ?? []
   const edges = flow.edges ?? []
   if (!nodes.length) throw new Error('There are no nodes to run.')
@@ -1481,7 +1490,8 @@ async function triggerNode(flow, flowMeta, node, { reason }) {
     const currentMeta = (await readFlowIndex()).find(meta => meta.id === flowMeta.id)
     if (!currentMeta || currentMeta.paused || !config.runnerEnabled) throw createCancelledError()
     log('activated', `Flow Activated: ${flowMeta.name}: ${node.data?.label || node.id}`)
-    const result = await runFlow(flow, node.id, { runId: run.id, skipStartExecution: node.id, signal: run.controller.signal })
+    const triggerName = String(node.data?.label || node.data?.entityId || node.data?.kind || 'Trigger').slice(0, 180)
+    const result = await runFlow(flow, node.id, { runId: run.id, skipStartExecution: node.id, signal: run.controller.signal, insight: { reason: `${triggerName} triggered Flow “${String(flowMeta.name).slice(0, 120)}”, which requested this device action.` } })
     await finishRunHistory({
       id: run.id,
       startedAt,
@@ -1528,12 +1538,14 @@ function reconnectHomeAssistant() {
 
   haSocket.on('message', (raw) => {
     const message = JSON.parse(raw.toString())
+    if (commandContexts.accept(message)) return
     if (message.type === 'auth_required') {
       haSocket.send(JSON.stringify({ type: 'auth', access_token: ha.token }))
       return
     }
 
     if (message.type === 'auth_ok') {
+      haAuthenticated = true
       durationRecoveryRequested = true
       recoverDurationTriggers().catch(error => log('warn', `Could not recover held triggers: ${error.message}`))
       haSocket.send(JSON.stringify({ id: haMessageId++, type: 'subscribe_events' }))
@@ -1558,6 +1570,8 @@ function reconnectHomeAssistant() {
 }
 
 function scheduleReconnect() {
+  haAuthenticated = false
+  commandContexts.close()
   clearPendingStateTriggerTimers()
   durationRecoveryRequested = true
   broadcastRunner()
@@ -1587,6 +1601,8 @@ function closeHomeAssistantSocket() {
     haSocket.close()
   }
   haSocket = null
+  haAuthenticated = false
+  commandContexts.close()
   broadcastRunner()
 }
 
@@ -1601,11 +1617,21 @@ async function getEntity(entityId) {
 
 async function callService(domain, service, payload) {
   if (!domain || !service) throw new Error('Service nodes need a domain and service.')
-  return haRest(`/api/services/${domain}/${service}`, {
-    method: 'POST',
-    body: JSON.stringify(payload ?? {}),
-  })
+  let result, commandResult
+  if (haAuthenticated && haSocket?.readyState === WebSocket.OPEN) {
+    commandResult = await commandContexts.request(haSocket, { domain, service, service_data: payload ?? {} })
+    result = commandResult
+  } else {
+    // Preflight only: the event channel has not accepted a command, so the
+    // established REST path remains available. Never fall back after a send.
+    result = await haRest(`/api/services/${domain}/${service}`, { method: 'POST', body: JSON.stringify(payload ?? {}) })
+  }
+  try { recordInsightOrigin(originReport(originContext.getStore(), domain, service, payload, commandResult)) }
+  catch { try { log('warn', 'Insight origin unavailable; device action unchanged.') } catch { /* optional diagnostics */ } }
+  return result
 }
+
+const recordInsightOrigin = createOriginRecorder(report => haRest('/api/events/pixora_insight', { method: 'POST', body: JSON.stringify(report), signal: AbortSignal.timeout(2000) }), message => log('warn', message))
 
 async function verifyServiceResult(data, entityIds) {
   if (!entityIds.length) return
