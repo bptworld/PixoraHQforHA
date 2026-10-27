@@ -1,3 +1,6 @@
+## 0.1.12
+- Match collapsed-section spacing for Protection timeline, Why this setting and Heating / cooling history.
+
 ## 0.1.11
 - Preview the next schedule target or hold end, with protection and household caveats.
 - Add optional local-time notification quiet hours with urgent-warning bypass; suppressed messages are logged and never replayed.
