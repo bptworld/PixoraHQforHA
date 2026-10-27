@@ -4,7 +4,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from model import ENTITY, validate_settings, valid_exclusion, target_exclusion
+from model import ENTITY, validate_settings, valid_exclusion, target_exclusion, activity_exclusions
 
 DEFAULTS = {"days": 7, "limit": 20000, "excluded": []}
 
@@ -74,8 +74,9 @@ class Store:
     def append(self, rows):
         with self.lock, self.db:
             excluded = set(self.settings["excluded"])
+            contains = [key[len("contains:"):] for key in excluded if key.startswith("contains:")]
             for row in rows:
-                if set(row["entities"]) & excluded or target_exclusion(row) in excluded or any("device:" + d in excluded for d in row["details"].get("deviceIds", [])):
+                if any(fragment in entity for fragment in contains for entity in row["entities"]) or any(option["key"] in excluded for option in activity_exclusions(row)) or set(row["entities"]) & excluded or target_exclusion(row) in excluded or any("device:" + d in excluded for d in row["details"].get("deviceIds", [])):
                     continue
                 payload = json.dumps(row["details"], ensure_ascii=False)
                 if len(payload.encode("utf-8")) > 8192:

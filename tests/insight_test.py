@@ -13,7 +13,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pixora_insight"))
-from model import Catalog, normalize, projection, validate_settings, EVENTS
+from model import Catalog, normalize, projection, validate_settings, EVENTS, activity_exclusions
 from store import Store
 from collector import Collector, system_event
 spec = importlib.util.spec_from_file_location("insight_app", Path(__file__).resolve().parents[1]/"pixora_insight/app.py")
@@ -214,6 +214,44 @@ class Journal(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertIn("Recording gap", rows[0]["title"])
         self.assertEqual(self.store.stats()["count"], 5)
+
+    def test_targetless_command_and_activity_exclusions(self):
+        command = event("call_service", domain="esphome", service="lr_ts_screen_message", service_data={"message":"private"})
+        self.put(command)
+        self.store.exclude("service:esphome.lr_ts_screen_message")
+        self.put(command)
+        self.put(event("call_service", domain="esphome", service="other_command"))
+        self.assertEqual(self.store.stats()["count"], 2)
+        self.store.exclude("service:esphome.lr_ts_screen_message", restore=True)
+        self.put(command)
+        self.assertEqual(self.store.stats()["count"], 3)
+        report = event("pixora_insight", source="Example app", reason="Requested", outcome="requested", operation="example.command")
+        self.store.exclude("source:Example app")
+        self.put(report)
+        self.assertEqual(self.store.stats()["count"], 3)
+        coverage = system_event("Connection interrupted")
+        key = activity_exclusions(coverage)[0]["key"]
+        self.store.exclude(key)
+        self.store.append([coverage, system_event("Different warning")])
+        self.assertEqual(self.store.stats()["count"], 4)
+        self.assertNotIn("private", str(activity_exclusions(normalize(command, self.catalog))))
+
+    def test_contains_entity_exclusion_and_restoration(self):
+        self.store.exclude("contains:wi_fi_signal_strength")
+        self.put(changed("sensor.living_room_wi_fi_signal_strength"))
+        self.put(changed("sensor.new_wi_fi_signal_strength_db"))
+        self.put(changed("sensor.wifi_signal"))
+        self.put(event("call_service", domain="homeassistant", service="update_entity", service_data={"entity_id": ["sensor.new_wi_fi_signal_strength_db", "sensor.other"]}))
+        self.assertEqual(self.store.stats()["count"], 1)
+        other = Store(self.temp.name)
+        try:
+            self.assertIn("contains:wi_fi_signal_strength", other.settings["excluded"])
+        finally: other.close()
+        self.store.exclude("contains:wi_fi_signal_strength", restore=True)
+        self.put(changed("sensor.living_room_wi_fi_signal_strength"))
+        self.assertEqual(self.store.stats()["count"], 2)
+        for invalid in ("contains:", "contains:.*", "contains:a b", "contains:" + "a"*161):
+            with self.assertRaises(ValueError): self.store.exclude(invalid)
 
     def test_pagination_and_restart_persistence(self):
         self.store.append([normalize(changed(), self.catalog)]*55)

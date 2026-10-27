@@ -7,10 +7,10 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from aiohttp import ClientSession, web
 from collector import Collector, system_event
-from model import ENTITY, EVENTS
+from model import ENTITY, EVENTS, activity_exclusions
 from store import Store
 
-VERSION = "0.1.5"
+VERSION = "0.1.6"
 ROOT = Path(__file__).parent
 
 
@@ -66,6 +66,7 @@ def make_app(root=Path("/data"), test_collector=None):
         item = result["event"]
         devices = set(item["details"].get("deviceIds", []))
         devices.update(catalog.registry.get(e, {}).get("device_id") for e in item["entities"])
+        result["exclusionOptions"] = activity_exclusions(item)
         result["devices"] = sorted([{"id": d, "name": catalog.devices.get(d, {}).get("name") or d} for d in devices if d], key=lambda d: d["name"].casefold())
         return web.json_response(result)
 

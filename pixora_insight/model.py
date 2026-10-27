@@ -1,4 +1,5 @@
 """Small, allowlisted projections of HA events. Never store raw event payloads."""
+import hashlib
 import json
 import math
 import re
@@ -183,7 +184,7 @@ def normalize(event, catalog):
 
 
 def valid_exclusion(value):
-    return isinstance(value, str) and bool(ENTITY.fullmatch(value) or re.fullmatch(r"device:[A-Za-z0-9_-]{1,160}", value) or re.fullmatch(r"app-target:[^\x00-\x1f]{1,203}", value))
+    return isinstance(value, str) and bool(re.fullmatch(r"contains:[a-z0-9_.]{1,160}", value) or re.fullmatch(r"service:[a-z_]+\.[a-z0-9_]+", value) or re.fullmatch(r"source:[^\x00-\x1f]{1,80}", value) or re.fullmatch(r"activity:[a-f0-9]{64}", value) or ENTITY.fullmatch(value) or re.fullmatch(r"device:[A-Za-z0-9_-]{1,160}", value) or re.fullmatch(r"app-target:[^\x00-\x1f]{1,203}", value))
 
 
 def target_exclusion(row):
@@ -191,6 +192,19 @@ def target_exclusion(row):
     if row.get("kind") == "pixora_insight" and details.get("source") and details.get("targetName"):
         return "app-target:" + details["source"] + " / " + details["targetName"]
     return ""
+
+
+def activity_exclusions(row):
+    details = row.get("details", {})
+    options = []
+    if row.get("kind") == "call_service" and details.get("service"):
+        options.append({"key": "service:" + details["service"], "name": details["service"] + " (all requests for this command)", "label": "command"})
+    if row.get("kind") == "pixora_insight" and details.get("source"):
+        options.append({"key": "source:" + details["source"], "name": details["source"] + " (all app reports)", "label": "app reports"})
+    if not row.get("entities") and not options and not target_exclusion(row):
+        digest = hashlib.sha256(json.dumps([row.get("kind"), row.get("title")], ensure_ascii=False).encode("utf-8")).hexdigest()
+        options.append({"key": "activity:" + digest, "name": row.get("title", "Activity"), "label": "activity"})
+    return options
 
 
 def validate_settings(value):
@@ -201,5 +215,5 @@ def validate_settings(value):
     if type(value["limit"]) is not int or not 1000 <= value["limit"] <= 50000:
         raise ValueError("Keep between 1,000 and 50,000 events.")
     if not isinstance(value["excluded"], list) or len(value["excluded"]) > 500 or any(not valid_exclusion(v) for v in value["excluded"]):
-        raise ValueError("Choose up to 500 valid entity IDs or app display exclusions.")
+        raise ValueError("Choose up to 500 valid recording exclusions.")
     return {**value, "excluded": sorted(set(value["excluded"]))}

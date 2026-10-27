@@ -1,3 +1,7 @@
+## 0.1.6
+- Add literal entity-ID contains exclusions, including future matching entities, with restoration in History settings.
+- Allow excluding targetless commands by service, app reports by source, and other targetless activity by its exact activity type/title. Include restoration in History settings.
+
 ## 0.1.5
 - Hide exclusion, restoration and settings housekeeping notices from activity, including earlier notices. Keep recording coverage and gap warnings visible.
 
