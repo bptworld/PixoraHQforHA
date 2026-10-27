@@ -10,11 +10,42 @@ from unittest.mock import AsyncMock
 from thermostat_test_controller import FakeHA, zone
 from engine import Store, Engine
 from policy import validate
-from enhancements import freshness, household, indoor_value, RuntimeHistory
+from enhancements import freshness, household, indoor_value, RuntimeHistory, quiet_now, next_change, stamp
 from ha import HomeAssistant
 
 
 class ToolPolicies(unittest.TestCase):
+    def test_quiet_hours_local_time_boundaries_and_overnight(self):
+        quiet = {"enabled": True, "start": "22:00", "end": "07:00"}
+        self.assertTrue(quiet_now(quiet, datetime(2026, 10, 27, 2, tzinfo=timezone.utc), "America/New_York"))
+        self.assertFalse(quiet_now(quiet, datetime(2026, 10, 27, 11, tzinfo=timezone.utc), "America/New_York"))
+        quiet.update(start="09:00", end="17:00")
+        self.assertTrue(quiet_now(quiet, self.now, "America/New_York"))
+        quiet["enabled"] = False
+        self.assertFalse(quiet_now(quiet, self.now, "America/New_York"))
+
+    def test_next_change_resolves_hold_end_period_and_protection(self):
+        z = zone()
+        z["schedule"][1]["name"] = "Bedtime"
+        result = next_change(z, {}, self.now, "America/New_York")
+        self.assertEqual(result["target"], {"mode": "heat", "heat": 64})
+        self.assertEqual(result["period"], "Bedtime")
+        runtime = {"override": {"until": "2026-10-28T12:00:00Z", "target": {"mode": "heat", "heat": 72}}, "window": True}
+        result = next_change(z, runtime, self.now, "America/New_York")
+        self.assertEqual(result["label"], "Hold ends")
+        self.assertEqual(result["target"]["heat"], 70)
+        self.assertIn("protection", result["note"])
+        runtime["override"].update(returnPerson="person.alex", until=datetime.max.replace(tzinfo=timezone.utc).isoformat())
+        self.assertIsNone(next_change(z, runtime, self.now, "America/New_York")["at"])
+
+    def test_quiet_hour_configuration_is_optional_and_validated(self):
+        z = validate({"zones": [zone()]})["zones"][0]
+        self.assertFalse(z["quietHours"]["enabled"])
+        for start, end in (("25:00", "07:00"), ("22:00", "22:00"), ("9:30", "07:00")):
+            bad = copy.deepcopy(z)
+            bad["quietHours"].update(start=start, end=end)
+            with self.assertRaises(ValueError): validate({"zones": [bad]})
+
     def setUp(self):
         self.now = datetime(2026, 10, 26, 16, tzinfo=timezone.utc)
 
@@ -151,6 +182,64 @@ class ToolPolicies(unittest.TestCase):
 
 
 class IntegrationTools(unittest.IsolatedAsyncioTestCase):
+    async def test_quiet_hours_suppress_routine_but_allow_urgent_and_never_replay(self):
+        z = self.config()
+        z["quietHours"] = {"enabled": True, "start": "09:00", "end": "17:00", "allowUrgent": True}
+        await self.engine.send_notice(z, {"message": "Routine"})
+        self.assertFalse(self.ha.calls)
+        self.assertIn("suppressed by quiet hours", str(self.store.data["events"]))
+        await self.engine.send_notice(z, {"message": "Urgent"}, urgent=True)
+        self.assertEqual(len(self.ha.calls), 1)
+        z["quietHours"]["allowUrgent"] = False
+        await self.engine.send_notice(z, {"message": "Silenced urgent"}, urgent=True)
+        self.assertEqual(len(self.ha.calls), 1)
+        self.now += timedelta(hours=8)
+        await self.tick()
+        self.assertFalse(any(f.get("message") == "Routine" for _, f in self.ha.calls))
+
+    async def test_quiet_hours_do_not_approve_outdoor_heat_off(self):
+        z = self.config()
+        z["quietHours"] = {"enabled": True, "start": "09:00", "end": "17:00", "allowUrgent": True}
+        z["outdoor"].update(enabled=True, mode="ask")
+        self.ha.states["sensor.outdoor"]["state"] = "60"
+        await self.tick()
+        runtime = self.store.data["runtime"]["living"]
+        self.assertEqual(runtime["approval"]["decision"], "pending")
+        self.assertTrue(runtime["approval"]["quietSuppressed"])
+        self.assertFalse(runtime["outdoor"])
+        self.assertFalse(any("actions" in f.get("data", {}) for _, f in self.ha.calls))
+
+    async def test_protection_timeline_tracks_observed_open_and_closed_delays(self):
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick()
+        row = self.engine.status["living"]["timeline"][0]
+        self.assertEqual(row["label"], "Living room window")
+        self.assertEqual(stamp(row["due"]), self.now+timedelta(minutes=3))
+        await self.tick(180)
+        self.assertIsNone(self.engine.status["living"]["timeline"][0]["due"])
+        self.ha.states["binary_sensor.window"]["state"] = "off"
+        await self.tick()
+        row = self.engine.status["living"]["timeline"][0]
+        self.assertEqual(row["state"], "Waiting to restore")
+        self.assertEqual(stamp(row["due"]), self.now+timedelta(minutes=1))
+        await self.tick(60)
+        self.assertFalse(self.engine.status["living"]["timeline"])
+
+    async def test_timeline_unknown_or_disconnected_reading_has_no_restore_deadline(self):
+        self.ha.states["binary_sensor.window"]["state"] = "on"
+        await self.tick()
+        await self.tick(180)
+        self.ha.states["binary_sensor.window"]["state"] = "unavailable"
+        await self.tick()
+        status = self.engine.status["living"]
+        self.assertEqual(status["reason"], "Needs attention")
+        self.assertTrue(all(row["due"] is None for row in status["timeline"]))
+        self.assertIn("Control is paused", status["nextChange"]["note"])
+        self.ha.connected = False
+        await self.tick()
+        self.assertEqual(self.engine.status["living"]["reason"], "Reconnecting")
+        self.assertTrue(all(row["due"] is None for row in self.engine.status["living"]["timeline"]))
+
     async def test_slow_recipient_does_not_serialize_other_deliveries(self):
         z = self.config()
         z["notify"]["recipients"] = [{"person": "Alex", "service": "notify.mobile_app_alex"}, {"person": "Sam", "service": "notify.mobile_app_bryan"}]

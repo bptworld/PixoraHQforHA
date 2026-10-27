@@ -11,7 +11,7 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from enhancements import freshness, indoor_value, household, RuntimeHistory, stamp
+from enhancements import freshness, indoor_value, household, RuntimeHistory, stamp, quiet_now, next_change
 from policy import schedule_at, next_period, target, temperature, observed, same, service_for
 
 
@@ -103,7 +103,12 @@ class Engine:
     def notice_actions(self, z):
         return any(r["service"].startswith("notify.mobile_app_") for r in self.recipients(z))
 
-    async def send_notice(self, z, fields):
+    async def send_notice(self, z, fields, urgent=False):
+        quiet = z.get("quietHours", {})
+        if quiet_now(quiet, self.now(), self.ha.timezone) and not (urgent and quiet.get("allowUrgent", True)):
+            self.store.patch_runtime(z["id"], self.store.data["runtime"].get(z["id"], {}),
+                "Notification suppressed by quiet hours; not queued for later. Message: " + fields["message"])
+            return
         async def deliver(recipient):
             service, name = recipient["service"], recipient["person"]
             payload = copy.deepcopy(fields)
@@ -164,6 +169,8 @@ class Engine:
                     except (ValueError, OSError, TypeError, KeyError):
                         pass
 
+                self.update_planning(zone)
+
             history_due = history_due or any(k not in active for k in self.history.data)
             self.history.data = {k: v for k, v in self.history.data.items() if k in active}
             self.history.samples = {k: v for k, v in self.history.samples.items() if k in active}
@@ -176,6 +183,47 @@ class Engine:
                 except (OSError, ValueError):
                     self.history_notice = "Runtime history could not be saved; current control continues. Recent unsaved totals may be lost on restart."
                 self.history.persisted = self.now()
+
+    def update_planning(self, z):
+        now = self.now()
+        runtime = self.store.data["runtime"].get(z["id"], {})
+        status = self.status.setdefault(z["id"], {})
+        quiet = z.get("quietHours", {})
+        status["quietNow"] = quiet_now(quiet, now, self.ha.timezone)
+        status["nextChange"] = next_change(z, runtime, now, self.ha.timezone)
+        if status["nextChange"] and status.get("reason") in {"Needs attention", "Reconnecting", "Check thermostat", "Waiting for thermostat"}:
+            status["nextChange"]["note"] += " Control is paused; this is a schedule preview, not a confirmed adjustment."
+        rows = []
+        if not z["enabled"]:
+            status["timeline"] = rows
+            return
+        timers = self.timers.get(z["id"], {})
+        for ident in z["openings"]:
+            if ident in runtime.get("ignored", {}):
+                continue
+            state = self.ha.states.get(ident, {}) if self.ha.connected else {}
+            reading = state.get("state")
+            if reading == "off":
+                continue
+            seen = timers.get("contacts", {}).get(ident, {}).get("at")
+            due = seen + timedelta(minutes=z["openMinutes"]) if seen and not runtime.get("window") else None
+            rows.append({"label": self.sensor_name(ident), "state": "Open" if reading == "on" else "Unavailable — new adjustments paused",
+                         "at": (stamp(state.get("last_changed")) or seen).isoformat() if stamp(state.get("last_changed")) or seen else None,
+                         "due": due.isoformat() if due else None,
+                         "detail": ("Setback protection is active." if runtime.get("window") else "Protection starts after the observed open delay.") if reading == "on" else "Unknown does not count as closed."})
+        if runtime.get("window") and not any(row["state"] == "Open" for row in rows):
+            closed = timers.get("closed")
+            rows.append({"label": "Door/window protection", "state": "Waiting to restore", "at": closed.isoformat() if closed else None,
+                         "due": (closed+timedelta(minutes=z["closeMinutes"])).isoformat() if closed else None,
+                         "detail": "Resume the current schedule or hold after every monitored contact stays closed. Unknown readings pause restoration."})
+        if runtime.get("outdoor"):
+            rows.append({"label": "Outdoor heat lockout", "state": "Active", "at": None, "due": None,
+                         "detail": f"Clears when outside reaches or falls below {z['outdoor']['limit']-z['outdoor']['margin']:g}°{z['unit']}. No time is assumed."})
+        approval = runtime.get("approval", {})
+        if approval.get("decision") == "pending":
+            rows.append({"label": "Outdoor heat-off request", "state": "Awaiting approval", "at": None, "due": approval["until"],
+                         "detail": "Prompt suppressed by quiet hours; no approval assumed or later replay." if approval.get("quietSuppressed") else "Only Yes approves heat-off. No response leaves the rule inactive."})
+        status["timeline"] = rows
 
     async def check_temperatures(self, z, now):
         fresh = z.get("freshness", {})
@@ -228,7 +276,7 @@ class Engine:
                 self.store.patch_runtime(z["id"], runtime, message, "warning")
                 if ident != z["entity"] and self.notice_available(z):
                     try:
-                        await self.send_notice(z, fields)
+                        await self.send_notice(z, fields, urgent=True)
                     except (ValueError, OSError, asyncio.TimeoutError):
                         pass
             return
@@ -259,7 +307,7 @@ class Engine:
         message = f"{self.sensor_name(ident)} is unusually {'cold' if kind == 'low' else 'hot'}: {value:g}°{z['unit']}. Warning threshold {options[kind]:g}°{z['unit']}. No thermostat setting was changed by this alert."
         self.store.patch_runtime(z["id"], runtime, message)
         try:
-            await self.send_notice(z, {"title": z["name"] + ": Indoor temperature", "message": message})
+            await self.send_notice(z, {"title": z["name"] + ": Indoor temperature", "message": message}, urgent=True)
         except (ValueError, OSError, asyncio.TimeoutError):
             pass
 
@@ -298,12 +346,12 @@ class Engine:
                     name = self.sensor_name(sensor)
                     prefix = "pixora_thermostat:" + token + ":"
                     try:
-                        await self.send_notice(z, {"title": z["name"] + ": " + name, "message": message + " Okay keeps protection unchanged. Ignore excludes only " + name + " until you mark it Fixed in the app.", "data": {"tag": "pixora-issue-" + z["id"] + "-" + sensor, "actions": [{"action": prefix + "okay", "title": "Okay"}, {"action": prefix + "ignore", "title": "Ignore"}]}})
+                        await self.send_notice(z, {"title": z["name"] + ": " + name, "message": message + " Okay keeps protection unchanged. Ignore excludes only " + name + " until you mark it Fixed in the app.", "data": {"tag": "pixora-issue-" + z["id"] + "-" + sensor, "actions": [{"action": prefix + "okay", "title": "Okay"}, {"action": prefix + "ignore", "title": "Ignore"}]}}, urgent=True)
                     except (ValueError, OSError, asyncio.TimeoutError):
                         pass
                 return
             try:
-                await self.send_notice(z, {"title": z["name"], "message": message})
+                await self.send_notice(z, {"title": z["name"], "message": message}, urgent=category in {"sensor", "failure"})
             except (ValueError, OSError, asyncio.TimeoutError):
                 pass
 
@@ -588,9 +636,9 @@ class Engine:
         elif outdoor["mode"] == "ask":
             approval = runtime.get("approval")
             if not approval and desired["mode"] in {"heat", "heat_cool"}:
-                approval = {"token": secrets.token_hex(16), "until": (now + timedelta(minutes=10)).isoformat(), "decision": "pending"}
+                approval = {"token": secrets.token_hex(16), "until": (now + timedelta(minutes=10)).isoformat(), "decision": "pending", "quietSuppressed": quiet_now(z.get("quietHours", {}), now, self.ha.timezone)}
                 runtime["approval"] = approval
-                self.store.patch_runtime(ident, runtime, "Asked the selected recipients whether to turn heat off.")
+                self.store.patch_runtime(ident, runtime, "Outdoor heat-off request created; delivery results follow in activity.")
                 prefix = "pixora_thermostat:" + approval["token"] + ":"
                 try:
                     if not self.notice_available(z):

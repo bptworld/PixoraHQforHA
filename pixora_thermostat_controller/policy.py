@@ -94,6 +94,14 @@ def validate(value):
         if not isinstance(notices, dict):
             raise ValueError("Choose notification grouping settings.")
         number(notices.get("cooldownMinutes"), 0, 120, "Notification cooldown")
+        quiet = z.setdefault("quietHours", {"enabled": False, "start": "22:00", "end": "07:00", "allowUrgent": True})
+        if not isinstance(quiet, dict) or type(quiet.get("enabled")) is not bool or type(quiet.get("allowUrgent")) is not bool:
+            raise ValueError("Choose valid notification quiet hours.")
+        for key in ("start", "end"):
+            if not isinstance(quiet.get(key), str) or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", quiet[key]):
+                raise ValueError("Choose valid quiet-hour start and end times.")
+        if quiet["start"] == quiet["end"]:
+            raise ValueError("Quiet-hour start and end must be different.")
         home = z.setdefault("household", {"enabled": False, "people": [], "awayMinutes": 5, "homeMinutes": 1, "away": {"mode": "heat", "heat": 60 if z["unit"] == "F" else 16}})
         if isinstance(home, dict) and "members" in home:
             members = home["members"]

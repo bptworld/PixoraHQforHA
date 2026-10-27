@@ -12,7 +12,7 @@ from ha import HomeAssistant
 from enhancements import freshness
 from policy import validate, target, next_period, service_for, observed, number, temperature
 
-VERSION = "0.1.10"
+VERSION = "0.1.11"
 ROOT = Path(__file__).parent
 
 

@@ -144,3 +144,22 @@ every listed destination, with a separate delivery result in Recent activity.
 Duplicate destinations are rejected. Ask first requires Companion mobile-app
 destinations for all recipients; the first valid Yes or No decides. No response
 leaves the outdoor rule inactive. Uncertain deliveries are never retried.
+
+## Next change and protection timeline
+
+Each enabled controller previews the next schedule period or timed-hold end,
+including its target and the rules that may delay it. Return-home holds show
+that event instead of an invented end time. The **Protection timeline** lists
+open contacts, observed delay deadlines, closed-contact restoration, outdoor
+lockouts and pending approval expiry. It uses the existing readings and checks;
+no extra polling or background history is added. Restart/reconnect observations
+start fresh, and unavailable contacts never count as closed.
+
+## Notification quiet hours
+
+Quiet hours are optional and start disabled, with suggested times of 10 PM to
+7 AM in Home Assistant’s time zone. Choose whether urgent sensor, failed-command
+and indoor-temperature warnings may bypass them. Routine notifications and
+outdoor Yes/No prompts are suppressed and recorded in activity, never queued or
+replayed later. A suppressed prompt grants no approval. Schedules, automatic
+protections and existing valid approvals continue operating normally.

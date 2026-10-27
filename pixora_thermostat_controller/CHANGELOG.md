@@ -1,3 +1,8 @@
+## 0.1.11
+- Preview the next schedule target or hold end, with protection and household caveats.
+- Add optional local-time notification quiet hours with urgent-warning bypass; suppressed messages are logged and never replayed.
+- Add a live protection timeline for open contacts, delay deadlines, restoration, outdoor lockouts and pending approvals.
+
 ## 0.1.10
 - Keep notification fan-out within one bounded send window and retain confirmed household mode when member names change or legacy selections migrate.
 - Reject duplicate/generic notification destinations and invalid household presence devices.
