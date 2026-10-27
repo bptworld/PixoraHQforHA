@@ -1,0 +1,17 @@
+name: Pixora Insight
+version: "0.1.0"
+slug: pixora_insight
+description: "Your home. Explained. Local device activity and evidence-based explanations. Brought to you by PixoraHQ.com."
+arch: [aarch64, amd64]
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+ingress: true
+ingress_port: 4194
+panel_icon: mdi:lightbulb-question-outline
+panel_title: Pixora Insight
+panel_admin: true
+options: {}
+schema: {}
+url: https://github.com/bptworld/PixoraHQforHA/tree/main/pixora_insight

@@ -3,7 +3,7 @@ from pathlib import Path
 import ast,json
 import yaml
 ROOT=Path(__file__).resolve().parents[1]
-APPS={'haflow','pixora_home_control','pixora_locator','pixora_led_displays','pixora_voice','pixora_thermostat_controller'}
+APPS={'haflow','pixora_home_control','pixora_locator','pixora_led_displays','pixora_voice','pixora_thermostat_controller','pixora_insight'}
 found={path.parent.name for path in ROOT.glob('*/config.yaml')}
 assert found==APPS,found
 for name in sorted(APPS):

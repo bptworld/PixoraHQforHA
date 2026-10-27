@@ -21,6 +21,7 @@ installed automatically. Each app keeps its own configuration, version and data.
 | Pixora LED Studio | Local S3 LED cards, native HA display entities and Wi-Fi updates | [Instructions](pixora_led_displays/README.md) |
 | Pixora Voice (Beta) | **In Beta Testing.** Local home questions and controls without a cloud service or LLM | [Instructions](pixora_voice/README.md) |
 | Pixora Thermostat Controller | Local schedules, overrides, door/window setbacks, outdoor heat limits and Yes/No notifications | [Instructions](pixora_thermostat_controller/README.md) |
+| Pixora Insight | Local device activity, command requests and evidence-based explanations | [Instructions](pixora_insight/README.md) |
 
 Home Control and Locator retain their existing Pixora service connections.
 LED Displays runs locally on the HA hub and supports S3 64x32/128x32 only.
