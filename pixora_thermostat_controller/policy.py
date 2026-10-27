@@ -54,15 +54,35 @@ def validate(value):
         number(outside.get("limit"), -40, 120, "Outdoor limit")
         number(outside.get("margin"), .5, 10, "Outdoor return margin")
         notice = z.get("notify")
+        if isinstance(notice, dict) and "recipients" in notice:
+            recipients = notice["recipients"]
+            if not isinstance(recipients, list) or len(recipients) > 32:
+                raise ValueError("Add up to 32 notification recipients.")
+            destinations = set()
+            for recipient in recipients:
+                if not isinstance(recipient, dict) or not isinstance(recipient.get("person"), str) or not recipient["person"].strip() or len(recipient["person"]) > 80:
+                    raise ValueError("Give each notification recipient a name.")
+                recipient["person"] = recipient["person"].strip()
+                entity(recipient.get("service"), {"notify"}, "notification destination")
+                if recipient["service"] == "notify.send_message":
+                    raise ValueError("Choose a named notification destination, not notify.send_message.")
+                if recipient["service"] in destinations:
+                    raise ValueError("Choose a different notification destination for each recipient.")
+                destinations.add(recipient["service"])
+            notice.update({key: recipients[0][key] if recipients else "" for key in ("person", "service")})
         if not isinstance(notice, dict) or not isinstance(notice.get("person"), str) or len(notice["person"]) > 80:
             raise ValueError("Choose who receives notifications.")
         entity(notice.get("service"), {"notify"}, "notification destination", optional=True)
+        if notice["service"] == "notify.send_message":
+            raise ValueError("Choose a named notification destination, not notify.send_message.")
         if bool(notice["person"].strip()) != bool(notice["service"]):
             raise ValueError("Choose both a person and their notification destination.")
         if z["enabled"] and (openings or outside["enabled"]) and not notice["service"]:
             raise ValueError("Choose a notification recipient for protection alerts.")
         if outside["enabled"] and outside["mode"] == "ask" and not notice["service"].startswith("notify.mobile_app_"):
             raise ValueError("Ask first needs a Home Assistant Companion mobile-app notification destination.")
+        if outside["enabled"] and outside["mode"] == "ask" and any(not r["service"].startswith("notify.mobile_app_") for r in notice.get("recipients", [])):
+            raise ValueError("Ask first needs Companion mobile-app destinations for all recipients.")
         alerts = z.setdefault("alerts", {"setback": True, "restore": True, "sensor": True, "failure": True})
         if not isinstance(alerts, dict) or set(alerts) != {"setback", "restore", "sensor", "failure"} or any(type(v) is not bool for v in alerts.values()):
             raise ValueError("Choose valid notification options.")
@@ -75,10 +95,20 @@ def validate(value):
             raise ValueError("Choose notification grouping settings.")
         number(notices.get("cooldownMinutes"), 0, 120, "Notification cooldown")
         home = z.setdefault("household", {"enabled": False, "people": [], "awayMinutes": 5, "homeMinutes": 1, "away": {"mode": "heat", "heat": 60 if z["unit"] == "F" else 16}})
+        if isinstance(home, dict) and "members" in home:
+            members = home["members"]
+            if not isinstance(members, list) or len(members) > 32:
+                raise ValueError("Add up to 32 household members.")
+            for member in members:
+                if not isinstance(member, dict) or not isinstance(member.get("name"), str) or not member["name"].strip() or len(member["name"]) > 80:
+                    raise ValueError("Give each household member a name.")
+                member["name"] = member["name"].strip()
+                entity(member.get("entity"), {"person", "device_tracker", "binary_sensor"}, "household presence source")
+            home["people"] = [member["entity"] for member in members]
         if not isinstance(home, dict) or type(home.get("enabled")) is not bool or not isinstance(home.get("people"), list) or len(home["people"]) > 32 or any(not isinstance(person, str) for person in home["people"]) or len(set(home["people"])) != len(home["people"]):
             raise ValueError("Choose up to 32 unique household people.")
         for person in home["people"]:
-            entity(person, {"person"}, "household person")
+            entity(person, {"person", "device_tracker", "binary_sensor"}, "household presence source")
         if home["enabled"] and not home["people"]:
             raise ValueError("Choose household people before enabling Home/Away.")
         number(home.get("awayMinutes"), 0, 120, "Household away delay")

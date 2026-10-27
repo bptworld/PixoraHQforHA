@@ -37,6 +37,30 @@ class AppTests(unittest.IsolatedAsyncioTestCase):
     async def save(self, z=None, revision=0):
         return await route(self.app, "POST", "/api/settings")(request({"revision": revision, "zones": [z or zone()]}))
 
+    async def test_household_member_migration_and_rename_keep_away_state(self):
+        z = zone()
+        z["household"] = {"enabled": True, "people": ["person.alex"], "awayMinutes": 5, "homeMinutes": 1, "away": {"mode": "heat", "heat": 60}}
+        self.ha.states["person.alex"] = {"entity_id": "person.alex", "state": "not_home", "attributes": {}}
+        self.assertEqual((await self.save(z)).status, 200)
+        store = self.app["store"]
+        data = copy.deepcopy(store.data)
+        data["runtime"]["living"]["household"].update(away=True)
+        store.write(data)
+        z = copy.deepcopy(store.data["zones"][0])
+        z["household"]["members"] = [{"name": "Alex", "entity": "person.alex"}]
+        self.assertEqual((await self.save(z, revision=1)).status, 200)
+        self.assertTrue(store.data["runtime"]["living"]["household"]["away"])
+        z["household"]["members"][0]["name"] = "Alex renamed"
+        self.assertEqual((await self.save(z, revision=2)).status, 200)
+        self.assertTrue(store.data["runtime"]["living"]["household"]["away"])
+
+    async def test_contact_cannot_be_used_as_household_presence(self):
+        z = zone()
+        z["household"] = {"enabled": True, "members": [{"name": "Alex", "entity": "binary_sensor.window"}], "awayMinutes": 0, "homeMinutes": 0, "away": {"mode": "heat", "heat": 60}}
+        with self.assertRaises(ValueError):
+            await self.save(z)
+        self.assertFalse(self.ha.calls)
+
     async def test_outside_reading_is_independent_of_control_and_never_uses_offline_cache(self):
         await self.save()
         self.ha.states['sensor.outdoor']['state']='10'

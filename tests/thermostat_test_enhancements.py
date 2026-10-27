@@ -1,5 +1,6 @@
 """New thermostat tools: deterministic tests, no live HA or equipment."""
 import copy
+import asyncio
 import ast
 from pathlib import Path
 import tempfile
@@ -16,6 +17,26 @@ from ha import HomeAssistant
 class ToolPolicies(unittest.TestCase):
     def setUp(self):
         self.now = datetime(2026, 10, 26, 16, tzinfo=timezone.utc)
+
+    def test_member_presence_sources_and_unknown(self):
+        config = {"enabled": True, "people": ["device_tracker.phone", "binary_sensor.member"], "away": {"mode": "heat", "heat": 60}, "awayMinutes": 0, "homeMinutes": 0}
+        states = {"device_tracker.phone": {"state": "work"}, "binary_sensor.member": {"state": "off", "attributes": {"device_class": "presence"}}}
+        runtime = {}
+        self.assertTrue(household(config, states, runtime, self.now)[0])
+        states["binary_sensor.member"]["state"] = "unavailable"
+        self.assertTrue(household(config, states, runtime, self.now)[0])
+        states["binary_sensor.member"]["state"] = "on"
+        self.assertFalse(household(config, states, runtime, self.now)[0])
+        states["binary_sensor.member"]["attributes"]["device_class"] = "door"
+        self.assertFalse(household(config, states, {}, self.now)[0])
+
+    def test_catalog_accepts_presence_trackers_without_contacts_confusion(self):
+        ha = HomeAssistant(None, "test")
+        for ident, device_class in [("device_tracker.phone", None), ("binary_sensor.member", "presence"), ("binary_sensor.motion", "motion")]:
+            ha.update({"entity_id": ident, "state": "off", "attributes": {"device_class": device_class}})
+        self.assertIn("device_tracker.phone", ha.states)
+        self.assertIn("binary_sensor.member", ha.states)
+        self.assertNotIn("binary_sensor.motion", ha.states)
 
     def test_old_value_but_recent_report_is_current(self):
         state = {"last_updated": "2020-01-01T00:00:00Z", "last_reported": self.now.isoformat()}
@@ -100,8 +121,81 @@ class ToolPolicies(unittest.TestCase):
         bad = copy.deepcopy(z); bad["indoorAlerts"].update(enabled=True, low=90, high=45)
         with self.assertRaises(ValueError): validate({"zones": [bad]})
 
+    def test_named_members_validate_and_preserve_legacy_people(self):
+        z = validate({"zones": [zone()]})["zones"][0]
+        z["household"]["members"] = [{"name": " Alex ", "entity": "device_tracker.alex"}, {"name": "Sam", "entity": "binary_sensor.sam_home"}]
+        result = validate({"zones": [z]})["zones"][0]["household"]
+        self.assertEqual(result["people"], ["device_tracker.alex", "binary_sensor.sam_home"])
+        self.assertEqual(result["members"][0]["name"], "Alex")
+        bad = copy.deepcopy(z)
+        bad["household"]["members"][1]["entity"] = "device_tracker.alex"
+        with self.assertRaises(ValueError): validate({"zones": [bad]})
+        bad["household"]["members"][1] = {"name": "", "entity": "person.sam"}
+        with self.assertRaises(ValueError): validate({"zones": [bad]})
+        legacy = copy.deepcopy(z)
+        legacy["household"].pop("members")
+        legacy["household"]["people"] = ["person.alex"]
+        self.assertEqual(validate({"zones": [legacy]})["zones"][0]["household"]["people"], ["person.alex"])
+
+    def test_notification_recipients_validate(self):
+        z = zone()
+        z["notify"]["recipients"] = [{"person": "Alex", "service": "notify.mobile_app_alex"}, {"person": "Sam", "service": "notify.mobile_app_sam"}]
+        result = validate({"zones": [z]})["zones"][0]
+        self.assertEqual(result["notify"]["person"], "Alex")
+        bad = copy.deepcopy(z)
+        bad["notify"]["recipients"][1]["service"] = "notify.mobile_app_alex"
+        with self.assertRaises(ValueError): validate({"zones": [bad]})
+        z["outdoor"].update(enabled=True, mode="ask")
+        z["notify"]["recipients"][1]["service"] = "notify.email"
+        with self.assertRaises(ValueError): validate({"zones": [z]})
+
 
 class IntegrationTools(unittest.IsolatedAsyncioTestCase):
+    async def test_slow_recipient_does_not_serialize_other_deliveries(self):
+        z = self.config()
+        z["notify"]["recipients"] = [{"person": "Alex", "service": "notify.mobile_app_alex"}, {"person": "Sam", "service": "notify.mobile_app_bryan"}]
+        self.ha.services.add("notify.mobile_app_alex")
+        second_started = asyncio.Event()
+        async def delivery(service, fields):
+            if service.endswith("alex"):
+                await asyncio.wait_for(second_started.wait(), timeout=1)
+            else:
+                second_started.set()
+            self.ha.calls.append((service, fields))
+        self.ha.call = delivery
+        await self.engine.send_notice(z, {"message": "Concurrent alert"})
+        self.assertEqual(len(self.ha.calls), 2)
+
+    async def test_shared_approval_first_valid_response_wins(self):
+        z = self.config()
+        z["outdoor"].update(enabled=True, mode="ask")
+        z["notify"]["recipients"] = [{"person": "Alex", "service": "notify.mobile_app_alex"}, {"person": "Sam", "service": "notify.mobile_app_bryan"}]
+        self.ha.services.add("notify.mobile_app_alex")
+        self.ha.states["sensor.outdoor"]["state"] = "60"
+        await self.tick()
+        notices = [fields for service, fields in self.ha.calls if service.startswith("notify.") and "actions" in fields.get("data", {})]
+        self.assertEqual(len(notices), 2)
+        self.assertEqual(notices[0]["data"]["actions"], notices[1]["data"]["actions"])
+        self.engine.handle_approval(notices[0]["data"]["actions"][1]["action"])
+        self.engine.handle_approval(notices[1]["data"]["actions"][0]["action"])
+        self.assertEqual(self.store.data["runtime"]["living"]["approval"]["decision"], "no")
+
+    async def test_notice_fanout_continues_after_failure_without_retry(self):
+        z = self.config()
+        z["notify"]["recipients"] = [{"person": "Alex", "service": "notify.mobile_app_alex"}, {"person": "Sam", "service": "notify.mobile_app_bryan"}]
+        self.ha.services.add("notify.mobile_app_alex")
+        async def delivery(service, fields):
+            self.ha.calls.append((service, copy.deepcopy(fields)))
+            if service.endswith("alex"):
+                raise ValueError("Uncertain")
+        self.ha.call = delivery
+        with self.assertRaises(ValueError):
+            await self.engine.send_notice(z, {"message": "Test alert"})
+        self.assertEqual([s for s, _ in self.ha.calls], ["notify.mobile_app_alex", "notify.mobile_app_bryan"])
+        events = str(self.store.data["events"])
+        self.assertIn("Notification to Alex", events)
+        self.assertIn("Notification sent to Sam", events)
+
     async def asyncSetUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.store = Store(self.temp.name); self.z = validate({"zones": [zone()]})["zones"][0]

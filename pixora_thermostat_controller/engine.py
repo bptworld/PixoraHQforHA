@@ -93,20 +93,45 @@ class Engine:
         self.preview_only = False
         self.history_notice = ""
 
+    def recipients(self, z):
+        notice = z["notify"]
+        return notice.get("recipients", [notice])
+
+    def notice_available(self, z):
+        return any(r["service"] in self.ha.services for r in self.recipients(z))
+
+    def notice_actions(self, z):
+        return any(r["service"].startswith("notify.mobile_app_") for r in self.recipients(z))
+
     async def send_notice(self, z, fields):
-        service = z["notify"]["service"]
-        recipient = z["notify"]["person"]
-        message = fields["message"]
-        try:
-            if service not in self.ha.services:
-                raise ValueError("Notification destination unavailable.")
-            await self.ha.call(service, fields)
-        except (ValueError, OSError, asyncio.TimeoutError):
+        async def deliver(recipient):
+            service, name = recipient["service"], recipient["person"]
+            payload = copy.deepcopy(fields)
+            if not service.startswith("notify.mobile_app_"):
+                payload.pop("data", None)
+            try:
+                if service not in self.ha.services:
+                    raise ValueError("Notification destination unavailable.")
+                await asyncio.wait_for(self.ha.call(service, payload), timeout=12)
+            except (ValueError, OSError, asyncio.TimeoutError):
+                return recipient, False
+            return recipient, True
+
+        # All destinations share one bounded send window, rather than letting
+        # each unavailable phone delay thermostat checks by another 12 seconds.
+        results = await asyncio.gather(*(deliver(r) for r in self.recipients(z)))
+        failed = False
+        for recipient, confirmed in results:
+            service, name = recipient["service"], recipient["person"]
+            if not confirmed:
+                failed = True
+                self.store.patch_runtime(z["id"], self.store.data["runtime"].get(z["id"], {}),
+                    f"Notification to {name} ({service}) could not be confirmed; it was not retried. Message: {fields['message']}", "warning")
+                continue
             self.store.patch_runtime(z["id"], self.store.data["runtime"].get(z["id"], {}),
-                f"Notification to {recipient} ({service}) could not be confirmed; it was not retried. Message: {message}", "warning")
-            raise
-        self.store.patch_runtime(z["id"], self.store.data["runtime"].get(z["id"], {}),
-            f"Notification sent to {recipient} ({service}): {message}")
+                f"Notification sent to {name} ({service}): {fields['message']}")
+        if failed:
+            raise ValueError("One or more notification deliveries could not be confirmed; no automatic retry.")
 
     async def tick(self):
         async with self.lock:
@@ -196,12 +221,12 @@ class Engine:
                     warning.pop("since", None)
                 message = self.sensor_name(ident) + " is unavailable for indoor temperature warnings. Thermostat control is unchanged."
                 fields = {"title": z["name"] + ": Indoor warning sensor", "message": message}
-                if ident != z["entity"] and z["notify"]["service"].startswith("notify.mobile_app_"):
+                if ident != z["entity"] and self.notice_actions(z):
                     token = runtime.setdefault("sensorActions", {}).setdefault(ident, secrets.token_hex(16))
                     prefix = "pixora_thermostat:" + token + ":"
                     fields["data"] = {"tag": "pixora-issue-" + z["id"] + "-" + ident, "actions": [{"action": prefix+"okay", "title": "Okay"}, {"action": prefix+"ignore", "title": "Ignore"}]}
                 self.store.patch_runtime(z["id"], runtime, message, "warning")
-                if ident != z["entity"] and z["notify"]["service"] in self.ha.services:
+                if ident != z["entity"] and self.notice_available(z):
                     try:
                         await self.send_notice(z, fields)
                     except (ValueError, OSError, asyncio.TimeoutError):
@@ -228,7 +253,7 @@ class Engine:
         if not kind or warning.get("sent") or (now-stamp(warning["since"])).total_seconds() < options["minutes"]*60:
             return
         service = z["notify"]["service"]
-        if service not in self.ha.services:
+        if not self.notice_available(z):
             return
         warning["sent"] = True
         message = f"{self.sensor_name(ident)} is unusually {'cold' if kind == 'low' else 'hot'}: {value:g}°{z['unit']}. Warning threshold {options[kind]:g}°{z['unit']}. No thermostat setting was changed by this alert."
@@ -252,16 +277,16 @@ class Engine:
             self.contact_notice_since.pop(z["id"], None)
         # A missing service is not a send attempt. Wait for its registration;
         # after an actual attempt the durable claim still prevents retries.
-        if message and z.get("alerts", {}).get(category, True) and z["notify"]["service"] not in self.ha.services:
+        if message and z.get("alerts", {}).get(category, True) and not self.notice_available(z):
             return
         runtime = copy.deepcopy(self.store.data["runtime"].get(z["id"], {}))
         if runtime.get("issue", "") == message:
             return
         runtime["issue"] = message
         self.store.patch_runtime(z["id"], runtime)
-        if message and z.get("alerts", {}).get(category, True) and z["notify"]["service"] in self.ha.services:
+        if message and z.get("alerts", {}).get(category, True) and self.notice_available(z):
             problems = self.problem_sensors(z, runtime) if category == "sensor" else []
-            if problems and z["notify"]["service"].startswith("notify.mobile_app_"):
+            if problems and self.notice_actions(z):
                 for sensor in problems:
                     runtime = copy.deepcopy(self.store.data["runtime"].get(z["id"], {}))
                     actions = runtime.setdefault("sensorActions", {})
@@ -565,10 +590,10 @@ class Engine:
             if not approval and desired["mode"] in {"heat", "heat_cool"}:
                 approval = {"token": secrets.token_hex(16), "until": (now + timedelta(minutes=10)).isoformat(), "decision": "pending"}
                 runtime["approval"] = approval
-                self.store.patch_runtime(ident, runtime, "Asked the selected person whether to turn heat off.")
+                self.store.patch_runtime(ident, runtime, "Asked the selected recipients whether to turn heat off.")
                 prefix = "pixora_thermostat:" + approval["token"] + ":"
                 try:
-                    if z["notify"]["service"] not in self.ha.services:
+                    if not self.notice_available(z):
                         raise ValueError("Notification destination unavailable.")
                     await self.send_notice(z, {"title": z["name"], "message": f"It's over {outdoor['limit']} degrees {z['unit']} outside. Should I turn the heat off?", "data": {"tag": "pixora-thermostat-" + ident, "actions": [{"action": prefix + "yes", "title": "Yes"}, {"action": prefix + "no", "title": "No"}]}})
                 except (ValueError, asyncio.TimeoutError, OSError):
@@ -668,7 +693,7 @@ class Engine:
             service = z["notify"]["service"]
             if service and z.get("alerts", {}).get("setback" if active else "restore", True):
                 try:
-                    if service not in self.ha.services:
+                    if not self.notice_available(z):
                         raise ValueError("Notification destination is unavailable.")
                     await self.send_notice(z, {"title": "Pixora Thermostat Controller", "message": z["name"] + ": " + text})
                 except (ValueError, asyncio.TimeoutError, OSError):

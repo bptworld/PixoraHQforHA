@@ -1,7 +1,7 @@
-# Pixora Thermostat Controller (Beta)
+# Pixora Thermostat Controller
 
 Weekly schedules, temporary holds and local thermostat protection running on your
-Home Assistant hub. **Beta: verify your equipment and notification behavior before
+Home Assistant hub. **Verify your equipment and notification behavior before
 relying on unattended control.**
 
 [Brought to you by PixoraHQ.com](https://pixorahq.com/)
@@ -9,7 +9,7 @@ relying on unattended control.**
 ## Install and set up
 
 1. Add **https://github.com/bptworld/PixoraHQforHA** in Settings -> Apps -> App
-   store -> Repositories. Install **Pixora Thermostat Controller (Beta)**.
+   store -> Repositories. Install **Pixora Thermostat Controller**.
 2. Start the app and open its Web UI. No token entry, pairing or HA restart is
    required. It uses Home Assistant's internal API through Supervisor.
 3. Add a thermostat. Choose its temperature unit as shown in HA, then add weekly
@@ -111,6 +111,10 @@ Voice: “Why is the heat off?”, “What is the thermostat status?”, “How 
 
 Controller settings include household Home/Away, indoor temperature warnings and
 advanced temperature-report freshness checks. These options start disabled.
+Use **Add household member** to give each person a name and choose their HA
+person, phone/device tracker, or presence sensor. Existing person selections
+carry over. Presence sensors use On for home and Off for away; choose a source
+that represents that person, rather than a shared room sensor.
 Household Away requires every selected person to have a known away state;
 unknown presence retains the last household mode. Protection rules stay above
 manual holds, household Away and the weekly schedule.
@@ -131,3 +135,12 @@ history retains up to 90 days and shows the latest seven. It counts only observe
 Home Assistant equipment activity; restart, disconnect and long sampling gaps
 are not filled in. History is saved at most every five minutes or on an activity
 transition, without a chart library or cloud service.
+
+## Notification recipients
+
+Use **Add notification recipient** to choose a name and HA notification
+destination for each person. The existing recipient carries over. Alerts go to
+every listed destination, with a separate delivery result in Recent activity.
+Duplicate destinations are rejected. Ask first requires Companion mobile-app
+destinations for all recipients; the first valid Yes or No decides. No response
+leaves the outdoor rule inactive. Uncertain deliveries are never retried.

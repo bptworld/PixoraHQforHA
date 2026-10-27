@@ -1,3 +1,10 @@
+## 0.1.10
+- Keep notification fan-out within one bounded send window and retain confirmed household mode when member names change or legacy selections migrate.
+- Reject duplicate/generic notification destinations and invalid household presence devices.
+- Add multiple named notification recipients, per-destination delivery activity and shared first-response Yes/No prompts.
+- Remove current beta labels from the app listing, interface and documentation.
+- Add named household members with individual HA person, device tracker or presence-sensor selections, preserving existing person selections.
+
 ## 0.1.9
 - Put the thermostat selector first in controller settings.
 - Add optional temperature-report freshness checks, household Home/Away targets, and delayed indoor temperature warnings.

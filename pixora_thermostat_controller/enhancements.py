@@ -24,7 +24,7 @@ def freshness(state, now, minutes):
 
 
 def indoor_value(state, unit, fallback_unit):
-    if not state or state.get("state") in {None, "unknown", "unavailable"}:
+    if not state or not isinstance(state.get("state"), str) or state.get("state") in {"unknown", "unavailable"}:
         raise ValueError("Indoor temperature is unavailable.")
     attrs = state.get("attributes", {})
     climate = str(state.get("entity_id", "")).startswith("climate.")
@@ -47,7 +47,14 @@ def household(config, states, runtime, now):
     binding = [sorted(config["people"]), config["away"], config["awayMinutes"], config["homeMinutes"]]
     if previous.get("binding") != binding:
         previous = {"away": False, "binding": copy.deepcopy(binding)}
-    values = [states.get(person, {}).get("state") for person in config["people"]]
+    values = []
+    for person in config["people"]:
+        state = states.get(person, {})
+        value = state.get("state")
+        if person.startswith("binary_sensor."):
+            value = ({"on": "home", "off": "not_home"}.get(value)
+                     if isinstance(value, str) and state.get("attributes", {}).get("device_class") in {"presence", "occupancy"} else None)
+        values.append(value if isinstance(value, str) else None)
     unknown = any(v in {None, "", "unknown", "unavailable"} for v in values)
     wanted = False if "home" in values else None if unknown else True
     if wanted is None:

@@ -43,10 +43,10 @@ class HomeAssistant:
         if not isinstance(state, dict):
             return
         ident = str(state.get("entity_id", ""))
-        if ident.split(".")[0] not in {"climate", "sensor", "binary_sensor", "weather", "person"}:
+        if ident.split(".")[0] not in {"climate", "sensor", "binary_sensor", "weather", "person", "device_tracker"}:
             return
         attrs = state.get("attributes", {})
-        if ident.startswith("sensor.") and attrs.get("device_class") != "temperature" or ident.startswith("binary_sensor.") and attrs.get("device_class") not in {"door", "window", "opening", "garage_door"}:
+        if ident.startswith("sensor.") and attrs.get("device_class") != "temperature" or ident.startswith("binary_sensor.") and attrs.get("device_class") not in {"door", "window", "opening", "garage_door", "presence", "occupancy"}:
             self.states.pop(ident, None)
             return
         old = self.states.get(ident, {})

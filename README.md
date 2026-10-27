@@ -20,7 +20,7 @@ installed automatically. Each app keeps its own configuration, version and data.
 | Pixora Locator | Connect Pixora Locator with HA and import selected zones | [Instructions](pixora_locator/README.md) |
 | Pixora LED Studio | Local S3 LED cards, native HA display entities and Wi-Fi updates | [Instructions](pixora_led_displays/README.md) |
 | Pixora Voice (Beta) | **In Beta Testing.** Local home questions and controls without a cloud service or LLM | [Instructions](pixora_voice/README.md) |
-| Pixora Thermostat Controller (Beta) | Local schedules, overrides, door/window setbacks, outdoor heat limits and Yes/No notifications | [Instructions](pixora_thermostat_controller/README.md) |
+| Pixora Thermostat Controller | Local schedules, overrides, door/window setbacks, outdoor heat limits and Yes/No notifications | [Instructions](pixora_thermostat_controller/README.md) |
 
 Home Control and Locator retain their existing Pixora service connections.
 LED Displays runs locally on the HA hub and supports S3 64x32/128x32 only.

@@ -12,7 +12,7 @@ from ha import HomeAssistant
 from enhancements import freshness
 from policy import validate, target, next_period, service_for, observed, number, temperature
 
-VERSION = "0.1.9"
+VERSION = "0.1.10"
 ROOT = Path(__file__).parent
 
 
@@ -110,13 +110,15 @@ def make_app(root=Path("/data"), test_ha=None):
                 if z["household"]["enabled"]:
                     for person in z["household"]["people"]:
                         if person not in ha.states:
-                            raise ValueError("Choose available household people.")
+                            raise ValueError("Choose available household presence sources.")
+                        if person.startswith("binary_sensor.") and ha.states[person].get("attributes", {}).get("device_class") not in {"presence", "occupancy"}:
+                            raise ValueError("Choose a person, device tracker or presence sensor for each household member.")
                     service_for(target(z["household"]["away"]), state, z["unit"], ha.unit, ha.services)
                 if z["indoorAlerts"]["enabled"] and z["indoorAlerts"]["entity"]:
                     reading = ha.states.get(z["indoorAlerts"]["entity"])
                     if not reading or reading.get("attributes", {}).get("device_class") != "temperature":
                         raise ValueError("Choose an indoor temperature sensor.")
-                if z["notify"]["service"] and z["notify"]["service"] not in ha.services:
+                if any(r["service"] and r["service"] not in ha.services for r in z["notify"].get("recipients", [z["notify"]])):
                     raise ValueError("Choose an available notification destination.")
                 prior = old.get(z["id"])
                 if prior and prior["entity"] != z["entity"] and store.data["runtime"].get(z["id"], {}).get("pending"):
@@ -135,7 +137,16 @@ def make_app(root=Path("/data"), test_ha=None):
                     current.pop("sensorActions", None)
                     current.pop("issue", None)
             for z in value["zones"]:
-                if old.get(z["id"], {}).get("household") != z.get("household"):
+                # Names and the legacy-to-member UI migration do not change
+                # presence inputs and must not erase a confirmed Away mode.
+                before_home = copy.deepcopy(old.get(z["id"], {}).get("household", {}))
+                after_home = copy.deepcopy(z.get("household", {}))
+                before_home.pop("members", None)
+                after_home.pop("members", None)
+                for home in (before_home, after_home):
+                    if "people" in home:
+                        home["people"] = sorted(home["people"])
+                if before_home != after_home:
                     saved["runtime"].get(z["id"], {}).pop("household", None)
                 if old.get(z["id"], {}).get("indoorAlerts") != z.get("indoorAlerts"):
                     saved["runtime"].get(z["id"], {}).pop("indoorWarning", None)

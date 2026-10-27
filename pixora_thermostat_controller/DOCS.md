@@ -1,6 +1,6 @@
 # Pixora Thermostat Controller
 
-**Beta testing.** Local schedules, overrides, door/window setbacks and outdoor
+Local schedules, overrides, door/window setbacks and outdoor
 heat limits. [Brought to you by PixoraHQ.com](https://pixorahq.com/).
 
 Install from **https://github.com/bptworld/PixoraHQforHA** to retain the app's
