@@ -1,5 +1,5 @@
 'use strict';
-let snapshot=null,cursor=null,busy=false,filter={entity:'',search:'',kind:''},sequence=0;
+let snapshot=null,cursor=null,busy=false,filter={entity:'',search:'',kind:''},sequence=0,exclusionDraft=[];
 const $=id=>document.getElementById(id);
 function node(tag,attrs={},...children){const e=document.createElement(tag);for(const[k,v]of Object.entries(attrs)){if(k.startsWith('on'))e.addEventListener(k.slice(2).toLowerCase(),v);else if(k in e)e[k]=v;else e.setAttribute(k,v)}for(const c of children.flat(Infinity)){if(c===null||c===undefined||c===false)continue;e.append(c instanceof Node?c:document.createTextNode(String(c)))}return e}
 async function api(path,body){const response=await fetch(path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json','X-Pixora-Request':'1'}:{},body:body?JSON.stringify(body):undefined,cache:'no-store'});if(!response.ok){let error='The request could not be completed.';try{error=(await response.json()).error||error}catch{}throw Error(error)}return response.json()}
@@ -31,11 +31,24 @@ function exclusionControls(event,devices=[]){
  return rows.length?node('section',{className:'exclusion-controls','aria-label':'Entity recording options'},...rows):null;
 }
 async function explain(id){$('explanation-body').replaceChildren(node('p',{},'Reading the recorded evidence…'));$('explanation').showModal();try{const result=await api('api/explain/'+id);$('explanation-body').replaceChildren(node('h3',{},result.event.title),node('p',{},when(result.event.at)),node('p',{},result.answer),...([exclusionControls(result.event,result.devices)].filter(Boolean)),node('h3',{},'Recorded details'),detailsView(result.event),node('h3',{},'Linked evidence'),result.evidence.length?node('ol',{},...result.evidence.map(row=>node('li',{},node('strong',{},row.title),node('p',{className:'fine'},when(row.at))))):node('p',{},'No additional causal links were retained.'),node('p',{className:'fine'},result.note))}catch(e){$('explanation-body').replaceChildren(node('p',{},e.message))}}
-$('apply').onclick=()=>{if(busy)return;filter={entity:$('entity').value,search:$('search').value.trim(),kind:$('kind').value};cursor=null;load()};$('search').addEventListener('keydown',e=>{if(e.key==='Enter')$('apply').click()});$('refresh').onclick=()=>load();$('older').onclick=()=>{$('live').checked=false;load(true)};$('explanation-close').onclick=()=>$('explanation').close();$('settings-close').onclick=()=>$('settings').close();$('settings-open').onclick=()=>{if(!snapshot)return;$('days').value=snapshot.settings.days;$('limit').value=snapshot.settings.limit;$('excluded').value=snapshot.settings.excluded.join('\n');$('settings-error').textContent='';
- const list=$('restore-list');list.replaceChildren(...snapshot.settings.excluded.map(key=>{
+$('apply').onclick=()=>{if(busy)return;filter={entity:$('entity').value,search:$('search').value.trim(),kind:$('kind').value};cursor=null;load()};$('search').addEventListener('keydown',e=>{if(e.key==='Enter')$('apply').click()});$('refresh').onclick=()=>load();$('older').onclick=()=>{$('live').checked=false;load(true)};$('explanation-close').onclick=()=>$('explanation').close();$('settings-close').onclick=()=>$('settings').close();function renderExclusions(){
+ const entities=exclusionDraft.filter(key=>!key.startsWith('device:')&&!key.startsWith('app-target:'));
+ $('excluded').replaceChildren(...entities.map(key=>node('option',{value:key},key)));
+ $('restore-entity').disabled=true;
+ const devices=exclusionDraft.filter(key=>key.startsWith('device:')||key.startsWith('app-target:'));
+ $('restore-list').replaceChildren(...devices.map(key=>{
   const button=node('button',{type:'button'},'Restore');
-  button.onclick=()=>{$('excluded').value=$('excluded').value.split(/\r?\n/).filter(v=>v.trim()!==key).join('\n');button.disabled=true;button.textContent='Restored when saved'};
-  return node('div',{className:'exclusion-row'},node('span',{},key),button);
- }));$('settings').showModal()};
-$('settings-form').onsubmit=async e=>{e.preventDefault();const submit=e.submitter;submit.disabled=true;try{await api('api/settings',{days:Number($('days').value),limit:Number($('limit').value),excluded:$('excluded').value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean)});$('settings').close();await load()}catch(e){$('settings-error').textContent=e.message}finally{submit.disabled=false}};
+  button.onclick=()=>{exclusionDraft=exclusionDraft.filter(value=>value!==key);renderExclusions();$('settings-error').textContent='Save settings to apply restoration.'};
+  return node('div',{className:'exclusion-row'},node('span',{},key.replace(/^app-target:/,'').replace(/^device:/,'Device: ')),button);
+ }));
+ $('device-exclusions').hidden=!devices.length;
+}
+$('excluded').onchange=()=>{$('restore-entity').disabled=!$('excluded').selectedOptions.length};
+$('restore-entity').onclick=()=>{
+ const selected=new Set(Array.from($('excluded').selectedOptions,option=>option.value));
+ exclusionDraft=exclusionDraft.filter(key=>!selected.has(key));renderExclusions();
+ $('settings-error').textContent='Save settings to apply restoration.';
+};
+$('settings-open').onclick=()=>{if(!snapshot)return;$('days').value=snapshot.settings.days;$('limit').value=snapshot.settings.limit;exclusionDraft=[...snapshot.settings.excluded];renderExclusions();$('settings-error').textContent='';$('settings').showModal()};
+$('settings-form').onsubmit=async e=>{e.preventDefault();const submit=e.submitter;submit.disabled=true;try{await api('api/settings',{days:Number($('days').value),limit:Number($('limit').value),excluded:exclusionDraft});$('settings').close();await load()}catch(e){$('settings-error').textContent=e.message}finally{submit.disabled=false}};
 load();setInterval(()=>{if(!document.hidden&&$('live').checked&&!$('settings').open&&!$('explanation').open&&!document.activeElement?.matches('input,select,textarea'))load()},5000);

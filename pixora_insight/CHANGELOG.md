@@ -1,3 +1,6 @@
+## 0.1.4
+- Simplify History settings: select excluded entities in one list and use one Restore button; show only device/display exclusions below.
+
 ## 0.1.3
 - Add explicit restore buttons for excluded entities, devices and app displays.
 - Add Exclude device for all entities registered to an HA device, including future entities, with restoration through History settings.
