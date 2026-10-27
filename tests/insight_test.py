@@ -164,6 +164,43 @@ class Journal(unittest.TestCase):
         self.assertEqual(self.store.stats()["count"], 1)
         with self.assertRaises(ValueError): self.store.exclude("invalid")
 
+    def test_app_display_exclusion_preserves_history_and_other_displays(self):
+        def report(target, source="Pixora LED Studio"):
+            return event("pixora_insight", source=source, reason="Card requested", outcome="requested", operation="pixora_led_studio.card", target_name=target)
+        self.put(report("Center-128"))
+        self.store.exclude("app-target:Pixora LED Studio / Center-128")
+        self.put(report("Center-128"))
+        self.put(report("Right"))
+        self.put(report("Center-128", "Another app"))
+        self.assertEqual(self.store.stats()["count"], 3)
+        other = Store(self.temp.name)
+        try:
+            self.assertIn("app-target:Pixora LED Studio / Center-128", other.settings["excluded"])
+            other.append([normalize(report("Center-128"), self.catalog)])
+            self.assertEqual(other.stats()["count"], 3)
+        finally: other.close()
+        self.store.save_settings({**self.store.settings, "excluded": []})
+        self.put(report("Center-128"))
+        self.assertEqual(self.store.stats()["count"], 4)
+
+    def test_device_exclusion_covers_entities_and_restore(self):
+        self.catalog.registry = {"light.kitchen": {"device_id": "device-a"}, "sensor.power": {"device_id": "device-a"}}
+        self.store.exclude("device:device-a")
+        self.put(changed())
+        self.put(changed("sensor.power"))
+        self.put(changed("light.other"))
+        self.assertEqual(self.store.stats()["count"], 1)
+        self.catalog.registry["sensor.new"] = {"device_id": "device-a"}
+        self.put(changed("sensor.new"))
+        self.assertEqual(self.store.stats()["count"], 1)
+        self.store.exclude("device:device-a", restore=True)
+        self.put(changed("sensor.new"))
+        self.assertEqual(self.store.stats()["count"], 2)
+        self.store.exclude("sensor.new")
+        self.store.exclude("sensor.new", restore=True)
+        self.put(changed("sensor.new"))
+        self.assertEqual(self.store.stats()["count"], 3)
+
     def test_pagination_and_restart_persistence(self):
         self.store.append([normalize(changed(), self.catalog)]*55)
         first = self.store.query(); second = self.store.query(before=first["next"])

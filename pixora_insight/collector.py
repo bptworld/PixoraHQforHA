@@ -129,7 +129,7 @@ class Collector:
                                     if ident == 21:
                                         self.catalog.registry = {r["entity_id"]: {k: r.get(k) for k in ("device_id", "area_id")} for r in result[:20000] if isinstance(r, dict) and isinstance(r.get("entity_id"), str)}
                                     elif ident == 22:
-                                        self.catalog.devices = {r["id"]: {"area_id": r.get("area_id")} for r in result[:20000] if isinstance(r, dict) and isinstance(r.get("id"), str)}
+                                        self.catalog.devices = {r["id"]: {"area_id": r.get("area_id"), "name": str(r.get("name_by_user") or r.get("name") or r["id"])[:160]} for r in result[:20000] if isinstance(r, dict) and isinstance(r.get("id"), str)}
                                     else:
                                         self.catalog.areas = {r["area_id"]: r.get("name", "")[:120] for r in result[:2000] if isinstance(r, dict) and isinstance(r.get("area_id"), str)}
                                     registry.add(ident)

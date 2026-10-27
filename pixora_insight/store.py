@@ -4,7 +4,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from model import ENTITY, validate_settings
+from model import ENTITY, validate_settings, valid_exclusion, target_exclusion
 
 DEFAULTS = {"days": 7, "limit": 20000, "excluded": []}
 
@@ -60,20 +60,22 @@ class Store:
             self.db.execute("DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY id LIMIT 1000)")
         self.prune()
 
-    def exclude(self, entity):
-        if not isinstance(entity, str) or not ENTITY.fullmatch(entity):
+    def exclude(self, entity, restore=False):
+        if not valid_exclusion(entity):
             raise ValueError("Choose a valid entity.")
         # Merge under the same lock as other settings writes; never replace
         # newer retention settings or another simultaneous exclusion.
         with self.lock:
-            incoming = {**self.settings, "excluded": sorted(set(self.settings["excluded"]) | {entity})}
+            values = set(self.settings["excluded"])
+            values.discard(entity) if restore else values.add(entity)
+            incoming = {**self.settings, "excluded": sorted(values)}
             return self.save_settings(incoming)
 
     def append(self, rows):
         with self.lock, self.db:
             excluded = set(self.settings["excluded"])
             for row in rows:
-                if set(row["entities"]) & excluded:
+                if set(row["entities"]) & excluded or target_exclusion(row) in excluded or any("device:" + d in excluded for d in row["details"].get("deviceIds", [])):
                     continue
                 payload = json.dumps(row["details"], ensure_ascii=False)
                 if len(payload.encode("utf-8")) > 8192:

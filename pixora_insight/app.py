@@ -10,7 +10,7 @@ from collector import Collector, system_event
 from model import ENTITY, EVENTS
 from store import Store
 
-VERSION = "0.1.1"
+VERSION = "0.1.3"
 ROOT = Path(__file__).parent
 
 
@@ -62,6 +62,11 @@ def make_app(root=Path("/data"), test_collector=None):
         result = await asyncio.to_thread(store.explain, int(request.match_info["id"]))
         if not result:
             raise web.HTTPNotFound(text="This event has expired or was not recorded.")
+        catalog = app["collector"].catalog
+        item = result["event"]
+        devices = set(item["details"].get("deviceIds", []))
+        devices.update(catalog.registry.get(e, {}).get("device_id") for e in item["entities"])
+        result["devices"] = sorted([{"id": d, "name": catalog.devices.get(d, {}).get("name") or d} for d in devices if d], key=lambda d: d["name"].casefold())
         return web.json_response(result)
 
     async def settings(request):
@@ -72,10 +77,10 @@ def make_app(root=Path("/data"), test_collector=None):
 
     async def exclude(request):
         body = await request.json()
-        if not isinstance(body, dict) or set(body) != {"entity"}:
+        if not isinstance(body, dict) or set(body) not in ({"entity"}, {"entity", "restore"}) or type(body.get("restore", False)) is not bool:
             raise ValueError("Choose one entity to exclude.")
-        result = await asyncio.to_thread(store.exclude, body["entity"])
-        app["collector"].enqueue(system_event("An entity was excluded from future recording. Earlier records expire normally."))
+        result = await asyncio.to_thread(store.exclude, body["entity"], body.get("restore", False))
+        app["collector"].enqueue(system_event("Recording restored for an exclusion." if body.get("restore") else "An entity, device or display was excluded from future recording. Earlier records expire normally."))
         return web.json_response({"settings": result})
 
     async def static(request):

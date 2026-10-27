@@ -172,10 +172,25 @@ def normalize(event, catalog):
             details["actionContext"] = action_context
         title = source + ": " + (operation.replace('_',' ') + " " if operation else "") + outcome
         if details.get("targetName"):title += " · " + details["targetName"]
+    devices = {catalog.registry.get(entity, {}).get("device_id") for entity in entities}
+    devices.update(details.get("targets", {}).get("device_id", []))
+    devices = sorted(d for d in devices if isinstance(d, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,160}", d))
+    if devices: details["deviceIds"] = devices[:256]
     context = context if isinstance(context, dict) else {}
     return {"at": timestamp(event.get("time_fired")), "kind": kind, "title": title[:350], "name": name,
             "entities": entities, "context": text(context.get("id"), 80), "parent": text(context.get("parent_id"), 80),
             "user": bool(context.get("user_id")), "details": details}
+
+
+def valid_exclusion(value):
+    return isinstance(value, str) and bool(ENTITY.fullmatch(value) or re.fullmatch(r"device:[A-Za-z0-9_-]{1,160}", value) or re.fullmatch(r"app-target:[^\x00-\x1f]{1,203}", value))
+
+
+def target_exclusion(row):
+    details = row.get("details", {})
+    if row.get("kind") == "pixora_insight" and details.get("source") and details.get("targetName"):
+        return "app-target:" + details["source"] + " / " + details["targetName"]
+    return ""
 
 
 def validate_settings(value):
@@ -185,6 +200,6 @@ def validate_settings(value):
         raise ValueError("Keep between 1 and 14 days.")
     if type(value["limit"]) is not int or not 1000 <= value["limit"] <= 50000:
         raise ValueError("Keep between 1,000 and 50,000 events.")
-    if not isinstance(value["excluded"], list) or len(value["excluded"]) > 500 or any(not isinstance(v, str) or not ENTITY.fullmatch(v) for v in value["excluded"]):
-        raise ValueError("Choose up to 500 valid excluded entities.")
+    if not isinstance(value["excluded"], list) or len(value["excluded"]) > 500 or any(not valid_exclusion(v) for v in value["excluded"]):
+        raise ValueError("Choose up to 500 valid entity IDs or app display exclusions.")
     return {**value, "excluded": sorted(set(value["excluded"]))}
