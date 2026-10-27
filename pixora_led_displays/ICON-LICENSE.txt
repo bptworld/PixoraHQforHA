@@ -1,3 +1,7 @@
+Current icon.svg and icon.png: original PixoraHQ LED panel artwork.
+The previous packaged MDI led-on icon has been replaced. Home Assistant
+still supplies the built-in sidebar symbol. Prior MDI attribution follows.
+
 Pictogrammers Free License
 --------------------------
 

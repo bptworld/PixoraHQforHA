@@ -1,3 +1,7 @@
+# 1.2.44
+
+- Replace the monochrome app-store icon with original full-color Pixora LED panel artwork.
+
 # 1.2.43
 
 - Use the same LED symbol on the Home Assistant app card and Information page as the Studio sidebar, replacing the generic puzzle-piece icon.
