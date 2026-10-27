@@ -108,3 +108,10 @@ Uses HA's documented [WebSocket event subscriptions](https://contributors.home-a
 and [context data model](https://contributors.home-assistant.io/data/reference/data-model/).
 What HA exposes can vary by integration; an automation starting does not prove
 its conditions passed or its actions completed.
+
+## Exclude a noisy entity
+
+Open an activity entry with **Explain**, then choose **Exclude entity** beside
+its entity ID. It stops future recording without removing earlier history.
+For events with multiple targets, choose each entity separately. Restore recording
+by removing the ID from the exclusions in **History settings**.

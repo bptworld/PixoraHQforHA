@@ -151,6 +151,16 @@ class Journal(unittest.TestCase):
         self.assertEqual(len(self.store.query(entity="light.bedroom")["events"]), 1)
         self.assertFalse(self.store.query(search="%' OR 1=1 --")["events"])
 
+    def test_single_exclusion_preserves_settings_history_and_is_idempotent(self):
+        self.put(changed())
+        self.store.save_settings({"days": 3, "limit": 1000, "excluded": ["sensor.other"]})
+        self.store.exclude("light.kitchen")
+        settings = self.store.exclude("light.kitchen")
+        self.assertEqual(settings, {"days": 3, "limit": 1000, "excluded": ["light.kitchen", "sensor.other"]})
+        self.put(changed())
+        self.assertEqual(self.store.stats()["count"], 1)
+        with self.assertRaises(ValueError): self.store.exclude("invalid")
+
     def test_pagination_and_restart_persistence(self):
         self.store.append([normalize(changed(), self.catalog)]*55)
         first = self.store.query(); second = self.store.query(before=first["next"])
@@ -241,7 +251,15 @@ class AsyncTests(unittest.IsolatedAsyncioTestCase):
         response = await route(app, "GET", "/api/events")(NS(query={"search": "test"}))
         self.assertEqual(json.loads(response.text)["events"], [])
         posts = [r.resource.canonical for r in app.router.routes() if r.method == "POST"]
-        self.assertEqual(posts, ["/api/settings"])
+        self.assertEqual(posts, ["/api/settings", "/api/exclude"])
+
+    async def test_exclude_endpoint_merges_only_one_entity(self):
+        app = app_module.make_app(Path(self.temp.name)/"api", self.collector)
+        self.addCleanup(app["store"].close)
+        response = await route(app, "POST", "/api/exclude")(NS(json=AsyncMock(return_value={"entity": "sensor.distance"})))
+        self.assertIn("sensor.distance", json.loads(response.text)["settings"]["excluded"])
+        with self.assertRaises(ValueError):
+            await route(app, "POST", "/api/exclude")(NS(json=AsyncMock(return_value={"entity": "sensor.other", "days": 1})))
 
     async def test_websocket_subscriptions_and_registry_refresh_use_unique_increasing_ids(self):
         sent, clock = [], [0]

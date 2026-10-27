@@ -1,3 +1,6 @@
+## 0.1.1
+- Add an Exclude entity button to explanations, preserving current history settings and earlier records.
+
 ## 0.1.0
 - First standalone local Insight app: HA-reported state/attribute changes, requested commands, automation/script starts and causal explanations using HA contexts.
 - Search by device/entity or action, inspect linked evidence and distinguish unknown causes from confirmed reports.

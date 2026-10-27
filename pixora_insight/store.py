@@ -4,7 +4,7 @@ import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from model import validate_settings
+from model import ENTITY, validate_settings
 
 DEFAULTS = {"days": 7, "limit": 20000, "excluded": []}
 
@@ -59,6 +59,15 @@ class Store:
         with self.lock, self.db:
             self.db.execute("DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY id LIMIT 1000)")
         self.prune()
+
+    def exclude(self, entity):
+        if not isinstance(entity, str) or not ENTITY.fullmatch(entity):
+            raise ValueError("Choose a valid entity.")
+        # Merge under the same lock as other settings writes; never replace
+        # newer retention settings or another simultaneous exclusion.
+        with self.lock:
+            incoming = {**self.settings, "excluded": sorted(set(self.settings["excluded"]) | {entity})}
+            return self.save_settings(incoming)
 
     def append(self, rows):
         with self.lock, self.db:

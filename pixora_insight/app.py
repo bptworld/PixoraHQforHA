@@ -10,7 +10,7 @@ from collector import Collector, system_event
 from model import ENTITY, EVENTS
 from store import Store
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 ROOT = Path(__file__).parent
 
 
@@ -70,6 +70,14 @@ def make_app(root=Path("/data"), test_collector=None):
         app["collector"].enqueue(system_event("Retention or exclusions changed. Exclusions affect future recording; retained earlier events expire normally."))
         return web.json_response({"settings": result})
 
+    async def exclude(request):
+        body = await request.json()
+        if not isinstance(body, dict) or set(body) != {"entity"}:
+            raise ValueError("Choose one entity to exclude.")
+        result = await asyncio.to_thread(store.exclude, body["entity"])
+        app["collector"].enqueue(system_event("An entity was excluded from future recording. Earlier records expire normally."))
+        return web.json_response({"settings": result})
+
     async def static(request):
         name = request.match_info.get("name") or "index.html"
         if name not in {"index.html", "ui.js", "style.css", "icon.svg"}:
@@ -106,6 +114,7 @@ def make_app(root=Path("/data"), test_collector=None):
     app.router.add_get("/api/events", events)
     app.router.add_get("/api/explain/{id}", explain)
     app.router.add_post("/api/settings", settings)
+    app.router.add_post("/api/exclude", exclude)
     app.router.add_get("/", static)
     app.router.add_get("/{name}", static)
     return app
