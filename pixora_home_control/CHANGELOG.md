@@ -1,3 +1,7 @@
+# 1.0.12
+
+- Add bounded, read-only Music Assistant player discovery, library search, favorites and queue details for the Home Control Music Assistant card. Uses the existing pairing and HA service permissions. Playback still uses the validated shared command handler; commands are never retried automatically.
+
 # 1.0.11
 
 - Preserve Home Control command source and Pixora Flow trigger/run origin with the exact local HA service context, and report it to Insight without delaying or retrying device actions.

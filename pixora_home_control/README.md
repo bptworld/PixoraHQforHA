@@ -33,3 +33,7 @@ Home Control reports its own source, or the initiating Flow/trigger when supplie
 using HA’s exact service context. Reports use a bounded background queue and
 cannot delay, fail or retry device commands. No re-pairing or extra companion
 installation is needed. Older entries without provenance remain unknown.
+
+## Music Assistant card
+
+Home Control includes a responsive Music Assistant card for computers, tablets and phones. Select a Music Assistant player or group when adding the card. Playback uses the controls advertised by HA. Library search, favorite songs/albums/playlists/radio and current/next queue details require this app version 1.0.12 or later and the Music Assistant integration in HA. The existing pairing is reused; no Music Assistant token or separate connection is needed. Browsing runs on demand and never starts music. No extra background music polling is added on the Yellow.

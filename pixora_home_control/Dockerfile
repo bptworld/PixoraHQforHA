@@ -3,6 +3,7 @@ FROM ${BUILD_FROM}
 ENV PYTHONUNBUFFERED=1
 RUN apk add --no-cache python3 py3-aiohttp
 COPY app.py /app/app.py
+COPY music_assistant_card.py /app/music_assistant_card.py
 COPY run.sh /run.sh
 RUN chmod 0755 /run.sh
 CMD ["/run.sh"]

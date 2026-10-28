@@ -30,7 +30,7 @@ async def socket_json(ws, name, timeout=15):
 
 
 def allowed(path, method):
-    return (method == 'GET' and (path in {'/api/', '/api/config', '/api/states', '/api/services', '/pixora/registry'} or re.fullmatch(r'/api/states/[a-z0-9_]+\.[a-z0-9_]+', path))) or (method == 'POST' and re.fullmatch(r'/api/services/[a-z0-9_]+/[a-z0-9_]+', path))
+    return (method == 'GET' and (path in {'/api/', '/api/config', '/api/states', '/api/services', '/pixora/registry', '/pixora/music'} or re.fullmatch(r'/api/states/[a-z0-9_]+\.[a-z0-9_]+', path))) or (method == 'POST' and re.fullmatch(r'/api/services/[a-z0-9_]+/[a-z0-9_]+', path))
 
 
 class LocalAPI:
@@ -52,6 +52,18 @@ class LocalAPI:
                 if len(raw) > 5_000_000:
                     raise ValueError('Home Assistant response is too large.')
             return json.loads(raw)
+
+    async def music_artwork(self, entity):
+        import base64
+        async with self.session.get(API + '/media_player_proxy/' + entity, headers={'Authorization':'Bearer '+self.token}, timeout=aiohttp.ClientTimeout(total=6), allow_redirects=False) as response:
+            kind=response.headers.get('Content-Type','').split(';')[0].lower()
+            if response.status!=200 or kind not in {'image/jpeg','image/png','image/webp'}:
+                return {}
+            raw=bytearray()
+            async for chunk in response.content.iter_chunked(32768):
+                raw.extend(chunk)
+                if len(raw)>524288:return {}
+            return {'artwork':'data:'+kind+';base64,'+base64.b64encode(raw).decode('ascii')}
 
     async def query(self, kind, **fields):
         self.counter += 1
@@ -203,7 +215,11 @@ class Connector:
                 _, _, _, domain, service = path.split('/')
                 result = await local.query('call_service', domain=domain, service=service, service_data=message.get('payload') or {})
             else:
-                result = await local.registry() if path == '/pixora/registry' else await local.request(path, method, message.get('payload'))
+                if path == '/pixora/music':
+                    from music_assistant_card import read_music
+                    result = await read_music(local, message.get('payload'))
+                else:
+                    result = await local.registry() if path == '/pixora/registry' else await local.request(path, method, message.get('payload'))
             if method == 'POST':
                 try:self.record_flow_origin(message, result)
                 except Exception:
