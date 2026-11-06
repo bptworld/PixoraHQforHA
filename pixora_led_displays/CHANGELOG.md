@@ -1,3 +1,6 @@
+## 1.2.46
+- Show the team abbreviation and GOAL on wide sports walls when the scorer's name is missing. Keep WINS for game winners.
+
 ## 1.2.45
 - Report logical card starts, priority messages, settings and restart requests to Insight with the panel name. Omit message contents and animation-frame noise; diagnostics never alter delivery.
 

@@ -7,9 +7,30 @@ SOURCE=Path('D:/planner/.build-tmp/led-public-card-source/cards')
 os.chdir(SOURCE);sys.path[:0]=[str(ROOT/'pixora_led_displays'),str(SOURCE),str(SOURCE/'addons')]
 import _sports_wall as wall
 from graphic_layout import install
+import graphic_layout
 wall._fetch_logo=lambda url:Image.new('RGBA',(22,22),(210,30,160,255)) if url else None
 wall._fetch_headshot=lambda url,size=24:Image.new('RGBA',(size,size),(30,210,160,255)) if url else None
 install(wall)
+original_panel=graphic_layout.panel
+captions=[]
+try:
+    def capture_caption(image, lines, left, right, color, accent='white'):
+        captions.append(tuple(lines))
+        return original_panel(image,lines,left,right,color,accent)
+    graphic_layout.panel=capture_caption
+    for width in (192,256):
+        bruins={'_width':width,'_wall':True,'abbreviation':'BOS','color':'FFB81C'}
+        for kind,player,expected in (
+            ('goal','',('BOS','GOAL')),
+            ('goal','David Pastrnak',('Pastrnak','GOAL')),
+            ('hat_trick',' ',('BOS','HAT TRICK')),
+            ('win','',('WINS','BOS')),
+        ):
+            captions.clear()
+            wall.render_wall_score_frames({**bruins,'playerName':player},kind,sport='hockey')
+            assert captions and set(captions)=={expected},(width,kind,player,set(captions))
+finally:
+    graphic_layout.panel=original_panel
 checked=0
 for width in (192,256):
     team={'_width':width,'_wall':True,'abbreviation':'BOS','logo':'fixture','color':'008348','alternateColor':'FFFFFF'}

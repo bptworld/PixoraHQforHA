@@ -191,8 +191,12 @@ def install(selected):
                     wall._draw_generic_arena_frame(arena,ImageDraw.Draw(arena),width,sport,index,color,alt)
                 image.paste(arena.crop((27,3,width-27,30)).convert('RGB'),(27,3))
                 lane=124 if width>=256 else 60;left=(width-lane)//2
-                name=str(team.get('playerName') or '').split()
-                lines=(name[-1], 'HAT TRICK' if kind=='hat_trick' else 'GOAL') if name and kind in ('goal','hat_trick') else ('WINS',team.get('abbreviation','TEAM'))
+                team_label=team.get('abbreviation') or team.get('shortDisplayName') or 'TEAM'
+                if kind in ('goal','hat_trick'):
+                    name=str(team.get('playerName') or '').split()
+                    lines=(name[-1] if name else team_label,'HAT TRICK' if kind=='hat_trick' else 'GOAL')
+                else:
+                    lines=('WINS',team_label)
                 panel(image,lines,left-2,left+lane+1,color)
             return frames,durations
         replace(wall,'render_wall_score_frames',wall_frames)
