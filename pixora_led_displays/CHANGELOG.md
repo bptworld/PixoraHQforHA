@@ -1,3 +1,6 @@
+## 1.2.50
+- Keep rule actions on one compact row.
+
 ## 1.2.49
 - Correct the Home Assistant sidebar path so Studio opens inside Home Assistant.
 
