@@ -1,6 +1,6 @@
 """Local, minute-resolution Studio schedules."""
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 import logging
 import re
 import time
@@ -10,17 +10,30 @@ from zoneinfo import ZoneInfo
 def validate_schedule(value):
     if not isinstance(value, dict):
         raise ValueError('Choose a schedule.')
+    dates = {}
+    for key, label in (('startDate', 'start'), ('endDate', 'end')):
+        day = value.get(key)
+        if day is None or day == '':
+            continue
+        try:
+            if not isinstance(day, str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', day):
+                raise ValueError()
+            dates[key] = date.fromisoformat(day).isoformat()
+        except ValueError:
+            raise ValueError(f'Choose a valid {label} date.') from None
+    if dates.get('startDate') and dates.get('endDate') and dates['startDate'] > dates['endDate']:
+        raise ValueError('End date must be on or after the start date.')
     kind = value.get('kind')
     if kind == 'hourly':
         minute = value.get('minute')
         if type(minute) is not int or not 0 <= minute <= 59:
             raise ValueError('Choose a minute from 0 to 59.')
-        return {'kind': kind, 'minute': minute}
+        return {'kind': kind, 'minute': minute, **dates}
     if kind == 'interval':
         minutes = value.get('minutes')
         if type(minutes) is not int or not 1 <= minutes <= 1440:
             raise ValueError('Choose an interval from 1 to 1440 minutes.')
-        return {'kind': kind, 'minutes': minutes}
+        return {'kind': kind, 'minutes': minutes, **dates}
     if kind == 'days':
         clock = value.get('time')
         days = value.get('days')
@@ -28,15 +41,24 @@ def validate_schedule(value):
             raise ValueError('Choose a time of day.')
         if not isinstance(days, list) or not 1 <= len(days) <= 7 or any(type(day) is not int or not 0 <= day <= 6 for day in days):
             raise ValueError('Choose at least one day of the week.')
-        return {'kind': kind, 'time': clock, 'days': sorted(set(days))}
+        return {'kind': kind, 'time': clock, 'days': sorted(set(days)), **dates}
     raise ValueError('Choose a schedule type.')
 
 
 def due(schedule, epoch_minute, timezone):
     kind = schedule['kind']
-    if kind == 'interval':
-        return epoch_minute % schedule['minutes'] == 0
+    if kind == 'interval' and epoch_minute % schedule['minutes'] != 0:
+        return False
+    start, end = schedule.get('startDate'), schedule.get('endDate')
+    if kind == 'interval' and not (start or end):
+        return True
     local = datetime.fromtimestamp(epoch_minute * 60, ZoneInfo(timezone))
+    if start or end:
+        day = local.date().isoformat()
+        if (start and day < start) or (end and day > end):
+            return False
+    if kind == 'interval':
+        return True
     if local.fold:
         return False  # A repeated local time when clocks fall back runs once.
     if kind == 'hourly':

@@ -34,6 +34,11 @@ body{background:var(--bg);color:var(--ink)}header{background:linear-gradient(120
 <label>Time<input id="ruleTime" type="time" value="08:00" required disabled></label>
 <div id="ruleDays" class="actions" aria-label="Days of the week"></div>
 </div>
+<div class="row">
+<label>Start date (optional)<input id="ruleStartDate" type="date"></label>
+<label>End date (optional)<input id="ruleEndDate" type="date"></label>
+</div>
+<p class="muted">Scheduled runs include both dates in the Studio time zone.</p>
 <label><input id="ruleEnabled" type="checkbox" checked> Enabled</label>
 <div class="actions"><button type="submit" class="primary">Save rule</button><button type="button" id="ruleReset">New rule</button></div>
 </form>
@@ -103,10 +108,12 @@ function renderRules(){
   for(const [id,rule] of Object.entries(state.rules||{}).sort((a,b)=>a[1].name.localeCompare(b[1].name))){
     const schedule=rule.schedule;
     const timing=schedule.kind==='hourly'?'Every hour at :'+String(schedule.minute).padStart(2,'0'):schedule.kind==='interval'?'Every '+schedule.minutes+' min':schedule.days.map(d=>ruleDays[d]).join(', ')+' at '+schedule.time;
+    const dates=schedule.startDate&&schedule.endDate?schedule.startDate+' through '+schedule.endDate:
+      schedule.startDate?'From '+schedule.startDate:schedule.endDate?'Through '+schedule.endDate:'';
     const row=text('div','');row.className='tile rule-card';
     const card=state.cards.find(c=>c.id===rule.card);
     const target=card?.wallWidths?state.groups[rule.target]?.name:state.displays.find(d=>d.id===rule.target)?.name;
-    row.append(text('strong',rule.name),text('small',[timing,card?.name||'Card unavailable',target||'Target unavailable',rule.enabled?'Enabled':'Paused'].join(' · ')));
+    row.append(text('strong',rule.name),text('small',[timing,...(dates?[dates]:[]),card?.name||'Card unavailable',target||'Target unavailable',rule.enabled?'Enabled':'Paused'].join(' · ')));
     const status=text('small',state.ruleStatus?.[id]||'');status.dataset.ruleStatus=id;row.append(status);
     const actions=text('div','');actions.className='actions';
     actions.append(button('Edit',async()=>editRule(id,rule)),
@@ -123,6 +130,8 @@ function editRule(id='',rule=null){
     $('ruleName').value=rule.name;$('ruleCard').value=rule.card;
     $('ruleDuration').value=rule.duration;$('ruleEnabled').checked=rule.enabled;
     const schedule=rule.schedule;$('ruleKind').value=schedule.kind;
+    $('ruleStartDate').value=schedule.startDate||'';
+    $('ruleEndDate').value=schedule.endDate||'';
     if(schedule.kind==='hourly')$('ruleMinute').value=schedule.minute;
     if(schedule.kind==='interval')$('ruleInterval').value=schedule.minutes;
     if(schedule.kind==='days'){
@@ -138,6 +147,8 @@ $('ruleReset').onclick=()=>editRule();
 $('ruleForm').onsubmit=event=>{event.preventDefault();run(async()=>{
   const kind=$('ruleKind').value;
   const schedule=kind==='hourly'?{kind,minute:Number($('ruleMinute').value)}:kind==='interval'?{kind,minutes:Number($('ruleInterval').value)}:{kind,time:$('ruleTime').value,days:[...$('ruleDays').querySelectorAll('input:checked')].map(input=>Number(input.value))};
+  if($('ruleStartDate').value)schedule.startDate=$('ruleStartDate').value;
+  if($('ruleEndDate').value)schedule.endDate=$('ruleEndDate').value;
   const payload={name:$('ruleName').value,card:$('ruleCard').value,target:$('ruleTarget').value,duration:Number($('ruleDuration').value),enabled:$('ruleEnabled').checked,schedule};
   if(editingRule)payload.id=editingRule;
   refresh(await api('studio/rules',{method:'POST',body:JSON.stringify(payload)}));editRule();notify('Rule saved.');

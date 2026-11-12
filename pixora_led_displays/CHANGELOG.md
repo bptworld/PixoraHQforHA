@@ -1,3 +1,6 @@
+## 1.2.51
+- Add optional, inclusive start and end dates to Rules using the Studio time zone.
+
 ## 1.2.50
 - Keep rule actions on one compact row.
 

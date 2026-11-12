@@ -32,6 +32,24 @@ def schedules():
     assert not due(days, minute('2026-11-13T19:00'), timezone)
     interval = validate_schedule({'kind': 'interval', 'minutes': 15})
     assert due(interval, 45, timezone) and not due(interval, 46, timezone)
+    for base in (hourly, interval, days):
+        limited = validate_schedule({**base, 'startDate': '2026-11-12', 'endDate': '2026-11-12'})
+        assert due(limited, minute('2026-11-12T19:00'), timezone)
+        assert not due(limited, minute('2026-11-05T19:00'), timezone)
+        assert not due(limited, minute('2026-11-19T19:00'), timezone)
+    before_end = validate_schedule({**hourly, 'endDate': '2026-12-25'})
+    assert due(before_end, minute('2026-12-25T23:00'), timezone)
+    assert not due(before_end, minute('2026-12-26T00:00'), timezone)
+    after_start = validate_schedule({**hourly, 'startDate': '2026-12-25'})
+    assert not due(after_start, minute('2026-12-24T23:00'), timezone)
+    assert due(after_start, minute('2026-12-25T00:00'), timezone)
+    for dates in ({'startDate': '2026-02-29'}, {'endDate': '20261225'},
+                  {'startDate': '2026-12-26', 'endDate': '2026-12-25'}):
+        try:
+            validate_schedule({**hourly, **dates})
+        except ValueError:
+            continue
+        raise AssertionError(f'Accepted invalid date range {dates}')
     for invalid in ({'kind': 'hourly', 'minute': 60}, {'kind': 'interval', 'minutes': True},
                     {'kind': 'days', 'time': '25:00', 'days': [0]}, {'kind': 'days', 'time': '09:00', 'days': []}):
         try:
