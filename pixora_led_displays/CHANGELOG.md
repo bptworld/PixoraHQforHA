@@ -1,3 +1,6 @@
+## 1.2.49
+- Correct the Home Assistant sidebar path so Studio opens inside Home Assistant.
+
 ## 1.2.48
 - Prevent the Home Assistant sidebar from reusing an old Studio interface after app updates.
 
