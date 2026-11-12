@@ -1,3 +1,7 @@
+## 1.2.47
+- Add local Rules for hourly, interval, and selected-day playback, with pause and Run now controls.
+- Play Turkey Chase and other wall cards across compatible saved display groups. Scheduled playback respects quiet hours.
+
 ## 1.2.46
 - Show the team abbreviation and GOAL on wide sports walls when the scorer's name is missing. Keep WINS for game winners.
 

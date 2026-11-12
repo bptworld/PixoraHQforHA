@@ -44,6 +44,13 @@ def validate(data):
             if option['type'] in ('select','multiselect'):
                 choices=option.get('choices')
                 if not isinstance(choices,list) or len(choices)>3000 or any(not isinstance(c,str) and not (isinstance(c,dict) and isinstance(c.get('value'),(str,int,float)) and isinstance(c.get('label'),str)) for c in choices):raise ValueError('Invalid card choices.')
+        if 'wallWidths' in card:
+            widths=card['wallWidths']
+            if (not isinstance(widths,list) or not 2<=len(widths)<=8
+                    or any(type(width) is not int or width not in (64,128) for width in widths)
+                    or sum(widths)>512
+                    or not any(option['key']=='wallTarget' and option['type']=='select' for option in options)):
+                raise ValueError('Invalid display group layout.')
         preview=card.get('previewUrl','')
         if preview and not preview.startswith('https://raw.githubusercontent.com/bptworld/pixora/'):raise ValueError('Invalid card preview source.')
     return data

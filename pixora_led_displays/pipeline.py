@@ -15,7 +15,7 @@ WALL_START_LEAD=.15
 class WallNotReady(ValueError):pass
 
 def quiet_card(studio,ident,payload):
-    if payload.get('source')!='event' or not hasattr(studio,'quiet'):return False
+    if payload.get('source') not in ('event','schedule') or not hasattr(studio,'quiet'):return False
     members=payload.get('wall_members') or [ident]
     return any(studio.quiet(studio.data.get('devices',{}).get(member,{})) for member in members)
 
@@ -176,6 +176,12 @@ class Pipeline:
                 start=payload.get('start_at',0)
                 wall=bool(payload.get('wall_members'))
                 try:
+                    if payload.get('source')=='schedule':
+                        rule=self.studio.data.get('rules',{}).get(payload.get('rule_id'),{})
+                        group_changed=wall and self.studio.data.get('groups',{}).get(rule.get('target'),{}).get('members')!=payload['wall_members']
+                        if rule.get('revision')!=payload.get('rule_revision') or group_changed:
+                            if wall:self.abort_wall(payload,'The scheduled rule or its group changed.')
+                            raise WallNotReady('The scheduled rule or its group changed.')
                     if quiet_card(self.studio,ident,payload):
                         if wall:self.abort_wall(payload,'Card graphic skipped during quiet hours.')
                         raise WallNotReady('Card graphic skipped during quiet hours.')
@@ -208,7 +214,7 @@ class Pipeline:
                         body=base64.b64decode(payload['body'],validate=True)
                         options={'synchronize':lambda:self.ready_wall(ident,payload),'group_check':lambda:self.check_wall(payload)} if wall else {}
                         duration=payload['duration']
-                        if payload.get('source')=='event' and hasattr(self.studio,'quiet_remaining'):
+                        if payload.get('source') in ('event','schedule') and hasattr(self.studio,'quiet_remaining'):
                             if quiet_card(self.studio,ident,payload):raise WallNotReady('Card graphic skipped during quiet hours.')
                             members=payload.get('wall_members') or [ident]
                             duration=min(self.studio.quiet_remaining(self.studio.data['devices'].get(member,{}),duration) for member in members)

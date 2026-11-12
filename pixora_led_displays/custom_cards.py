@@ -25,7 +25,7 @@ def describe(body, *, existing=False):
     except (UnicodeError, SyntaxError, ValueError, RecursionError) as exc:
         raise ValueError('The card must be valid UTF-8 Python.') from exc
     values = {}
-    fields = {'CARD_ID', 'CARD_NAME', 'CARD_DETAIL', 'CARD_VERSION', 'CARD_AUTHOR', 'CARD_OPTIONS'}
+    fields = {'CARD_ID', 'CARD_NAME', 'CARD_DETAIL', 'CARD_VERSION', 'CARD_AUTHOR', 'CARD_OPTIONS', 'CARD_WALL_WIDTHS'}
     for node in tree.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
@@ -110,8 +110,21 @@ def describe(body, *, existing=False):
         raise ValueError('Options must contain ordinary JSON values.') from exc
     if len(encoded) > 16000:
         raise ValueError('Card options are too large.')
+    wall_widths = values.get('CARD_WALL_WIDTHS')
+    wall = {}
+    if wall_widths is not None:
+        valid_wall = (
+            isinstance(wall_widths, list) and len(wall_widths) >= 2
+            and all(type(width) is int and width in (64, 128) for width in wall_widths)
+            and sum(wall_widths) <= 512
+            and any(option['key'] == 'wallTarget' and option['type'] == 'select' for option in options)
+        )
+        if not valid_wall and not existing:
+            raise ValueError('CARD_WALL_WIDTHS needs ordered 64/128 pixel widths (512 total max) and a wallTarget select option.')
+        if valid_wall:
+            wall['wallWidths'] = wall_widths
     custom_id = 'custom_' + ident
     return {'id': custom_id, 'module': custom_id, 'name': values['CARD_NAME'].strip(),
             'detail': values.get('CARD_DETAIL', ''), 'version': values.get('CARD_VERSION', ''),
             'author': values.get('CARD_AUTHOR', ''), 'category': 'My Apps', 'options': options,
-            'custom': True, 'sourceHash': hashlib.sha256(body).hexdigest()}
+            'custom': True, 'sourceHash': hashlib.sha256(body).hexdigest(), **wall}

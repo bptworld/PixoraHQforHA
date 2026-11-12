@@ -89,7 +89,7 @@ Use HTTPS, short network timeouts and a clear fallback when a provider is offlin
 
 Test real 64×32 and 128×32 layouts separately. Do not draw at one size and stretch it to fit the other. Measure text with Pillow textbbox/textlength, account for font offsets, and shorten or wrap long names and values. Keep every text box and logo inside its allocated area with a few pixels of spacing. Use legible small fonts, strong contrast, restrained colors and useful fallback artwork. A wide card should use its extra space deliberately.
 
-Custom cards join regular decks. This simple import format does not register custom group-wall event controls or custom rules. If requesting a scoring interrupt or wall animation, use the existing library sports cards or extend and test the HA event pipeline separately; do not invent unsupported metadata or assume legacy Cloud event headers work.
+Custom cards can play a one-shot animation on a saved display group. Declare a literal `CARD_WALL_WIDTHS` list of 64 or 128 pixel panel widths in left-to-right order (at least two panels, up to 512 pixels total). Add a `wallTarget` select option with the `group_wall` choice. In the card options, select a group and press **Test** to play once. The renderer receives the combined `_width` for that playback. Return the full-width animation and keep the usual 64/128-pixel layouts for single-display previews. This playback is started from the options dialog.
 
 ## Required checks before returning a card
 

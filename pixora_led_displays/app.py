@@ -373,6 +373,8 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
                 if queue and ident not in studio.pipeline.errors:studio.pipeline.start(ident)
         if not (root/'.cleanup-started').exists():
             studio.recovery_task=asyncio.create_task(studio.recovery_loop())
+            from local_rules import run as run_local_rules
+            studio.rule_task=asyncio.create_task(run_local_rules(studio))
 
     async def cleanup(app):
         await studio.shutdown()

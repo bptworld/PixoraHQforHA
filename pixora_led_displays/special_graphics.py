@@ -30,7 +30,9 @@ def tests_for(card):
     football=ident in ('nfl','college_football','cfl','ufl')
     for option in card.get('options',[]):
         key=option['key'];kind=None;renderer='_render_score_alert_frames'
-        if key=='scoreAnimationTarget':
+        if key=='wallTarget' and card.get('wallWidths'):
+            kind='wall_card';renderer='render'
+        elif key=='scoreAnimationTarget':
             kind='touchdown' if football else 'goal' if 'lacrosse' in ident else 'point' if 'volleyball' in ident else 'three'
             if football:renderer='_render_score_animation_frames'
         elif key=='runAnimationTarget':kind='run';renderer='_render_run_animation_frames'
@@ -60,6 +62,24 @@ def render_test(module,card,key,options,width):
     import base64
     test=tests_for(card).get(key)
     if not test:raise ValueError('Choose a special graphic for this card.')
+    if test['kind']=='wall_card':
+        import io, math
+        from PIL import Image, ImageSequence
+        body=module.render({**options,'_width':width})
+        if isinstance(body,dict):body=body.get('body')
+        if not isinstance(body,(bytes,bytearray)) or not body or len(body)>5*1024*1024:
+            raise ValueError('The wall card returned invalid artwork.')
+        with Image.open(io.BytesIO(body)) as image:
+            if image.size!=(width,32):
+                raise ValueError(f'The wall card must return {width} x 32 artwork.')
+            delays=[]
+            for frame in ImageSequence.Iterator(image):
+                if len(delays)>=2048:raise ValueError('Animation exceeds 2048 frames.')
+                frame.load()
+                delays.append(max(20,min(60000,int(frame.info.get('duration',100)))))
+        duration=max(1,min(300,math.ceil(sum(delays)/1000)))
+        return {'body':base64.b64encode(artwork(body,width,once=True)).decode(),
+                'duration':duration,'kind':test['kind'],'once':True}
     team,warning=test_team(module,card,options,width)
     if str(options.get(key,'device')) in ('group','group_wall','wall') or str(options.get(key,'')).startswith('group:'):
         team['_wall']=True

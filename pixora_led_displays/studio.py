@@ -16,6 +16,7 @@ class PanelFrame:
 class CardSkipped(ValueError):pass
 from client import PriorityMessageActive,DisplayUnavailable,DisplayWriteUnconfirmed
 import quiet_hours
+import local_rules
 
 class Studio:
     def __init__(self,app,root,selected,displays):
@@ -27,6 +28,7 @@ class Studio:
         self.runtime={ident:{'playing':False,'error':cfg['last_error']} for ident,cfg in self.data['devices'].items() if cfg.get('last_error')}
         self.graphic_jobs={};self.graphic_prepared={};self.frame_prepared={};self.slice_prepared={}
         self.score_monitors={};self.recovery_jobs={};self.recovery_task=None;self.starting=set();self.restarting=set();self.play_generation={}
+        self.rule_task=None;self.rule_status={};self.data.setdefault('rules',{})
 
     async def recover_display(self,ident,info):
         cfg=self.data['devices'].get(ident)
@@ -124,7 +126,8 @@ class Studio:
 
     def used(self,data=None):
         data=self.data if data is None else data
-        return {row['card'] for deck in data['decks'].values() for row in deck['items'] if 'card' in row}
+        return ({row['card'] for deck in data['decks'].values() for row in deck['items'] if 'card' in row}
+                | {rule['card'] for rule in data.get('rules',{}).values()})
 
     def public(self):
         result=json.loads(json.dumps(self.data))
@@ -135,6 +138,7 @@ class Studio:
         for key in list(result['settings']):
             if any(word in key.lower() for word in ('key','token','secret','password')):result['settings'][key]=''
         result['runtime']=json.loads(json.dumps(self.runtime))
+        result['ruleStatus']=dict(getattr(self,'rule_status',{}))
         for ident,message in getattr(self,'monitor_errors',{}).items():result['runtime'].setdefault(ident,{})['warning']=message
         result['priority']={ident:{'queued':len(queue),'active':ident in self.pipeline.jobs and not self.pipeline.jobs[ident].done(),'error':self.pipeline.errors.get(ident,'')} for ident,queue in self.pipeline.data['queues'].items()}
         result['cards']=[{k:v for k,v in card.items() if k not in ('files','module')}|{'installed':self.store.installed(card['id']),'specialTests':tests_for(card)} for card in self.store.cards.values()]
@@ -166,7 +170,7 @@ class Studio:
             await self.save()
 
     async def shutdown(self):
-        recovery=[task for task in [self.recovery_task,*self.recovery_jobs.values()] if task]
+        recovery=[task for task in [getattr(self,'rule_task',None),self.recovery_task,*self.recovery_jobs.values()] if task]
         for task in recovery:task.cancel()
         await asyncio.gather(*recovery,return_exceptions=True)
         for ident in list(self.jobs):await self.stop(ident,remember=False)
@@ -931,7 +935,7 @@ class Studio:
         if len(groups)!=1:raise ValueError('Choose a specific display group for this special graphic.')
         return groups[0]
 
-    async def test_graphic(self,payload,prepare=False):
+    async def test_graphic(self,payload,prepare=False,scheduled=None):
         ident=payload.get('display');self.selected(ident)
         card=self.store.cards.get(payload.get('card'))
         key=payload.get('option')
@@ -952,6 +956,9 @@ class Studio:
             info=known.get(member)
             if not info or info.get('width') not in (64,128):raise ValueError('Refresh the display status before testing a graphic.')
             widths.append((member,info['width']))
+        if card.get('wallWidths') and [width for _,width in widths]!=card['wallWidths']:
+            expected=' + '.join(str(width) for width in card['wallWidths'])
+            raise ValueError(f'Choose a display group ordered {expected} pixels from left to right.')
         width=sum(w for _,w in widths)
         if width>512:raise ValueError('Test graphics support a group up to 512 pixels wide.')
         request=await self.render(validated,width,device_id=ident,request_only=True)
@@ -988,6 +995,9 @@ class Studio:
                 task.add_done_callback(finished)
             event,slices=await asyncio.shield(task)
         if prepare:return {'prepared':True}
+        if scheduled is not None:
+            await self.queue_rule(scheduled,event,slices,targets if group else None)
+            return {'queued':True}
         render_ms=round((time.monotonic()-started)*1000)
         entries=[];event_id='test-'+uuid.uuid4().hex
         for member,member_width,body in slices:
@@ -997,6 +1007,76 @@ class Studio:
             for _,payload in entries:payload['start_at']=ready_at
         await self.pipeline.submit(entries)
         return {'queued':True,'render_ms':render_ms,'displays':len(widths),'message':'Test graphic queued'+(' for the group' if group else '')+'. '+(event.get('warning','')+' ' if event.get('warning') else '')+'The deck continues with the next card after the interrupt.'}
+
+    def validate_rule(self,payload):
+        name=payload.get('name')
+        if not isinstance(name,str) or not 1<=len(name.strip())<=80:
+            raise ValueError('Enter a rule name up to 80 characters.')
+        card_id=payload.get('card')
+        card=self.store.cards.get(card_id) if isinstance(card_id,str) else None
+        if not card:raise ValueError('Choose a card from the library.')
+        target=payload.get('target')
+        if not isinstance(target,str):raise ValueError('Choose a display or group.')
+        if card.get('wallWidths'):
+            group=self.data['groups'].get(target)
+            widths={d['id']:d.get('width') for d in self.displays()}
+            if not group or [widths.get(member) for member in group['members']]!=card['wallWidths']:
+                expected=' + '.join(map(str,card['wallWidths']))
+                raise ValueError(f'Choose a display group ordered {expected} pixels from left to right.')
+        else:self.selected(target)
+        duration=payload.get('duration',15)
+        if type(duration) is not int or not 1<=duration<=300:
+            raise ValueError('Choose a duration from 1 to 300 seconds.')
+        return {'name':name.strip(),'card':card_id,'target':target,'duration':duration,
+                'enabled':payload.get('enabled',True) is True,
+                'schedule':local_rules.validate_schedule(payload.get('schedule')),
+                'revision':uuid.uuid4().hex}
+
+    async def run_rule(self,ident,rule,minute=None):
+        card=self.store.cards.get(rule['card'])
+        if not card:raise ValueError('The rule card is unavailable.')
+        group=self.data['groups'].get(rule['target']) if card.get('wallWidths') else None
+        if card.get('wallWidths') and not group:raise ValueError('The rule group is unavailable.')
+        targets=group['members'] if group else [rule['target']]
+        if any(self.quiet(self.data['devices'].get(member,{})) for member in targets):
+            self.rule_status[ident]='Skipped during quiet hours.'
+            return
+        scheduled=(ident,rule,minute)
+        if group:
+            await self.test_graphic({'display':targets[0],'card':rule['card'],'option':'wallTarget',
+                                     'options':{'wallTarget':'group:'+rule['target']}},scheduled=scheduled)
+        else:
+            target=targets[0];self.selected(target)
+            width=next((d.get('width') for d in self.displays() if d['id']==target),None)
+            if width not in (64,128):raise ValueError('The rule display is unavailable.')
+            item=self.validate_deck({'name':rule['name'],'items':[{'card':rule['card'],'duration':rule['duration']}]})['items'][0]
+            body=await self.render(item,width,device_id=target,fresh=True)
+            await self.prepared_frames(body,width)
+            await self.queue_rule(scheduled,{'duration':rule['duration'],'once':True},
+                                  [(target,width,base64.b64encode(body).decode())])
+
+    async def queue_rule(self,scheduled,event,slices,members=None):
+        ident,rule,minute=scheduled
+        async with self.lock:
+            if (self.root/'.cleanup-started').exists() or self.data.get('rules',{}).get(ident)!=rule:
+                return
+            if minute is not None and (not rule['enabled'] or time.time()>=(minute+1)*60):
+                self.rule_status[ident]='Skipped because preparation ran past the scheduled minute.'
+                return
+            if members and self.data['groups'].get(rule['target'],{}).get('members')!=members:
+                raise ValueError('The rule display group changed during preparation.')
+            if any(self.quiet(self.data['devices'].get(member,{})) for member,_,_ in slices):
+                self.rule_status[ident]='Skipped during quiet hours.'
+                return
+            occurrence=str(minute) if minute is not None else uuid.uuid4().hex
+            event_id=f"rule-{ident}-{rule['revision']}-{occurrence}"
+            ready=time.time()+WALL_START_LEAD if members else 0
+            entries=[(member,{**event,'body':body,'source':'schedule','event_id':event_id,
+                              'rule_id':ident,'rule_revision':rule['revision'],
+                              'start_at':ready,**({'wall_members':members,'wall_width':width} if members else {})})
+                     for member,width,body in slices]
+            await self.pipeline.submit(entries)
+            self.rule_status[ident]='Queued for playback.'
 
     def register(self):
         routes=self.app.router
@@ -1008,6 +1088,29 @@ class Studio:
         async def standings_groups(request):return web.json_response(await self.standings_groups(await object_data(request)))
         async def prepare_graphic(request):return web.json_response(await self.test_graphic(await object_data(request),prepare=True))
         async def test_graphic(request):return web.json_response(await self.test_graphic(await object_data(request)))
+        async def rule_save(request):
+            payload=await object_data(request)
+            existing=payload.get('id')
+            if existing is not None and not isinstance(existing,str):raise ValueError('Invalid rule.')
+            ident=existing if existing is not None else uuid.uuid4().hex
+            def save_rule():
+                rules=self.data['rules']
+                if existing is not None and ident not in rules:raise ValueError('The rule no longer exists.')
+                if existing is None and len(rules)>=30:raise ValueError('Up to 30 rules are supported.')
+                rules[ident]=self.validate_rule(payload)
+            await self.mutate(save_rule)
+            self.rule_status.pop(ident,None)
+            return web.json_response(self.public())
+        async def rule_delete(request):
+            ident=request.match_info['ident']
+            await self.mutate(lambda:self.data['rules'].pop(ident,None))
+            self.rule_status.pop(ident,None)
+            return web.json_response(self.public())
+        async def rule_run(request):
+            ident=request.match_info['ident'];rule=self.data['rules'].get(ident)
+            if not rule:raise ValueError('The rule no longer exists.')
+            await self.run_rule(ident,rule)
+            return web.json_response(self.public())
         async def deck_save(request):
             payload=await object_data(request);ident=payload.get('id') or uuid.uuid4().hex
             if not isinstance(ident,str) or len(ident)>80:raise ValueError('Invalid deck.')
@@ -1176,6 +1279,9 @@ class Studio:
         routes.add_get('/api/studio/creator-brief',creator_brief)
         routes.add_get('/api/studio/custom-starter',custom_starter)
         routes.add_post('/api/studio/test-graphic',test_graphic)
+        routes.add_post('/api/studio/rules',rule_save)
+        routes.add_delete('/api/studio/rules/{ident}',rule_delete)
+        routes.add_post('/api/studio/rules/{ident}/run',rule_run)
         routes.add_post('/api/studio/prepare-graphic',prepare_graphic)
         routes.add_post('/api/studio/standings-groups',standings_groups)
         routes.add_get('/api/studio',state);routes.add_post('/api/studio/decks',deck_save);routes.add_delete('/api/studio/decks/{ident}',deck_delete)

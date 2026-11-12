@@ -67,6 +67,12 @@ Then uninstall **Pixora LED Studio** in **Settings → Apps** and restart Home A
 
 ## Local special graphics and interruptions
 
+### Scheduled cards
+
+In **Rules**, choose a card and its display or matching display group. Choose **Every hour** and set the minute to **0** for the top of each hour, **Every N minutes** for a fixed interval, or **At a time on selected days** for a daily or weekly schedule. Hourly and selected-day rules use the Studio time zone. Interval rules use fixed clock boundaries. Save the rule, then use **Run now** to try it or **Pause** to stop future scheduled runs.
+
+Studio runs saved rules on the hub while the app is running. It skips missed times and skips playback during quiet hours on any target display. Rules use the card's default options. Single-display rules let you set a duration; wall cards use their own animation length and the saved display group's left-to-right order.
+
 Use **Test** beside a special graphic setting to send a sample to the selected display or group through the normal interrupt queue. It uses the options currently shown without saving them, changing live event history, or starting a paused deck. Progress and success/error feedback appear in the dialog; render time is shown after queueing. Group tests use the same readiness check and shared animation clock as real group events.
 
 After updating to 1.2.0, restart Home Assistant once if prompted so its notify entities use the hub queue. Existing display entities keep their identities.
