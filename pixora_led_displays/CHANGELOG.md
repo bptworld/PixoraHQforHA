@@ -1,3 +1,6 @@
+## 1.2.48
+- Prevent the Home Assistant sidebar from reusing an old Studio interface after app updates.
+
 ## 1.2.47
 - Add local Rules for hourly, interval, and selected-day playback, with pause and Run now controls.
 - Play Turkey Chase and other wall cards across compatible saved display groups. Scheduled playback respects quiet hours.

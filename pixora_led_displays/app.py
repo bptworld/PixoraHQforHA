@@ -99,7 +99,9 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app.middlewares.append(errors)
 
     async def index(request):
-        return web.FileResponse(Path(__file__).with_name('studio.html'))
+        # Ingress uses the same iframe URL across app upgrades.
+        return web.FileResponse(Path(__file__).with_name('studio.html'),
+                                headers={'Cache-Control': 'no-store'})
 
     async def tools(request):
         return web.FileResponse(Path(__file__).with_name('index.html'))
@@ -384,6 +386,7 @@ def make_app(root=Path('/data'), config_root=Path('/homeassistant'), client_fact
     app.on_startup.append(startup)
     app.on_cleanup.append(cleanup)
     app.router.add_get('/', index)
+    app.router.add_get('/studio', index)
     app.router.add_get('/tools', tools)
     app.router.add_get('/api/displays', listing)
     app.router.add_get('/api/displays/{display_id}/status', display_status)
